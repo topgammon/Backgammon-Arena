@@ -3168,66 +3168,57 @@ function GameBoard() {
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'space-between',
+                        justifyContent: 'flex-start',
                         gap: '12px',
                         cursor: 'pointer',
                         padding: '12px 16px',
-                        background: '#fff',
+                        background: '#a8a7a8',
                         borderRadius: '8px',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                         transition: 'all 0.2s',
                         minWidth: '162px',
                         boxSizing: 'border-box'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#f8f8f8';
-                        e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                        e.currentTarget.style.background = '#9a999a';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.background = '#fff';
-                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                        e.currentTarget.style.background = '#a8a7a8';
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
-                        <div style={{
-                          width: '44px',
-                          height: '44px',
-                          borderRadius: '50%',
-                          background: '#ff751f',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '18px',
-                          color: '#fff',
-                          fontWeight: 'bold',
-                          flexShrink: 0
-                        }}>
-                          {userProfile?.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '👤'}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', flex: 1, minWidth: 0 }}>
-                          <span style={{ 
-                            fontSize: '15px', 
-                            fontWeight: '600',
-                            color: '#000',
-                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            width: '100%'
-                          }}>
-                            {userProfile?.username || 'User'}
-                          </span>
-                          <span style={{ 
-                            fontSize: '12px', 
-                            opacity: 0.7,
-                            color: '#666',
-                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-                          }}>
-                            ELO: {userProfile?.elo_rating || 1000}
-                          </span>
-                        </div>
+                      <div style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        background: '#ff751f',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '16px',
+                        color: '#fff',
+                        fontWeight: 'bold',
+                        flexShrink: 0
+                      }}>
+                        {userProfile?.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '👤'}
                       </div>
-                      <span style={{ fontSize: '22px', flexShrink: 0 }}>
+                      <span style={{ 
+                        fontSize: '15px', 
+                        fontWeight: '600',
+                        color: '#fff',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {userProfile?.username || 'User'}
+                      </span>
+                      <span style={{ 
+                        fontSize: '15px', 
+                        fontWeight: '600',
+                        color: '#fff',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {userProfile?.elo_rating || 1000}
+                      </span>
+                      <span style={{ fontSize: '18px', flexShrink: 0 }}>
                         {userProfile?.country === 'US' ? '🇺🇸' : 
                          userProfile?.country === 'GB' ? '🇬🇧' :
                          userProfile?.country === 'CA' ? '🇨🇦' :
@@ -4125,18 +4116,17 @@ function GameBoard() {
       <div style={{ textAlign: 'center', marginTop: 30, paddingBottom: 40, background: '#a8a7a8', minHeight: '100vh' }}>
         <div style={{
           ...sectionStyle,
-          maxWidth: 800,
+          maxWidth: 1200,
           width: '100%',
           margin: '20px auto',
           padding: '40px'
         }}>
-          <div style={{ marginBottom: '24px' }}>
+          <div style={{ marginBottom: '32px', textAlign: 'left' }}>
             <button
               onClick={() => setScreen('home')}
               style={{
                 ...buttonStyle,
                 background: '#6c757d',
-                marginBottom: '20px',
                 minWidth: '120px'
               }}
             >
@@ -4144,7 +4134,15 @@ function GameBoard() {
             </button>
           </div>
 
-          <div style={{ marginBottom: '32px' }}>
+          {/* Profile Header - 2 Columns */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'auto 1fr',
+            gap: '24px',
+            marginBottom: '32px',
+            alignItems: 'center',
+            textAlign: 'left'
+          }}>
             <div style={{
               width: '120px',
               height: '120px',
@@ -4154,34 +4152,36 @@ function GameBoard() {
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: '48px',
-              margin: '0 auto 16px',
               color: '#fff',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              flexShrink: 0
             }}>
               {userProfile?.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '👤'}
             </div>
-            <h1 style={{ 
-              margin: '0 0 8px 0', 
-              fontSize: '32px', 
-              color: '#000',
-              fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-            }}>
-              {userProfile?.username || 'User'}
-            </h1>
-            <p style={{ 
-              margin: '0 0 24px 0', 
-              fontSize: '16px', 
-              color: '#666',
-              fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-            }}>
-              {user.email}
-            </p>
+            <div>
+              <h1 style={{ 
+                margin: '0 0 8px 0', 
+                fontSize: '32px', 
+                color: '#000',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+              }}>
+                {userProfile?.username || 'User'}
+              </h1>
+              <p style={{ 
+                margin: '0', 
+                fontSize: '16px', 
+                color: '#666',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+              }}>
+                {user.email}
+              </p>
+            </div>
           </div>
 
-          {/* Stats Section */}
+          {/* Stats Section - 2 Columns */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gridTemplateColumns: 'repeat(2, 1fr)',
             gap: '20px',
             marginBottom: '32px'
           }}>
@@ -4194,6 +4194,17 @@ function GameBoard() {
               <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>ELO Rating</div>
               <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ff751f' }}>
                 {userProfile?.elo_rating || 1000}
+              </div>
+            </div>
+            <div style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '24px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            }}>
+              <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Games Played</div>
+              <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#6c757d' }}>
+                {userProfile?.games_played || 0}
               </div>
             </div>
             <div style={{
@@ -4216,17 +4227,6 @@ function GameBoard() {
               <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Losses</div>
               <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#dc3545' }}>
                 {userProfile?.losses || 0}
-              </div>
-            </div>
-            <div style={{
-              background: '#fff',
-              borderRadius: '12px',
-              padding: '24px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}>
-              <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Games Played</div>
-              <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#6c757d' }}>
-                {userProfile?.games_played || 0}
               </div>
             </div>
           </div>

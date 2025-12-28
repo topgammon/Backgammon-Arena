@@ -2887,8 +2887,29 @@ function GameBoard() {
     setLoginLoading(true);
 
     try {
+      let emailToUse = loginFormData.email;
+
+      // Check if input is a username (not containing @)
+      if (!loginFormData.email.includes('@')) {
+        // It's a username, fetch the user's email from the database
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('email')
+          .eq('username', loginFormData.email)
+          .single();
+
+        if (userError || !userData) {
+          setLoginError('Username not found');
+          setLoginLoading(false);
+          return;
+        }
+
+        emailToUse = userData.email;
+      }
+
+      // Sign in with email and password
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: loginFormData.email,
+        email: emailToUse,
         password: loginFormData.password,
       });
 
@@ -3340,8 +3361,8 @@ function GameBoard() {
                 <form onSubmit={handleLogin} style={{ textAlign: 'left' }}>
                   <div style={{ marginBottom: '12px' }}>
                     <input
-                      type="email"
-                      placeholder="Email"
+                      type="text"
+                      placeholder="Username or Email"
                       value={loginFormData.email}
                       onChange={(e) => setLoginFormData({ ...loginFormData, email: e.target.value })}
                       required

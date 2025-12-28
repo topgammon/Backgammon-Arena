@@ -3293,7 +3293,10 @@ function GameBoard() {
       minHeight: '100vh',
       position: 'relative',
       paddingLeft: user && sidebarOpen && !isMobile ? '260px' : '0',
-      transition: 'padding-left 0.3s ease'
+      transition: 'padding-left 0.3s ease',
+      overflowX: 'hidden',
+      width: '100%',
+      boxSizing: 'border-box'
     }}>
       {/* Sidebar Menu - Only show when logged in */}
       {user && (
@@ -3324,7 +3327,7 @@ function GameBoard() {
           <div style={{
             position: 'fixed',
             top: 0,
-            left: sidebarOpen ? 0 : '-260px',
+            left: sidebarOpen ? 0 : (isMobile ? '-220px' : '-260px'),
             width: isMobile ? '220px' : '260px',
             height: '100vh',
             background: '#fff',
@@ -3375,8 +3378,10 @@ function GameBoard() {
                 position: 'fixed',
                 top: 0,
                 left: 0,
-                width: '100vw',
-                height: '100vh',
+                right: 0,
+                bottom: 0,
+                width: '100%',
+                height: '100%',
                 background: 'rgba(0,0,0,0.3)',
                 zIndex: 1300
               }}

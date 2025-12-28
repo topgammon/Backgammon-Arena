@@ -15,7 +15,7 @@ const buttonStyle = {
   borderRadius: '6px',
   fontSize: '18px',
   cursor: 'pointer',
-  minWidth: '180px',
+  minWidth: '162px',
 };
 
 // CPU Difficulty Levels (1-9) - Removed "Perfect" to make 9 levels for 3x3 grid
@@ -2795,8 +2795,9 @@ function GameBoard() {
         src="/Homeboard.png" 
         alt="Backgammon Arena Board" 
         style={{ 
-          maxWidth: '100%', 
-          height: 'auto', 
+          width: 'auto', 
+          height: '350px', 
+          objectFit: 'contain',
           margin: '0 auto 18px', 
           display: 'block'
         }} 
@@ -2825,19 +2826,19 @@ function GameBoard() {
         <div style={{ marginBottom: '18px' }}>
           <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '180px' }} />
         </div>
-        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%', gap: 32, marginTop: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', width: '100%', gap: 48, marginTop: 8, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 320 }}>
             <HomeBoardSVG />
           </div>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 320, paddingLeft: 12 }}>
             <div style={{ width: '100%' }}>
-              <h2 style={{ marginBottom: '16px', color: '#000' }}>Play Online</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '32px' }}>
+              <h2 style={{ marginBottom: '4px', color: '#000' }}>Play Online</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
                 <button style={buttonStyle} onClick={() => alert('Coming soon!')}>Play as Guest</button>
                 <button style={buttonStyle} onClick={() => alert('Coming soon!')}>Login / Signup</button>
               </div>
-              <h2 style={{ marginBottom: '16px', color: '#000' }}>Play Offline</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <h2 style={{ marginBottom: '4px', color: '#000' }}>Play Offline</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <button style={buttonStyle} onClick={() => setScreen('passplay')}>Pass and Play</button>
                 <button style={buttonStyle} onClick={() => setScreen('cpu-difficulty')}>Vs. CPU</button>
               </div>

@@ -123,9 +123,12 @@ ALTER TABLE public.moves ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tournaments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tournament_participants ENABLE ROW LEVEL SECURITY;
 
--- Users: Anyone can read, users can update their own data
+-- Users: Anyone can read, users can insert/update their own data
 CREATE POLICY "Users are viewable by everyone" ON public.users
   FOR SELECT USING (true);
+
+CREATE POLICY "Users can insert their own profile" ON public.users
+  FOR INSERT WITH CHECK (auth.uid() = id);
 
 CREATE POLICY "Users can update their own data" ON public.users
   FOR UPDATE USING (auth.uid() = id);

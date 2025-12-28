@@ -182,6 +182,8 @@ function GameBoard() {
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [showLoginForm, setShowLoginForm] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
   const timerRef = useRef();
   const prevPlayerRef = useRef(null);
   const cpuDoubleCheckedRef = useRef(false);
@@ -261,8 +263,35 @@ function GameBoard() {
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = not found
         console.error('Error fetching user profile:', error);
-      } else {
+        setUserProfile(null);
+      } else if (data) {
         setUserProfile(data);
+      } else {
+        // If profile doesn't exist, try to create it from auth metadata
+        if (user.user_metadata?.username) {
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert({
+              id: user.id,
+              email: user.email,
+              username: user.user_metadata.username,
+              country: user.user_metadata.country || 'US',
+              elo_rating: 1000,
+              wins: 0,
+              losses: 0,
+              games_played: 0
+            });
+          
+          if (!insertError) {
+            // Fetch again after creating
+            const { data: newData } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', user.id)
+              .single();
+            setUserProfile(newData);
+          }
+        }
       }
     };
 
@@ -2932,6 +2961,52 @@ function GameBoard() {
     }
   };
 
+  // Check username availability
+  const checkUsernameAvailability = async (username) => {
+    if (!supabase || !username || username.length < 3) {
+      setUsernameAvailable(null);
+      return;
+    }
+
+    setCheckingUsername(true);
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('username')
+        .eq('username', username)
+        .single();
+
+      if (error && error.code === 'PGRST116') {
+        // Not found = available
+        setUsernameAvailable(true);
+      } else if (data) {
+        // Found = not available
+        setUsernameAvailable(false);
+      } else {
+        setUsernameAvailable(null);
+      }
+    } catch (error) {
+      setUsernameAvailable(null);
+    } finally {
+      setCheckingUsername(false);
+    }
+  };
+
+  // Debounced username check
+  useEffect(() => {
+    if (!showSignupForm) return;
+
+    const timeoutId = setTimeout(() => {
+      if (signupFormData.username && signupFormData.username.length >= 3) {
+        checkUsernameAvailability(signupFormData.username);
+      } else {
+        setUsernameAvailable(null);
+      }
+    }, 500); // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timeoutId);
+  }, [signupFormData.username, showSignupForm]);
+
   // Signup function
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -2947,6 +3022,18 @@ function GameBoard() {
       // Validate form
       if (!signupFormData.email || !signupFormData.password || !signupFormData.username) {
         setSignupError('Please fill in all fields');
+        setSignupLoading(false);
+        return;
+      }
+
+      if (signupFormData.username.length < 3) {
+        setSignupError('Username must be at least 3 characters');
+        setSignupLoading(false);
+        return;
+      }
+
+      if (usernameAvailable === false) {
+        setSignupError('Username is already taken. Please choose another.');
         setSignupLoading(false);
         return;
       }
@@ -2997,7 +3084,20 @@ function GameBoard() {
 
       if (profileError) {
         console.error('Error creating user profile:', profileError);
-        // Don't fail signup if profile creation fails - we can retry later
+        setSignupError(profileError.message || 'Failed to create profile. Please try again.');
+        setSignupLoading(false);
+        return;
+      }
+
+      // Immediately fetch the profile to ensure it's available
+      const { data: newProfile } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single();
+      
+      if (newProfile) {
+        setUserProfile(newProfile);
       }
 
       // Success! User is automatically logged in
@@ -3556,24 +3656,89 @@ function GameBoard() {
                   }}>
                     Username
                   </label>
-                  <input
-                    type="text"
-                    value={signupFormData.username}
-                    onChange={(e) => setSignupFormData({ ...signupFormData, username: e.target.value })}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      border: '2px solid #ddd',
-                      borderRadius: '8px',
-                      fontSize: '16px',
-                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                      boxSizing: 'border-box',
-                      transition: 'border-color 0.2s'
-                    }}
-                    onFocus={(e) => e.target.style.borderColor = '#ff751f'}
-                    onBlur={(e) => e.target.style.borderColor = '#ddd'}
-                  />
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      value={signupFormData.username}
+                      onChange={(e) => {
+                        setSignupFormData({ ...signupFormData, username: e.target.value });
+                        setUsernameAvailable(null); // Reset while typing
+                      }}
+                      required
+                      minLength={3}
+                      style={{
+                        width: '100%',
+                        padding: '12px 40px 12px 12px',
+                        border: `2px solid ${
+                          usernameAvailable === false ? '#dc3545' : 
+                          usernameAvailable === true ? '#28a745' : 
+                          '#ddd'
+                        }`,
+                        borderRadius: '8px',
+                        fontSize: '16px',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                        boxSizing: 'border-box',
+                        transition: 'border-color 0.2s'
+                      }}
+                      onFocus={(e) => {
+                        if (usernameAvailable === null) {
+                          e.target.style.borderColor = '#ff751f';
+                        }
+                      }}
+                      onBlur={(e) => {
+                        if (usernameAvailable === null) {
+                          e.target.style.borderColor = '#ddd';
+                        }
+                      }}
+                    />
+                    {signupFormData.username.length >= 3 && (
+                      <div style={{
+                        position: 'absolute',
+                        right: '12px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        fontSize: '18px'
+                      }}>
+                        {checkingUsername ? (
+                          <span style={{ color: '#999' }}>⏳</span>
+                        ) : usernameAvailable === true ? (
+                          <span style={{ color: '#28a745' }}>✓</span>
+                        ) : usernameAvailable === false ? (
+                          <span style={{ color: '#dc3545' }}>✗</span>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                  {signupFormData.username.length > 0 && signupFormData.username.length < 3 && (
+                    <p style={{ 
+                      margin: '4px 0 0 0', 
+                      fontSize: '12px', 
+                      color: '#999',
+                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                    }}>
+                      Username must be at least 3 characters
+                    </p>
+                  )}
+                  {usernameAvailable === false && (
+                    <p style={{ 
+                      margin: '4px 0 0 0', 
+                      fontSize: '12px', 
+                      color: '#dc3545',
+                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                    }}>
+                      Username is already taken
+                    </p>
+                  )}
+                  {usernameAvailable === true && (
+                    <p style={{ 
+                      margin: '4px 0 0 0', 
+                      fontSize: '12px', 
+                      color: '#28a745',
+                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                    }}>
+                      Username is available
+                    </p>
+                  )}
                 </div>
 
                 {/* Email */}

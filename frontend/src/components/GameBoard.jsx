@@ -4228,6 +4228,7 @@ function GameBoard() {
       )}
     </div>
   );
+  };
 
   // CPU Difficulty Selection Screen
   const renderCpuDifficultySelection = () => (

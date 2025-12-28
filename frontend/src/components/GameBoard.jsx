@@ -187,7 +187,18 @@ function GameBoard() {
   const [editingCountry, setEditingCountry] = useState(false);
   const [newCountry, setNewCountry] = useState('');
   const [showAvatarSelector, setShowAvatarSelector] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const timerRef = useRef();
+  
+  // Track window width for responsive design
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   // Available avatars
   const availableAvatars = [
@@ -3261,8 +3272,118 @@ function GameBoard() {
     );
   };
 
-  const renderHome = () => (
-    <div style={{ textAlign: 'center', marginTop: 30, paddingBottom: 40, background: '#a8a7a8', minHeight: '100vh' }}>
+  // Sidebar menu items
+  const sidebarMenuItems = [
+    { label: 'Tournaments', icon: '🏆' },
+    { label: 'Lessons', icon: '📚' },
+    { label: 'Game Review', icon: '🔍' },
+    { label: 'News', icon: '📰' },
+    { label: 'Events', icon: '📅' },
+    { label: 'Shop', icon: '🛒' }
+  ];
+
+  const renderHome = () => {
+    const isMobile = windowWidth <= 768;
+    return (
+    <div style={{ 
+      textAlign: 'center', 
+      marginTop: isMobile ? 80 : 30, 
+      paddingBottom: 40, 
+      background: '#a8a7a8', 
+      minHeight: '100vh',
+      position: 'relative',
+      paddingLeft: user && sidebarOpen && !isMobile ? '260px' : '0',
+      transition: 'padding-left 0.3s ease'
+    }}>
+      {/* Sidebar Menu - Only show when logged in */}
+      {user && (
+        <>
+          {/* Sidebar Toggle Button */}
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            style={{
+              position: 'fixed',
+              top: isMobile ? '10px' : '20px',
+              left: sidebarOpen && !isMobile ? '240px' : (isMobile ? (sidebarOpen ? '220px' : '10px') : '20px'),
+              zIndex: 1500,
+              background: '#ff751f',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: isMobile ? '8px 12px' : '10px 14px',
+              cursor: 'pointer',
+              fontSize: isMobile ? '18px' : '20px',
+              transition: 'left 0.3s ease',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+            }}
+          >
+            {sidebarOpen ? '✕' : '☰'}
+          </button>
+
+          {/* Sidebar */}
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: sidebarOpen ? 0 : '-260px',
+            width: isMobile ? '220px' : '260px',
+            height: '100vh',
+            background: '#fff',
+            boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
+            transition: 'left 0.3s ease',
+            zIndex: 1400,
+            overflowY: 'auto',
+            paddingTop: isMobile ? '50px' : '60px'
+          }}>
+            <div style={{ padding: '20px' }}>
+              {sidebarMenuItems.map((item, index) => (
+                <div
+                  key={index}
+                  onClick={() => alert('Coming soon!')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '14px 16px',
+                    marginBottom: '8px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    background: 'transparent',
+                    transition: 'all 0.2s',
+                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                    fontSize: '16px',
+                    color: '#333'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#f0f0f0';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                  }}
+                >
+                  <span style={{ fontSize: '20px' }}>{item.icon}</span>
+                  <span>{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Sidebar Overlay (for mobile) */}
+          {sidebarOpen && (
+            <div
+              onClick={() => setSidebarOpen(false)}
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                width: '100vw',
+                height: '100vh',
+                background: 'rgba(0,0,0,0.3)',
+                zIndex: 1300
+              }}
+            />
+          )}
+        </>
+      )}
       <div style={{
         ...sectionStyle,
         display: 'flex',
@@ -3276,17 +3397,40 @@ function GameBoard() {
         marginLeft: 'auto',
         marginRight: 'auto',
         boxSizing: 'border-box',
-        padding: '32px 36px 24px 36px',
+        padding: isMobile ? '20px 16px' : '32px 36px 24px 36px',
         gap: 0,
       }}>
-        <div style={{ marginBottom: '18px' }}>
-          <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '180px' }} />
+        <div style={{ marginBottom: isMobile ? '12px' : '18px' }}>
+          <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: isMobile ? '120px' : '180px', maxWidth: '100%' }} />
         </div>
-        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', width: '100%', gap: 48, marginTop: 8, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 320 }}>
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: isMobile ? 'column' : 'row', 
+          alignItems: 'flex-start', 
+          justifyContent: 'center', 
+          width: '100%', 
+          gap: isMobile ? 24 : 48, 
+          marginTop: 8, 
+          flexWrap: 'wrap' 
+        }}>
+          <div style={{ 
+            flex: 1, 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            minWidth: isMobile ? '100%' : 320,
+            maxWidth: isMobile ? '100%' : 'none'
+          }}>
             <HomeBoardSVG />
           </div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 320, paddingLeft: 12 }}>
+          <div style={{ 
+            flex: 1, 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: isMobile ? 'center' : 'flex-start', 
+            minWidth: isMobile ? '100%' : 320, 
+            paddingLeft: isMobile ? 0 : 12 
+          }}>
             <div style={{ width: '100%' }}>
               <h2 style={{ marginBottom: '4px', color: '#000' }}>Play Online</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
@@ -3300,12 +3444,19 @@ function GameBoard() {
                         justifyContent: 'flex-start',
                         gap: '12px',
                         cursor: 'pointer',
-                        ...buttonStyle,
-                        background: '#a8a7a8',
+                        backgroundColor: '#a8a7a8',
                         color: '#fff',
+                        padding: '12px 24px',
                         margin: '10px',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: isMobile ? '16px' : '18px',
+                        minWidth: isMobile ? '140px' : '162px',
+                        height: '42px',
+                        maxHeight: '42px',
                         transition: 'all 0.2s',
-                        boxSizing: 'border-box'
+                        boxSizing: 'border-box',
+                        overflow: 'hidden'
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.background = '#9a999a';
@@ -3348,20 +3499,20 @@ function GameBoard() {
                         {userProfile?.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '👤'}
                       </div>
                       <span style={{ 
-                        fontSize: '18px', 
+                        fontSize: isMobile ? '14px' : '18px', 
                         fontWeight: '600',
                         color: '#fff',
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                        whiteSpace: 'nowrap'
+                        whiteSpace: isMobile ? 'normal' : 'nowrap'
                       }}>
                         {userProfile?.username || 'User'}
                       </span>
                       <span style={{ 
-                        fontSize: '18px', 
+                        fontSize: isMobile ? '14px' : '18px', 
                         fontWeight: '600',
                         color: '#fff',
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                        whiteSpace: 'nowrap'
+                        whiteSpace: isMobile ? 'normal' : 'nowrap'
                       }}>
                         Rating {userProfile?.elo_rating || 1000}
                       </span>
@@ -3387,8 +3538,27 @@ function GameBoard() {
           </div>
         </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'stretch', gap: 40, margin: '0 auto 24px', maxWidth: 1100, flexWrap: 'wrap' }}>
-        <div style={{ ...sectionStyle, maxWidth: homepageBoxWidth, minWidth: 320, flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: isMobile ? 'column' : 'row', 
+        justifyContent: 'center', 
+        alignItems: 'stretch', 
+        gap: isMobile ? 20 : 40, 
+        margin: '0 auto 24px', 
+        maxWidth: 1100, 
+        flexWrap: 'wrap',
+        padding: isMobile ? '0 16px' : '0'
+      }}>
+        <div style={{ 
+          ...sectionStyle, 
+          maxWidth: isMobile ? '100%' : homepageBoxWidth, 
+          minWidth: isMobile ? '100%' : 320, 
+          flex: 1, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          minHeight: '100%',
+          padding: isMobile ? '20px 16px' : sectionStyle.padding
+        }}>
           <ul style={{ fontSize: 20, color: '#000', textAlign: 'left', listStyle: 'disc inside', margin: 0, padding: 0, lineHeight: 1.7, fontWeight: 700, fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif' }}>
             {homepageFeatures.map((f, i) => (
               <li key={i} style={{ marginBottom: 8 }}>{f}</li>

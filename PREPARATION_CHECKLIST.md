@@ -10,7 +10,7 @@ Welcome! This checklist will guide you through everything you need to set up bef
 **What is it?** Think of Node.js as the engine that runs JavaScript on your computer (not just in a browser). It's like installing a program that lets your computer understand and run JavaScript code.
 
 **How to do it:**
-1. Go to [nodejs.org](https://nodejs.org/)
+1. Go to [nodejs.org](https://nodejs.hesg/)
 2. Download the **LTS version** (Long-Term Support - this is the stable version)
 3. Run the installer and follow the prompts (just click "Next" through everything)
 4. **Verify it worked:** Open your terminal/PowerShell and type:

@@ -1,0 +1,11 @@
+flask==3.0.0
+flask-cors==4.0.0
+numpy>=1.24.0
+gunicorn>=21.2.0
+
+# Note: GNU Backgammon (gnubg) is not available as a simple pip package
+# It requires system-level installation. The AI service will use a fallback
+# implementation that still supports difficulty levels (1-10).
+# For production, GNU Backgammon can be integrated later via system installation
+# or by using its command-line interface.
+

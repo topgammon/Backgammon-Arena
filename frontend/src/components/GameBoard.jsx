@@ -173,8 +173,15 @@ function GameBoard() {
     username: '',
     country: 'US'
   });
+  const [loginFormData, setLoginFormData] = useState({
+    email: '',
+    password: ''
+  });
   const [signupError, setSignupError] = useState('');
   const [signupLoading, setSignupLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [showLoginForm, setShowLoginForm] = useState(false);
   const timerRef = useRef();
   const prevPlayerRef = useRef(null);
   const cpuDoubleCheckedRef = useRef(false);
@@ -195,6 +202,29 @@ function GameBoard() {
   const [screen, setScreen] = useState('home'); // Start on homepage
   const [cpuDoubleMessage, setCpuDoubleMessage] = useState(null); // Message to show after CPU decides on double
   const [positionEvaluation, setPositionEvaluation] = useState(0); // Current position evaluation (-1 to 1)
+
+  // Auto-detect country based on browser locale when signup form opens
+  useEffect(() => {
+    if (showSignupForm && (!signupFormData.country || signupFormData.country === 'US')) {
+      // Try to detect country from timezone or locale
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const locale = navigator.language || navigator.userLanguage;
+      
+      // Simple country detection based on common patterns
+      let detectedCountry = 'US';
+      if (timezone.includes('Europe/London') || locale.includes('en-GB')) detectedCountry = 'GB';
+      else if (timezone.includes('Europe/') || locale.includes('de')) detectedCountry = 'DE';
+      else if (timezone.includes('Europe/Paris') || locale.includes('fr')) detectedCountry = 'FR';
+      else if (timezone.includes('Europe/Madrid') || locale.includes('es')) detectedCountry = 'ES';
+      else if (timezone.includes('Europe/Rome') || locale.includes('it')) detectedCountry = 'IT';
+      else if (timezone.includes('America/Toronto') || locale.includes('en-CA')) detectedCountry = 'CA';
+      else if (timezone.includes('Australia/') || locale.includes('en-AU')) detectedCountry = 'AU';
+      else if (timezone.includes('America/Sao_Paulo') || locale.includes('pt-BR')) detectedCountry = 'BR';
+      else if (timezone.includes('America/Mexico') || locale.includes('es-MX')) detectedCountry = 'MX';
+      
+      setSignupFormData(prev => ({ ...prev, country: detectedCountry }));
+    }
+  }, [showSignupForm]);
 
   // Check authentication state on mount and when auth changes
   useEffect(() => {
@@ -2845,6 +2875,42 @@ function GameBoard() {
     </div>
   );
 
+  // Login function
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    if (!supabase) {
+      setLoginError('Supabase not configured');
+      return;
+    }
+
+    setLoginError('');
+    setLoginLoading(true);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loginFormData.email,
+        password: loginFormData.password,
+      });
+
+      if (error) {
+        setLoginError(error.message);
+        setLoginLoading(false);
+        return;
+      }
+
+      // Success! User is logged in
+      setShowLoginModal(false);
+      setShowLoginForm(false);
+      setLoginFormData({ email: '', password: '' });
+      setLoginError('');
+    } catch (error) {
+      console.error('Login error:', error);
+      setLoginError('An unexpected error occurred');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
   // Signup function
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -2975,33 +3041,56 @@ function GameBoard() {
               <h2 style={{ marginBottom: '4px', color: '#000' }}>Play Online</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
                 {user ? (
-                  <div 
-                    onClick={() => setScreen('profile')}
-                    style={{
-                      ...buttonStyle,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '10px',
-                      cursor: 'pointer',
-                      textDecoration: 'none'
-                    }}
-                  >
-                    <span style={{ fontSize: '20px' }}>👤</span>
-                    <span>{userProfile?.username || user.email}</span>
-                    <span style={{ fontSize: '18px' }}>
-                      {userProfile?.country === 'US' ? '🇺🇸' : 
-                       userProfile?.country === 'GB' ? '🇬🇧' :
-                       userProfile?.country === 'CA' ? '🇨🇦' :
-                       userProfile?.country === 'AU' ? '🇦🇺' :
-                       userProfile?.country === 'DE' ? '🇩🇪' :
-                       userProfile?.country === 'FR' ? '🇫🇷' :
-                       userProfile?.country === 'ES' ? '🇪🇸' :
-                       userProfile?.country === 'IT' ? '🇮🇹' :
-                       userProfile?.country === 'BR' ? '🇧🇷' :
-                       userProfile?.country === 'MX' ? '🇲🇽' : '🌍'}
-                    </span>
-                  </div>
+                  <>
+                    <div 
+                      onClick={() => setScreen('profile')}
+                      style={{
+                        ...buttonStyle,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '10px',
+                        cursor: 'pointer',
+                        textDecoration: 'none',
+                        padding: '12px 20px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '50%',
+                          background: '#ff751f',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '20px',
+                          color: '#fff',
+                          fontWeight: 'bold',
+                          flexShrink: 0
+                        }}>
+                          {userProfile?.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '👤'}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left' }}>
+                          <span style={{ fontSize: '16px', fontWeight: '600' }}>{userProfile?.username || user.email}</span>
+                          <span style={{ fontSize: '12px', opacity: 0.8 }}>ELO: {userProfile?.elo_rating || 1000}</span>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '20px' }}>
+                        {userProfile?.country === 'US' ? '🇺🇸' : 
+                         userProfile?.country === 'GB' ? '🇬🇧' :
+                         userProfile?.country === 'CA' ? '🇨🇦' :
+                         userProfile?.country === 'AU' ? '🇦🇺' :
+                         userProfile?.country === 'DE' ? '🇩🇪' :
+                         userProfile?.country === 'FR' ? '🇫🇷' :
+                         userProfile?.country === 'ES' ? '🇪🇸' :
+                         userProfile?.country === 'IT' ? '🇮🇹' :
+                         userProfile?.country === 'BR' ? '🇧🇷' :
+                         userProfile?.country === 'MX' ? '🇲🇽' : '🌍'}
+                      </span>
+                    </div>
+                    <button style={buttonStyle} onClick={() => alert('Coming soon!')}>Play Game</button>
+                  </>
                 ) : (
                   <>
                     <button style={buttonStyle} onClick={() => alert('Coming soon!')}>Play as Guest</button>
@@ -3087,6 +3176,12 @@ function GameBoard() {
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setShowLoginModal(false);
+              setShowSignupForm(false);
+              setShowLoginForm(false);
+              setSignupError('');
+              setLoginError('');
+              setSignupFormData({ email: '', password: '', username: '', country: 'US' });
+              setLoginFormData({ email: '', password: '' });
             }
           }}
         >
@@ -3105,7 +3200,15 @@ function GameBoard() {
           >
             {/* Close Button */}
             <button
-              onClick={() => setShowLoginModal(false)}
+              onClick={() => {
+                setShowLoginModal(false);
+                setShowSignupForm(false);
+                setShowLoginForm(false);
+                setSignupError('');
+                setLoginError('');
+                setSignupFormData({ email: '', password: '', username: '', country: 'US' });
+                setLoginFormData({ email: '', password: '' });
+              }}
               style={{
                 position: 'absolute',
                 top: '16px',
@@ -3217,7 +3320,8 @@ function GameBoard() {
                   color: '#fff',
                   transition: 'all 0.2s',
                   fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                  boxShadow: '0 2px 4px rgba(255, 117, 31, 0.3)'
+                  boxShadow: '0 2px 4px rgba(255, 117, 31, 0.3)',
+                  marginBottom: '16px'
                 }}
                 onMouseEnter={(e) => {
                   e.target.style.background = '#e6640f';
@@ -3230,6 +3334,97 @@ function GameBoard() {
               >
                 Create Account
               </button>
+
+              {/* Login Form */}
+              <div style={{ marginBottom: '16px' }}>
+                <form onSubmit={handleLogin} style={{ textAlign: 'left' }}>
+                  <div style={{ marginBottom: '12px' }}>
+                    <input
+                      type="email"
+                      placeholder="Email"
+                      value={loginFormData.email}
+                      onChange={(e) => setLoginFormData({ ...loginFormData, email: e.target.value })}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: '2px solid #ddd',
+                        borderRadius: '8px',
+                        fontSize: '15px',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                        boxSizing: 'border-box',
+                        transition: 'border-color 0.2s'
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = '#ff751f'}
+                      onBlur={(e) => e.target.style.borderColor = '#ddd'}
+                    />
+                  </div>
+                  <div style={{ marginBottom: '12px' }}>
+                    <input
+                      type="password"
+                      placeholder="Password"
+                      value={loginFormData.password}
+                      onChange={(e) => setLoginFormData({ ...loginFormData, password: e.target.value })}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        border: '2px solid #ddd',
+                        borderRadius: '8px',
+                        fontSize: '15px',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                        boxSizing: 'border-box',
+                        transition: 'border-color 0.2s'
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = '#ff751f'}
+                      onBlur={(e) => e.target.style.borderColor = '#ddd'}
+                    />
+                  </div>
+                  {loginError && (
+                    <div style={{
+                      marginBottom: '12px',
+                      padding: '10px',
+                      background: '#fee',
+                      border: '1px solid #fcc',
+                      borderRadius: '8px',
+                      color: '#c33',
+                      fontSize: '13px',
+                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                    }}>
+                      {loginError}
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={loginLoading}
+                    style={{
+                      width: '100%',
+                      padding: '12px 24px',
+                      background: loginLoading ? '#ccc' : '#6c757d',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '15px',
+                      fontWeight: '600',
+                      cursor: loginLoading ? 'not-allowed' : 'pointer',
+                      color: '#fff',
+                      transition: 'all 0.2s',
+                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!loginLoading) {
+                        e.target.style.background = '#5a6268';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!loginLoading) {
+                        e.target.style.background = '#6c757d';
+                      }
+                    }}
+                  >
+                    {loginLoading ? 'Logging in...' : 'Login'}
+                  </button>
+                </form>
+              </div>
 
               {/* Divider */}
               <div style={{ 

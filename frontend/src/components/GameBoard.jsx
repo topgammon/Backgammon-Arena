@@ -162,6 +162,7 @@ function GameBoard() {
   const [showConfirmResign, setShowConfirmResign] = useState(false);
   const [gameOver, setGameOver] = useState(null);
   const [timer, setTimer] = useState(45);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const timerRef = useRef();
   const prevPlayerRef = useRef(null);
   const cpuDoubleCheckedRef = useRef(false);
@@ -2835,7 +2836,7 @@ function GameBoard() {
               <h2 style={{ marginBottom: '4px', color: '#000' }}>Play Online</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
                 <button style={buttonStyle} onClick={() => alert('Coming soon!')}>Play as Guest</button>
-                <button style={buttonStyle} onClick={() => alert('Coming soon!')}>Login / Signup</button>
+                <button style={buttonStyle} onClick={() => setShowLoginModal(true)}>Login / Signup</button>
               </div>
               <h2 style={{ marginBottom: '4px', color: '#000' }}>Play Offline</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -2895,6 +2896,218 @@ function GameBoard() {
       <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'stretch', gap: 40, margin: '0 auto 24px', maxWidth: 1100, flexWrap: 'wrap' }}>
         <div style={{ ...sectionStyle, maxWidth: homepageBoxWidth, minWidth: 320, flex: 1 }}>{history}</div>
       </div>
+      
+      {/* Login/Signup Modal */}
+      {showLoginModal && (
+        <div 
+          style={{ 
+            position: 'fixed', 
+            top: 0, 
+            left: 0, 
+            width: '100vw', 
+            height: '100vh', 
+            background: 'rgba(0, 0, 0, 0.5)', 
+            zIndex: 2000, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            backdropFilter: 'blur(4px)'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowLoginModal(false);
+            }
+          }}
+        >
+          <div 
+            style={{ 
+              background: '#fff', 
+              borderRadius: '16px', 
+              padding: '40px', 
+              minWidth: '400px', 
+              maxWidth: '480px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+              position: 'relative',
+              animation: 'fadeIn 0.2s ease-in'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              onClick={() => setShowLoginModal(false)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: 'transparent',
+                border: 'none',
+                fontSize: '28px',
+                cursor: 'pointer',
+                color: '#666',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '50%',
+                transition: 'all 0.2s',
+                lineHeight: 1
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = '#f0f0f0';
+                e.target.style.color = '#000';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = 'transparent';
+                e.target.style.color = '#666';
+              }}
+            >
+              ×
+            </button>
+
+            {/* Modal Content */}
+            <div style={{ textAlign: 'center' }}>
+              <h2 style={{ 
+                margin: '0 0 8px 0', 
+                fontSize: '28px', 
+                fontWeight: 'bold', 
+                color: '#000',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+              }}>
+                Welcome to TopGammon
+              </h2>
+              <p style={{ 
+                margin: '0 0 32px 0', 
+                fontSize: '16px', 
+                color: '#666',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+              }}>
+                Sign in to track your stats and play ranked matches
+              </p>
+
+              {/* Google Sign In Button */}
+              <button
+                onClick={() => {
+                  // TODO: Implement Google sign in
+                  alert('Google sign in coming soon!');
+                }}
+                style={{
+                  width: '100%',
+                  padding: '14px 24px',
+                  marginBottom: '16px',
+                  background: '#fff',
+                  border: '2px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  color: '#333',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '12px',
+                  transition: 'all 0.2s',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.borderColor = '#4285f4';
+                  e.target.style.boxShadow = '0 4px 8px rgba(66, 133, 244, 0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.borderColor = '#ddd';
+                  e.target.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Continue with Google
+              </button>
+
+              {/* Create Account Button */}
+              <button
+                onClick={() => {
+                  // TODO: Implement create account
+                  alert('Create account coming soon!');
+                }}
+                style={{
+                  width: '100%',
+                  padding: '14px 24px',
+                  background: '#ff751f',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  color: '#fff',
+                  transition: 'all 0.2s',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                  boxShadow: '0 2px 4px rgba(255, 117, 31, 0.3)'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#e6640f';
+                  e.target.style.boxShadow = '0 4px 8px rgba(255, 117, 31, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = '#ff751f';
+                  e.target.style.boxShadow = '0 2px 4px rgba(255, 117, 31, 0.3)';
+                }}
+              >
+                Create Account
+              </button>
+
+              {/* Divider */}
+              <div style={{ 
+                margin: '24px 0', 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '12px',
+                color: '#999',
+                fontSize: '14px'
+              }}>
+                <div style={{ flex: 1, height: '1px', background: '#ddd' }}></div>
+                <span>or</span>
+                <div style={{ flex: 1, height: '1px', background: '#ddd' }}></div>
+              </div>
+
+              {/* Guest Play Option */}
+              <button
+                onClick={() => {
+                  setShowLoginModal(false);
+                  alert('Guest play coming soon!');
+                }}
+                style={{
+                  width: '100%',
+                  padding: '12px 24px',
+                  background: 'transparent',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '15px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  color: '#666',
+                  transition: 'all 0.2s',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.borderColor = '#999';
+                  e.target.style.color = '#333';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.borderColor = '#ddd';
+                  e.target.style.color = '#666';
+                }}
+              >
+                Continue as Guest
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 

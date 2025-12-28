@@ -43,6 +43,7 @@ CREATE TABLE public.users (
   username TEXT UNIQUE,
   email TEXT,
   country TEXT DEFAULT 'US',
+  avatar TEXT DEFAULT 'Barry',
   elo_rating INTEGER DEFAULT 1000,
   wins INTEGER DEFAULT 0,
   losses INTEGER DEFAULT 0,

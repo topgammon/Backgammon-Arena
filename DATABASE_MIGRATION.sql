@@ -45,7 +45,36 @@ UPDATE public.users
 SET games_played = 0 
 WHERE games_played IS NULL;
 
--- 4. Verify the changes
+-- 3. Add avatar column if it doesn't exist
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+    AND table_name = 'users' 
+    AND column_name = 'avatar'
+  ) THEN
+    ALTER TABLE public.users ADD COLUMN avatar TEXT DEFAULT 'Barry';
+    RAISE NOTICE 'Added avatar column';
+  ELSE
+    RAISE NOTICE 'Avatar column already exists';
+  END IF;
+END $$;
+
+-- 4. Update existing users to have default values (if they're NULL)
+UPDATE public.users 
+SET country = 'US' 
+WHERE country IS NULL;
+
+UPDATE public.users 
+SET games_played = 0 
+WHERE games_played IS NULL;
+
+UPDATE public.users 
+SET avatar = 'Barry' 
+WHERE avatar IS NULL;
+
+-- 5. Verify the changes
 SELECT 
   column_name, 
   data_type, 
@@ -54,6 +83,6 @@ SELECT
 FROM information_schema.columns 
 WHERE table_schema = 'public' 
   AND table_name = 'users'
-  AND column_name IN ('country', 'games_played')
+  AND column_name IN ('country', 'games_played', 'avatar')
 ORDER BY column_name;
 

@@ -184,7 +184,16 @@ function GameBoard() {
   const [showLoginForm, setShowLoginForm] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
+  const [editingCountry, setEditingCountry] = useState(false);
+  const [newCountry, setNewCountry] = useState('');
+  const [showAvatarSelector, setShowAvatarSelector] = useState(false);
   const timerRef = useRef();
+  
+  // Available avatars
+  const availableAvatars = [
+    'Barry', 'Bruce', 'Charles', 'Dennis', 'Edward', 'Gregory',
+    'Martin', 'Milo', 'Ronald', 'Seamus', 'Seymour', 'Troy'
+  ];
   const prevPlayerRef = useRef(null);
   const cpuDoubleCheckedRef = useRef(false);
   const [isRolling, setIsRolling] = useState(false);
@@ -276,6 +285,7 @@ function GameBoard() {
               email: user.email,
               username: user.user_metadata.username,
               country: user.user_metadata.country || 'US',
+              avatar: 'Barry', // Default to first avatar
               elo_rating: 1000,
               wins: 0,
               losses: 0,
@@ -3068,7 +3078,7 @@ function GameBoard() {
         return;
       }
 
-      // Create user profile in database
+      // Create user profile in database (default avatar is first one: Barry)
       const { error: profileError } = await supabase
         .from('users')
         .insert({
@@ -3076,6 +3086,7 @@ function GameBoard() {
           email: signupFormData.email,
           username: signupFormData.username,
           country: signupFormData.country,
+          avatar: 'Barry', // Default to first avatar
           elo_rating: 1000,
           wins: 0,
           losses: 0,
@@ -3171,9 +3182,9 @@ function GameBoard() {
                         justifyContent: 'flex-start',
                         gap: '12px',
                         cursor: 'pointer',
-                        padding: '12px 16px',
+                        padding: '12px 24px',
                         background: '#a8a7a8',
-                        borderRadius: '8px',
+                        borderRadius: '6px',
                         transition: 'all 0.2s',
                         minWidth: '162px',
                         boxSizing: 'border-box'
@@ -3185,12 +3196,30 @@ function GameBoard() {
                         e.currentTarget.style.background = '#a8a7a8';
                       }}
                     >
+                      {userProfile?.avatar ? (
+                        <img 
+                          src={`/avatars/${userProfile.avatar}.png`}
+                          alt={userProfile.avatar}
+                          style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '8px',
+                            objectFit: 'cover',
+                            flexShrink: 0
+                          }}
+                          onError={(e) => {
+                            // Fallback to initial if image fails to load
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
                       <div style={{
                         width: '36px',
                         height: '36px',
-                        borderRadius: '50%',
+                        borderRadius: '8px',
                         background: '#ff751f',
-                        display: 'flex',
+                        display: userProfile?.avatar ? 'none' : 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontSize: '16px',
@@ -3201,7 +3230,7 @@ function GameBoard() {
                         {userProfile?.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '👤'}
                       </div>
                       <span style={{ 
-                        fontSize: '15px', 
+                        fontSize: '18px', 
                         fontWeight: '600',
                         color: '#fff',
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
@@ -3210,13 +3239,13 @@ function GameBoard() {
                         {userProfile?.username || 'User'}
                       </span>
                       <span style={{ 
-                        fontSize: '15px', 
+                        fontSize: '18px', 
                         fontWeight: '600',
                         color: '#fff',
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
                         whiteSpace: 'nowrap'
                       }}>
-                        {userProfile?.elo_rating || 1000}
+                        Rating {userProfile?.elo_rating || 1000}
                       </span>
                       <span style={{ fontSize: '18px', flexShrink: 0 }}>
                         {userProfile?.country === 'US' ? '🇺🇸' : 
@@ -4112,6 +4141,41 @@ function GameBoard() {
       }
     };
 
+    const handleUpdateCountry = async () => {
+      if (!supabase || !newCountry) return;
+
+      const { error } = await supabase
+        .from('users')
+        .update({ country: newCountry })
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('Error updating country:', error);
+        alert('Failed to update country');
+      } else {
+        setUserProfile({ ...userProfile, country: newCountry });
+        setEditingCountry(false);
+        setNewCountry('');
+      }
+    };
+
+    const handleUpdateAvatar = async (avatarName) => {
+      if (!supabase) return;
+
+      const { error } = await supabase
+        .from('users')
+        .update({ avatar: avatarName })
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('Error updating avatar:', error);
+        alert('Failed to update avatar');
+      } else {
+        setUserProfile({ ...userProfile, avatar: avatarName });
+        setShowAvatarSelector(false);
+      }
+    };
+
     return (
       <div style={{ textAlign: 'center', marginTop: 30, paddingBottom: 40, background: '#a8a7a8', minHeight: '100vh' }}>
         <div style={{
@@ -4143,20 +4207,64 @@ function GameBoard() {
             alignItems: 'center',
             textAlign: 'left'
           }}>
-            <div style={{
-              width: '120px',
-              height: '120px',
-              borderRadius: '50%',
-              background: '#ff751f',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '48px',
-              color: '#fff',
-              fontWeight: 'bold',
-              flexShrink: 0
-            }}>
-              {userProfile?.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '👤'}
+            <div style={{ position: 'relative' }}>
+              {userProfile?.avatar ? (
+                <img 
+                  src={`/avatars/${userProfile.avatar}.png`}
+                  alt={userProfile.avatar}
+                  onClick={() => setShowAvatarSelector(true)}
+                  style={{
+                    width: '120px',
+                    height: '120px',
+                    borderRadius: '12px',
+                    objectFit: 'cover',
+                    cursor: 'pointer',
+                    border: '3px solid #ff751f',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.opacity = '0.8';
+                    e.target.style.transform = 'scale(1.05)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.opacity = '1';
+                    e.target.style.transform = 'scale(1)';
+                  }}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              <div 
+                onClick={() => setShowAvatarSelector(true)}
+                style={{
+                  width: '120px',
+                  height: '120px',
+                  borderRadius: '12px',
+                  background: '#ff751f',
+                  display: userProfile?.avatar ? 'none' : 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '48px',
+                  color: '#fff',
+                  fontWeight: 'bold',
+                  flexShrink: 0,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  border: '3px solid #ff751f'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.opacity = '0.8';
+                  e.target.style.transform = 'scale(1.05)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.opacity = '1';
+                  e.target.style.transform = 'scale(1)';
+                }}
+              >
+                {userProfile?.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '👤'}
+              </div>
             </div>
             <div>
               <h1 style={{ 
@@ -4168,13 +4276,114 @@ function GameBoard() {
                 {userProfile?.username || 'User'}
               </h1>
               <p style={{ 
-                margin: '0', 
+                margin: '0 0 8px 0', 
                 fontSize: '16px', 
                 color: '#666',
                 fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
               }}>
                 {user.email}
               </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ 
+                  fontSize: '16px', 
+                  color: '#666',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                }}>
+                  {editingCountry ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <select
+                        value={newCountry || userProfile?.country || 'US'}
+                        onChange={(e) => setNewCountry(e.target.value)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          border: '2px solid #ddd',
+                          fontSize: '14px',
+                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                        }}
+                      >
+                        <option value="US">🇺🇸 United States</option>
+                        <option value="GB">🇬🇧 United Kingdom</option>
+                        <option value="CA">🇨🇦 Canada</option>
+                        <option value="AU">🇦🇺 Australia</option>
+                        <option value="DE">🇩🇪 Germany</option>
+                        <option value="FR">🇫🇷 France</option>
+                        <option value="ES">🇪🇸 Spain</option>
+                        <option value="IT">🇮🇹 Italy</option>
+                        <option value="BR">🇧🇷 Brazil</option>
+                        <option value="MX">🇲🇽 Mexico</option>
+                      </select>
+                      <button
+                        onClick={handleUpdateCountry}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#28a745',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                        }}
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingCountry(false);
+                          setNewCountry('');
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#6c757d',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: '20px' }}>
+                        {userProfile?.country === 'US' ? '🇺🇸' : 
+                         userProfile?.country === 'GB' ? '🇬🇧' :
+                         userProfile?.country === 'CA' ? '🇨🇦' :
+                         userProfile?.country === 'AU' ? '🇦🇺' :
+                         userProfile?.country === 'DE' ? '🇩🇪' :
+                         userProfile?.country === 'FR' ? '🇫🇷' :
+                         userProfile?.country === 'ES' ? '🇪🇸' :
+                         userProfile?.country === 'IT' ? '🇮🇹' :
+                         userProfile?.country === 'BR' ? '🇧🇷' :
+                         userProfile?.country === 'MX' ? '🇲🇽' : '🌍'}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setEditingCountry(true);
+                          setNewCountry(userProfile?.country || 'US');
+                        }}
+                        style={{
+                          marginLeft: '8px',
+                          padding: '4px 12px',
+                          background: 'transparent',
+                          color: '#666',
+                          border: '1px solid #ddd',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                        }}
+                      >
+                        Edit
+                      </button>
+                    </>
+                  )}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -4266,6 +4475,144 @@ function GameBoard() {
             Sign Out
           </button>
         </div>
+
+        {/* Avatar Selector Modal */}
+        {showAvatarSelector && (
+          <div 
+            style={{ 
+              position: 'fixed', 
+              top: 0, 
+              left: 0, 
+              width: '100vw', 
+              height: '100vh', 
+              background: 'rgba(0, 0, 0, 0.5)', 
+              zIndex: 2000, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              backdropFilter: 'blur(4px)'
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowAvatarSelector(false);
+              }
+            }}
+          >
+            <div 
+              style={{ 
+                background: '#fff', 
+                borderRadius: '16px', 
+                padding: '40px', 
+                minWidth: '500px', 
+                maxWidth: '600px',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+                position: 'relative',
+                animation: 'fadeIn 0.2s ease-in'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setShowAvatarSelector(false)}
+                style={{
+                  position: 'absolute',
+                  top: '16px',
+                  right: '16px',
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '28px',
+                  cursor: 'pointer',
+                  color: '#666',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '50%',
+                  transition: 'all 0.2s',
+                  lineHeight: 1
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#f0f0f0';
+                  e.target.style.color = '#000';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = 'transparent';
+                  e.target.style.color = '#666';
+                }}
+              >
+                ×
+              </button>
+
+              <h2 style={{ 
+                margin: '0 0 24px 0', 
+                fontSize: '24px', 
+                fontWeight: 'bold', 
+                color: '#000',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+              }}>
+                Choose Your Avatar
+              </h2>
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: '16px'
+              }}>
+                {availableAvatars.map((avatarName) => (
+                  <div
+                    key={avatarName}
+                    onClick={() => handleUpdateAvatar(avatarName)}
+                    style={{
+                      cursor: 'pointer',
+                      padding: '8px',
+                      borderRadius: '12px',
+                      border: userProfile?.avatar === avatarName ? '3px solid #ff751f' : '2px solid #ddd',
+                      background: userProfile?.avatar === avatarName ? '#fff5f0' : '#fff',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = '#ff751f';
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (userProfile?.avatar !== avatarName) {
+                        e.currentTarget.style.borderColor = '#ddd';
+                      }
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                  >
+                    <img 
+                      src={`/avatars/${avatarName}.png`}
+                      alt={avatarName}
+                      style={{
+                        width: '100%',
+                        height: 'auto',
+                        borderRadius: '8px',
+                        display: 'block'
+                      }}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        const fallback = document.createElement('div');
+                        fallback.textContent = avatarName[0];
+                        fallback.style.cssText = 'width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; background: #ff751f; color: #fff; font-weight: bold; border-radius: 8px;';
+                        e.target.parentNode.appendChild(fallback);
+                      }}
+                    />
+                    <p style={{
+                      margin: '8px 0 0 0',
+                      fontSize: '12px',
+                      textAlign: 'center',
+                      color: '#666',
+                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                    }}>
+                      {avatarName}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };

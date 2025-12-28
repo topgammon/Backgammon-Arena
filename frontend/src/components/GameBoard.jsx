@@ -188,7 +188,7 @@ function GameBoard() {
   const [newCountry, setNewCountry] = useState('');
   const [showAvatarSelector, setShowAvatarSelector] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
   const timerRef = useRef();
   
   // Track window width for responsive design

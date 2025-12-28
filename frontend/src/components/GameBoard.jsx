@@ -194,6 +194,71 @@ function GameBoard() {
     'Barry', 'Bruce', 'Charles', 'Dennis', 'Edward', 'Gregory',
     'Martin', 'Milo', 'Ronald', 'Seamus', 'Seymour', 'Troy'
   ];
+
+  // Country list with flags
+  const countries = [
+    { code: 'US', name: 'United States', flag: '🇺🇸' },
+    { code: 'GB', name: 'United Kingdom', flag: '🇬🇧' },
+    { code: 'CA', name: 'Canada', flag: '🇨🇦' },
+    { code: 'AU', name: 'Australia', flag: '🇦🇺' },
+    { code: 'DE', name: 'Germany', flag: '🇩🇪' },
+    { code: 'FR', name: 'France', flag: '🇫🇷' },
+    { code: 'ES', name: 'Spain', flag: '🇪🇸' },
+    { code: 'IT', name: 'Italy', flag: '🇮🇹' },
+    { code: 'BR', name: 'Brazil', flag: '🇧🇷' },
+    { code: 'MX', name: 'Mexico', flag: '🇲🇽' },
+    { code: 'AR', name: 'Argentina', flag: '🇦🇷' },
+    { code: 'CL', name: 'Chile', flag: '🇨🇱' },
+    { code: 'CO', name: 'Colombia', flag: '🇨🇴' },
+    { code: 'PE', name: 'Peru', flag: '🇵🇪' },
+    { code: 'VE', name: 'Venezuela', flag: '🇻🇪' },
+    { code: 'NL', name: 'Netherlands', flag: '🇳🇱' },
+    { code: 'BE', name: 'Belgium', flag: '🇧🇪' },
+    { code: 'CH', name: 'Switzerland', flag: '🇨🇭' },
+    { code: 'AT', name: 'Austria', flag: '🇦🇹' },
+    { code: 'SE', name: 'Sweden', flag: '🇸🇪' },
+    { code: 'NO', name: 'Norway', flag: '🇳🇴' },
+    { code: 'DK', name: 'Denmark', flag: '🇩🇰' },
+    { code: 'FI', name: 'Finland', flag: '🇫🇮' },
+    { code: 'PL', name: 'Poland', flag: '🇵🇱' },
+    { code: 'CZ', name: 'Czech Republic', flag: '🇨🇿' },
+    { code: 'GR', name: 'Greece', flag: '🇬🇷' },
+    { code: 'PT', name: 'Portugal', flag: '🇵🇹' },
+    { code: 'IE', name: 'Ireland', flag: '🇮🇪' },
+    { code: 'TR', name: 'Turkey', flag: '🇹🇷' },
+    { code: 'RU', name: 'Russia', flag: '🇷🇺' },
+    { code: 'UA', name: 'Ukraine', flag: '🇺🇦' },
+    { code: 'IL', name: 'Israel', flag: '🇮🇱' },
+    { code: 'SA', name: 'Saudi Arabia', flag: '🇸🇦' },
+    { code: 'AE', name: 'United Arab Emirates', flag: '🇦🇪' },
+    { code: 'EG', name: 'Egypt', flag: '🇪🇬' },
+    { code: 'ZA', name: 'South Africa', flag: '🇿🇦' },
+    { code: 'NG', name: 'Nigeria', flag: '🇳🇬' },
+    { code: 'KE', name: 'Kenya', flag: '🇰🇪' },
+    { code: 'IN', name: 'India', flag: '🇮🇳' },
+    { code: 'PK', name: 'Pakistan', flag: '🇵🇰' },
+    { code: 'BD', name: 'Bangladesh', flag: '🇧🇩' },
+    { code: 'CN', name: 'China', flag: '🇨🇳' },
+    { code: 'JP', name: 'Japan', flag: '🇯🇵' },
+    { code: 'KR', name: 'South Korea', flag: '🇰🇷' },
+    { code: 'TH', name: 'Thailand', flag: '🇹🇭' },
+    { code: 'VN', name: 'Vietnam', flag: '🇻🇳' },
+    { code: 'PH', name: 'Philippines', flag: '🇵🇭' },
+    { code: 'ID', name: 'Indonesia', flag: '🇮🇩' },
+    { code: 'MY', name: 'Malaysia', flag: '🇲🇾' },
+    { code: 'SG', name: 'Singapore', flag: '🇸🇬' },
+    { code: 'NZ', name: 'New Zealand', flag: '🇳🇿' },
+    { code: 'IS', name: 'Iceland', flag: '🇮🇸' },
+    { code: 'LU', name: 'Luxembourg', flag: '🇱🇺' },
+    { code: 'MT', name: 'Malta', flag: '🇲🇹' },
+    { code: 'CY', name: 'Cyprus', flag: '🇨🇾' }
+  ];
+
+  // Helper function to get country flag
+  const getCountryFlag = (countryCode) => {
+    const country = countries.find(c => c.code === countryCode);
+    return country ? country.flag : '🌍';
+  };
   const prevPlayerRef = useRef(null);
   const cpuDoubleCheckedRef = useRef(false);
   const [isRolling, setIsRolling] = useState(false);
@@ -2852,6 +2917,7 @@ function GameBoard() {
     margin: '20px auto',
     maxWidth: '400px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
   };
 
   const homepageBoxWidth = 480;
@@ -2868,8 +2934,25 @@ function GameBoard() {
 
   const howToPlay = (
     <div style={sectionStyle}>
-      <h2 style={{ color: '#bfa76f' }}>How to Play Backgammon</h2>
-      <ol style={{ textAlign: 'left', maxWidth: 600, margin: '0 auto', fontSize: 17, color: '#333' }}>
+      <h2 style={{ 
+        color: '#000', 
+        fontSize: '24px',
+        fontWeight: 'bold',
+        marginBottom: '20px',
+        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+      }}>
+        How to Play Backgammon
+      </h2>
+      <ol style={{ 
+        textAlign: 'left', 
+        maxWidth: 600, 
+        margin: '0 auto', 
+        fontSize: 16, 
+        color: '#333',
+        lineHeight: 1.6,
+        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+        paddingLeft: '20px'
+      }}>
         <li><b>Setup:</b> Each player has 15 checkers. The board has 24 triangles (points), a bar, and bear-off area.</li>
         <li><b>Objective:</b> Move all your checkers into your home board and bear them off before your opponent does.</li>
         <li><b>Movement:</b> Players take turns rolling two dice and move checkers according to the numbers rolled. You can split the dice between two checkers or use both numbers for one checker.</li>
@@ -2884,8 +2967,27 @@ function GameBoard() {
 
   const glossary = (
     <div style={sectionStyle}>
-      <h2 style={{ color: '#bfa76f' }}>Backgammon Glossary</h2>
-      <ul style={{ textAlign: 'left', maxWidth: 600, margin: '0 auto', fontSize: 17, color: '#333', columns: 2, columnGap: 32 }}>
+      <h2 style={{ 
+        color: '#000', 
+        fontSize: '24px',
+        fontWeight: 'bold',
+        marginBottom: '20px',
+        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+      }}>
+        Backgammon Glossary
+      </h2>
+      <ul style={{ 
+        textAlign: 'left', 
+        maxWidth: 600, 
+        margin: '0 auto', 
+        fontSize: 16, 
+        color: '#333', 
+        columns: 2, 
+        columnGap: 32,
+        lineHeight: 1.6,
+        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+        paddingLeft: '20px'
+      }}>
         <li><b>Point:</b> A triangle on the board (1-24).</li>
         <li><b>Bar:</b> The center strip where hit checkers go.</li>
         <li><b>Bear Off:</b> Removing checkers from the board.</li>
@@ -2907,8 +3009,24 @@ function GameBoard() {
 
   const history = (
     <div style={sectionStyle}>
-      <h2 style={{ color: '#bfa76f' }}>A Brief History of Backgammon</h2>
-      <p style={{ maxWidth: 600, margin: '0 auto', fontSize: 17, color: '#333', textAlign: 'left' }}>
+      <h2 style={{ 
+        color: '#000', 
+        fontSize: '24px',
+        fontWeight: 'bold',
+        marginBottom: '20px',
+        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+      }}>
+        A Brief History of Backgammon
+      </h2>
+      <p style={{ 
+        maxWidth: 600, 
+        margin: '0 auto', 
+        fontSize: 16, 
+        color: '#333', 
+        textAlign: 'left',
+        lineHeight: 1.6,
+        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+      }}>
         Backgammon is one of the oldest known board games, dating back over 5,000 years to ancient Mesopotamia. It has been played by kings, scholars, and everyday people across Persia, Rome, and the Middle East. The modern rules were standardized in the 20th century, and today backgammon is enjoyed worldwide for its blend of strategy and luck. Whether played casually or competitively, backgammon remains a timeless classic.
       </p>
     </div>
@@ -3182,11 +3300,11 @@ function GameBoard() {
                         justifyContent: 'flex-start',
                         gap: '12px',
                         cursor: 'pointer',
-                        padding: '12px 24px',
+                        ...buttonStyle,
                         background: '#a8a7a8',
-                        borderRadius: '6px',
+                        color: '#fff',
+                        margin: '10px',
                         transition: 'all 0.2s',
-                        minWidth: '162px',
                         boxSizing: 'border-box'
                       }}
                       onMouseEnter={(e) => {
@@ -3248,16 +3366,7 @@ function GameBoard() {
                         Rating {userProfile?.elo_rating || 1000}
                       </span>
                       <span style={{ fontSize: '18px', flexShrink: 0 }}>
-                        {userProfile?.country === 'US' ? '🇺🇸' : 
-                         userProfile?.country === 'GB' ? '🇬🇧' :
-                         userProfile?.country === 'CA' ? '🇨🇦' :
-                         userProfile?.country === 'AU' ? '🇦🇺' :
-                         userProfile?.country === 'DE' ? '🇩🇪' :
-                         userProfile?.country === 'FR' ? '🇫🇷' :
-                         userProfile?.country === 'ES' ? '🇪🇸' :
-                         userProfile?.country === 'IT' ? '🇮🇹' :
-                         userProfile?.country === 'BR' ? '🇧🇷' :
-                         userProfile?.country === 'MX' ? '🇲🇽' : '🌍'}
+                        {getCountryFlag(userProfile?.country)}
                       </span>
                     </div>
                     <button style={buttonStyle} onClick={() => alert('Coming soon!')}>Play Game</button>
@@ -3287,10 +3396,26 @@ function GameBoard() {
           </ul>
         </div>
         <div style={{ ...sectionStyle, maxWidth: homepageBoxWidth, minWidth: 320, flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-          <h2 style={{ color: '#bfa76f' }}>Leaderboards</h2>
+          <h2 style={{ 
+            color: '#000', 
+            fontSize: '24px',
+            fontWeight: 'bold',
+            marginBottom: '20px',
+            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+          }}>
+            Leaderboards
+          </h2>
           <div style={{ display: 'flex', flexDirection: 'row', gap: 24, justifyContent: 'center', marginTop: 16, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 180, maxWidth: 240, background: '#fff', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', padding: 12, margin: '0 4px' }}>
-              <h3 style={{ margin: '0 0 8px 0', fontSize: 18, color: '#bfa76f' }}>Highest Rating</h3>
+              <h3 style={{ 
+                margin: '0 0 8px 0', 
+                fontSize: 18, 
+                color: '#000',
+                fontWeight: 'bold',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+              }}>
+                Highest Rating
+              </h3>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15 }}>
                 <thead>
                   <tr style={{ color: '#888', fontWeight: 600 }}>
@@ -3304,7 +3429,15 @@ function GameBoard() {
               </table>
             </div>
             <div style={{ flex: 1, minWidth: 180, maxWidth: 240, background: '#fff', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', padding: 12, margin: '0 4px' }}>
-              <h3 style={{ margin: '0 0 8px 0', fontSize: 18, color: '#bfa76f' }}>Most Wins All Time</h3>
+              <h3 style={{ 
+                margin: '0 0 8px 0', 
+                fontSize: 18, 
+                color: '#000',
+                fontWeight: 'bold',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+              }}>
+                Most Wins All Time
+              </h3>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15 }}>
                 <thead>
                   <tr style={{ color: '#888', fontWeight: 600 }}>
@@ -4299,19 +4432,15 @@ function GameBoard() {
                           borderRadius: '6px',
                           border: '2px solid #ddd',
                           fontSize: '14px',
-                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                          minWidth: '200px'
                         }}
                       >
-                        <option value="US">🇺🇸 United States</option>
-                        <option value="GB">🇬🇧 United Kingdom</option>
-                        <option value="CA">🇨🇦 Canada</option>
-                        <option value="AU">🇦🇺 Australia</option>
-                        <option value="DE">🇩🇪 Germany</option>
-                        <option value="FR">🇫🇷 France</option>
-                        <option value="ES">🇪🇸 Spain</option>
-                        <option value="IT">🇮🇹 Italy</option>
-                        <option value="BR">🇧🇷 Brazil</option>
-                        <option value="MX">🇲🇽 Mexico</option>
+                        {countries.map(country => (
+                          <option key={country.code} value={country.code}>
+                            {country.flag} {country.name}
+                          </option>
+                        ))}
                       </select>
                       <button
                         onClick={handleUpdateCountry}
@@ -4350,16 +4479,7 @@ function GameBoard() {
                   ) : (
                     <>
                       <span style={{ fontSize: '20px' }}>
-                        {userProfile?.country === 'US' ? '🇺🇸' : 
-                         userProfile?.country === 'GB' ? '🇬🇧' :
-                         userProfile?.country === 'CA' ? '🇨🇦' :
-                         userProfile?.country === 'AU' ? '🇦🇺' :
-                         userProfile?.country === 'DE' ? '🇩🇪' :
-                         userProfile?.country === 'FR' ? '🇫🇷' :
-                         userProfile?.country === 'ES' ? '🇪🇸' :
-                         userProfile?.country === 'IT' ? '🇮🇹' :
-                         userProfile?.country === 'BR' ? '🇧🇷' :
-                         userProfile?.country === 'MX' ? '🇲🇽' : '🌍'}
+                        {getCountryFlag(userProfile?.country)}
                       </span>
                       <button
                         onClick={() => {

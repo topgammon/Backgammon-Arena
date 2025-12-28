@@ -1,0 +1,2 @@
+web: python python_ai_service.py
+

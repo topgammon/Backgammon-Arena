@@ -10,6 +10,9 @@
     "dev": "node server.js",
     "start": "node server.js"
   },
+  "railway": {
+    "startCommand": "python python_ai_service.py"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

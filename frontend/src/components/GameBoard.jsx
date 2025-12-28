@@ -3066,38 +3066,68 @@ function GameBoard() {
                     <div 
                       onClick={() => setScreen('profile')}
                       style={{
-                        ...buttonStyle,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        gap: '10px',
+                        gap: '12px',
                         cursor: 'pointer',
-                        textDecoration: 'none',
-                        padding: '12px 20px'
+                        padding: '12px 16px',
+                        background: '#fff',
+                        borderRadius: '8px',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                        transition: 'all 0.2s',
+                        minWidth: '162px',
+                        boxSizing: 'border-box'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#f8f8f8';
+                        e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#fff';
+                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
                         <div style={{
-                          width: '40px',
-                          height: '40px',
+                          width: '44px',
+                          height: '44px',
                           borderRadius: '50%',
                           background: '#ff751f',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontSize: '20px',
+                          fontSize: '18px',
                           color: '#fff',
                           fontWeight: 'bold',
                           flexShrink: 0
                         }}>
                           {userProfile?.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '👤'}
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left' }}>
-                          <span style={{ fontSize: '16px', fontWeight: '600' }}>{userProfile?.username || user.email}</span>
-                          <span style={{ fontSize: '12px', opacity: 0.8 }}>ELO: {userProfile?.elo_rating || 1000}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', flex: 1, minWidth: 0 }}>
+                          <span style={{ 
+                            fontSize: '15px', 
+                            fontWeight: '600',
+                            color: '#000',
+                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            width: '100%'
+                          }}>
+                            {userProfile?.username || 'User'}
+                          </span>
+                          <span style={{ 
+                            fontSize: '12px', 
+                            opacity: 0.7,
+                            color: '#666',
+                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                          }}>
+                            ELO: {userProfile?.elo_rating || 1000}
+                          </span>
                         </div>
                       </div>
-                      <span style={{ fontSize: '20px' }}>
+                      <span style={{ fontSize: '22px', flexShrink: 0 }}>
                         {userProfile?.country === 'US' ? '🇺🇸' : 
                          userProfile?.country === 'GB' ? '🇬🇧' :
                          userProfile?.country === 'CA' ? '🇨🇦' :

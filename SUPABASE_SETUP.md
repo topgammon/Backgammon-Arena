@@ -42,9 +42,11 @@ CREATE TABLE public.users (
   id UUID REFERENCES auth.users(id) PRIMARY KEY,
   username TEXT UNIQUE,
   email TEXT,
+  country TEXT DEFAULT 'US',
   elo_rating INTEGER DEFAULT 1000,
   wins INTEGER DEFAULT 0,
   losses INTEGER DEFAULT 0,
+  games_played INTEGER DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

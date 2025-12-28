@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './GameBoard.css';
 import { getCpuMove, getThinkingTime, shouldAcceptDouble, shouldOfferDouble } from './cpuAI';
+import { supabase } from '../lib/supabase';
 
 // TODO: Future feature - Track player records against each bot difficulty for signed-in users
 // This will display win/loss stats for each difficulty level when viewing the difficulty selection screen
@@ -163,6 +164,17 @@ function GameBoard() {
   const [gameOver, setGameOver] = useState(null);
   const [timer, setTimer] = useState(45);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showSignupForm, setShowSignupForm] = useState(false);
+  const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
+  const [signupFormData, setSignupFormData] = useState({
+    email: '',
+    password: '',
+    username: '',
+    country: 'US'
+  });
+  const [signupError, setSignupError] = useState('');
+  const [signupLoading, setSignupLoading] = useState(false);
   const timerRef = useRef();
   const prevPlayerRef = useRef(null);
   const cpuDoubleCheckedRef = useRef(false);
@@ -183,6 +195,49 @@ function GameBoard() {
   const [screen, setScreen] = useState('home'); // Start on homepage
   const [cpuDoubleMessage, setCpuDoubleMessage] = useState(null); // Message to show after CPU decides on double
   const [positionEvaluation, setPositionEvaluation] = useState(0); // Current position evaluation (-1 to 1)
+
+  // Check authentication state on mount and when auth changes
+  useEffect(() => {
+    if (!supabase) return;
+
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Fetch user profile when user changes
+  useEffect(() => {
+    if (!user || !supabase) {
+      setUserProfile(null);
+      return;
+    }
+
+    const fetchUserProfile = async () => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = not found
+        console.error('Error fetching user profile:', error);
+      } else {
+        setUserProfile(data);
+      }
+    };
+
+    fetchUserProfile();
+  }, [user]);
 
   // Reset first roll state on mount
   useEffect(() => {
@@ -2790,6 +2845,90 @@ function GameBoard() {
     </div>
   );
 
+  // Signup function
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    if (!supabase) {
+      setSignupError('Supabase not configured');
+      return;
+    }
+
+    setSignupError('');
+    setSignupLoading(true);
+
+    try {
+      // Validate form
+      if (!signupFormData.email || !signupFormData.password || !signupFormData.username) {
+        setSignupError('Please fill in all fields');
+        setSignupLoading(false);
+        return;
+      }
+
+      if (signupFormData.password.length < 6) {
+        setSignupError('Password must be at least 6 characters');
+        setSignupLoading(false);
+        return;
+      }
+
+      // Sign up with Supabase
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: signupFormData.email,
+        password: signupFormData.password,
+        options: {
+          data: {
+            username: signupFormData.username,
+            country: signupFormData.country
+          }
+        }
+      });
+
+      if (authError) {
+        setSignupError(authError.message);
+        setSignupLoading(false);
+        return;
+      }
+
+      if (!authData.user) {
+        setSignupError('Failed to create account');
+        setSignupLoading(false);
+        return;
+      }
+
+      // Create user profile in database
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert({
+          id: authData.user.id,
+          email: signupFormData.email,
+          username: signupFormData.username,
+          country: signupFormData.country,
+          elo_rating: 1000,
+          wins: 0,
+          losses: 0,
+          games_played: 0
+        });
+
+      if (profileError) {
+        console.error('Error creating user profile:', profileError);
+        // Don't fail signup if profile creation fails - we can retry later
+      }
+
+      // Success! User is automatically logged in
+      setShowLoginModal(false);
+      setShowSignupForm(false);
+      setSignupFormData({ email: '', password: '', username: '', country: 'US' });
+      setSignupError('');
+      
+      // Navigate to home (already there, but refresh state)
+      setScreen('home');
+    } catch (error) {
+      console.error('Signup error:', error);
+      setSignupError('An unexpected error occurred');
+    } finally {
+      setSignupLoading(false);
+    }
+  };
+
   const HomeBoardSVG = () => {
     return (
       <img 
@@ -2835,8 +2974,40 @@ function GameBoard() {
             <div style={{ width: '100%' }}>
               <h2 style={{ marginBottom: '4px', color: '#000' }}>Play Online</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
-                <button style={buttonStyle} onClick={() => alert('Coming soon!')}>Play as Guest</button>
-                <button style={buttonStyle} onClick={() => setShowLoginModal(true)}>Login / Signup</button>
+                {user ? (
+                  <div 
+                    onClick={() => setScreen('profile')}
+                    style={{
+                      ...buttonStyle,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '10px',
+                      cursor: 'pointer',
+                      textDecoration: 'none'
+                    }}
+                  >
+                    <span style={{ fontSize: '20px' }}>👤</span>
+                    <span>{userProfile?.username || user.email}</span>
+                    <span style={{ fontSize: '18px' }}>
+                      {userProfile?.country === 'US' ? '🇺🇸' : 
+                       userProfile?.country === 'GB' ? '🇬🇧' :
+                       userProfile?.country === 'CA' ? '🇨🇦' :
+                       userProfile?.country === 'AU' ? '🇦🇺' :
+                       userProfile?.country === 'DE' ? '🇩🇪' :
+                       userProfile?.country === 'FR' ? '🇫🇷' :
+                       userProfile?.country === 'ES' ? '🇪🇸' :
+                       userProfile?.country === 'IT' ? '🇮🇹' :
+                       userProfile?.country === 'BR' ? '🇧🇷' :
+                       userProfile?.country === 'MX' ? '🇲🇽' : '🌍'}
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <button style={buttonStyle} onClick={() => alert('Coming soon!')}>Play as Guest</button>
+                    <button style={buttonStyle} onClick={() => setShowLoginModal(true)}>Login / Signup</button>
+                  </>
+                )}
               </div>
               <h2 style={{ marginBottom: '4px', color: '#000' }}>Play Offline</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -2966,6 +3137,7 @@ function GameBoard() {
             </button>
 
             {/* Modal Content */}
+            {!showSignupForm ? (
             <div style={{ textAlign: 'center' }}>
               <h2 style={{ 
                 margin: '0 0 8px 0', 
@@ -3031,8 +3203,7 @@ function GameBoard() {
               {/* Create Account Button */}
               <button
                 onClick={() => {
-                  // TODO: Implement create account
-                  alert('Create account coming soon!');
+                  setShowSignupForm(true);
                 }}
                 style={{
                   width: '100%',
@@ -3105,6 +3276,219 @@ function GameBoard() {
                 Continue as Guest
               </button>
             </div>
+            ) : (
+            /* Signup Form */
+            <div style={{ textAlign: 'center' }}>
+              <h2 style={{ 
+                margin: '0 0 8px 0', 
+                fontSize: '28px', 
+                fontWeight: 'bold', 
+                color: '#000',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+              }}>
+                Create Account
+              </h2>
+              <p style={{ 
+                margin: '0 0 24px 0', 
+                fontSize: '16px', 
+                color: '#666',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+              }}>
+                Join TopGammon to track your stats and compete
+              </p>
+
+              <form onSubmit={handleSignup} style={{ textAlign: 'left' }}>
+                {/* Username */}
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ 
+                    display: 'block', 
+                    marginBottom: '6px', 
+                    fontSize: '14px', 
+                    fontWeight: '600', 
+                    color: '#333',
+                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                  }}>
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    value={signupFormData.username}
+                    onChange={(e) => setSignupFormData({ ...signupFormData, username: e.target.value })}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '2px solid #ddd',
+                      borderRadius: '8px',
+                      fontSize: '16px',
+                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                      boxSizing: 'border-box',
+                      transition: 'border-color 0.2s'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#ff751f'}
+                    onBlur={(e) => e.target.style.borderColor = '#ddd'}
+                  />
+                </div>
+
+                {/* Email */}
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ 
+                    display: 'block', 
+                    marginBottom: '6px', 
+                    fontSize: '14px', 
+                    fontWeight: '600', 
+                    color: '#333',
+                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                  }}>
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={signupFormData.email}
+                    onChange={(e) => setSignupFormData({ ...signupFormData, email: e.target.value })}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '2px solid #ddd',
+                      borderRadius: '8px',
+                      fontSize: '16px',
+                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                      boxSizing: 'border-box',
+                      transition: 'border-color 0.2s'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#ff751f'}
+                    onBlur={(e) => e.target.style.borderColor = '#ddd'}
+                  />
+                </div>
+
+                {/* Password */}
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ 
+                    display: 'block', 
+                    marginBottom: '6px', 
+                    fontSize: '14px', 
+                    fontWeight: '600', 
+                    color: '#333',
+                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                  }}>
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={signupFormData.password}
+                    onChange={(e) => setSignupFormData({ ...signupFormData, password: e.target.value })}
+                    required
+                    minLength={6}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '2px solid #ddd',
+                      borderRadius: '8px',
+                      fontSize: '16px',
+                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                      boxSizing: 'border-box',
+                      transition: 'border-color 0.2s'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#ff751f'}
+                    onBlur={(e) => e.target.style.borderColor = '#ddd'}
+                  />
+                  <p style={{ 
+                    margin: '4px 0 0 0', 
+                    fontSize: '12px', 
+                    color: '#999',
+                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                  }}>
+                    Must be at least 6 characters
+                  </p>
+                </div>
+
+                {/* Error Message */}
+                {signupError && (
+                  <div style={{
+                    marginBottom: '16px',
+                    padding: '12px',
+                    background: '#fee',
+                    border: '1px solid #fcc',
+                    borderRadius: '8px',
+                    color: '#c33',
+                    fontSize: '14px',
+                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                  }}>
+                    {signupError}
+                  </div>
+                )}
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={signupLoading}
+                  style={{
+                    width: '100%',
+                    padding: '14px 24px',
+                    background: signupLoading ? '#ccc' : '#ff751f',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    cursor: signupLoading ? 'not-allowed' : 'pointer',
+                    color: '#fff',
+                    transition: 'all 0.2s',
+                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                    boxShadow: signupLoading ? 'none' : '0 2px 4px rgba(255, 117, 31, 0.3)',
+                    marginBottom: '16px'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!signupLoading) {
+                      e.target.style.background = '#e6640f';
+                      e.target.style.boxShadow = '0 4px 8px rgba(255, 117, 31, 0.4)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!signupLoading) {
+                      e.target.style.background = '#ff751f';
+                      e.target.style.boxShadow = '0 2px 4px rgba(255, 117, 31, 0.3)';
+                    }
+                  }}
+                >
+                  {signupLoading ? 'Creating Account...' : 'Create Account'}
+                </button>
+
+                {/* Back to Login */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSignupForm(false);
+                    setSignupError('');
+                    setSignupFormData({ email: '', password: '', username: '', country: 'US' });
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '12px 24px',
+                    background: 'transparent',
+                    border: '1px solid #ddd',
+                    borderRadius: '8px',
+                    fontSize: '15px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    color: '#666',
+                    transition: 'all 0.2s',
+                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.borderColor = '#999';
+                    e.target.style.color = '#333';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.borderColor = '#ddd';
+                    e.target.style.color = '#666';
+                  }}
+                >
+                  Back to Sign In
+                </button>
+              </form>
+            </div>
+            )}
           </div>
         </div>
       )}
@@ -3309,10 +3693,177 @@ function GameBoard() {
     );
   };
 
+  // Profile Page
+  const renderProfile = () => {
+    if (!user) {
+      // Redirect to home if not logged in
+      setScreen('home');
+      return null;
+    }
+
+    const handleSignOut = async () => {
+      if (supabase) {
+        await supabase.auth.signOut();
+        setUser(null);
+        setUserProfile(null);
+        setScreen('home');
+      }
+    };
+
+    return (
+      <div style={{ textAlign: 'center', marginTop: 30, paddingBottom: 40, background: '#a8a7a8', minHeight: '100vh' }}>
+        <div style={{
+          ...sectionStyle,
+          maxWidth: 800,
+          width: '100%',
+          margin: '20px auto',
+          padding: '40px'
+        }}>
+          <div style={{ marginBottom: '24px' }}>
+            <button
+              onClick={() => setScreen('home')}
+              style={{
+                ...buttonStyle,
+                background: '#6c757d',
+                marginBottom: '20px',
+                minWidth: '120px'
+              }}
+            >
+              ← Back to Home
+            </button>
+          </div>
+
+          <div style={{ marginBottom: '32px' }}>
+            <div style={{
+              width: '120px',
+              height: '120px',
+              borderRadius: '50%',
+              background: '#ff751f',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '48px',
+              margin: '0 auto 16px',
+              color: '#fff',
+              fontWeight: 'bold'
+            }}>
+              {userProfile?.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '👤'}
+            </div>
+            <h1 style={{ 
+              margin: '0 0 8px 0', 
+              fontSize: '32px', 
+              color: '#000',
+              fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+            }}>
+              {userProfile?.username || 'User'}
+            </h1>
+            <p style={{ 
+              margin: '0 0 24px 0', 
+              fontSize: '16px', 
+              color: '#666',
+              fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+            }}>
+              {user.email}
+            </p>
+          </div>
+
+          {/* Stats Section */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '20px',
+            marginBottom: '32px'
+          }}>
+            <div style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '24px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            }}>
+              <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>ELO Rating</div>
+              <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ff751f' }}>
+                {userProfile?.elo_rating || 1000}
+              </div>
+            </div>
+            <div style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '24px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            }}>
+              <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Wins</div>
+              <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>
+                {userProfile?.wins || 0}
+              </div>
+            </div>
+            <div style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '24px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            }}>
+              <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Losses</div>
+              <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#dc3545' }}>
+                {userProfile?.losses || 0}
+              </div>
+            </div>
+            <div style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '24px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            }}>
+              <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Games Played</div>
+              <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#6c757d' }}>
+                {userProfile?.games_played || 0}
+              </div>
+            </div>
+          </div>
+
+          {/* Placeholder for future content */}
+          <div style={{
+            background: '#fff',
+            borderRadius: '12px',
+            padding: '24px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            marginBottom: '24px'
+          }}>
+            <h2 style={{ 
+              margin: '0 0 16px 0', 
+              fontSize: '20px', 
+              color: '#000',
+              fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+            }}>
+              Game History
+            </h2>
+            <p style={{ color: '#666', fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif' }}>
+              Your game history will appear here
+            </p>
+          </div>
+
+          {/* Sign Out Button */}
+          <button
+            onClick={handleSignOut}
+            style={{
+              ...buttonStyle,
+              background: '#dc3545',
+              color: '#fff',
+              width: '100%',
+              maxWidth: '300px'
+            }}
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   if (screen === 'home') return renderHome();
   if (screen === 'passplay') return renderPassPlay();
   if (screen === 'cpu-difficulty') return renderCpuDifficultySelection();
   if (screen === 'cpu') return renderCpuGame();
+  if (screen === 'profile') return renderProfile();
   
   return renderHome();
 }

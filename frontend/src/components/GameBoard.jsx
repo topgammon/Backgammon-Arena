@@ -771,25 +771,33 @@ function GameBoard() {
 
   // Auto-end turn if no legal moves (not a forfeit - only timeout is forfeit)
   useEffect(() => {
-    if (
+    // Only auto-end if all dice are used OR no valid moves remain AND we've made at least one move
+    const shouldAutoEnd = 
       !gameOver &&
       hasRolled &&
       !awaitingEndTurn &&
       !isRolling &&
       !firstRollPhase &&
       (screen === 'passplay' || screen === 'onlineGame') &&
-      !hasAnyValidMoves() &&
-      usedDice.length > 0
-    ) {
-      // Small delay to ensure UI updates
+      usedDice.length > 0 &&
+      (allDiceUsed() || !hasAnyValidMoves());
+    
+    if (shouldAutoEnd) {
+      // Small delay to ensure UI updates and state is current
       const timeoutId = setTimeout(() => {
-        if (!hasAnyValidMoves() && usedDice.length > 0) {
-          handleEndTurn();
+        // Double-check conditions before ending turn - must have used dice and no valid moves
+        if (!gameOver && hasRolled && usedDice.length > 0 && !awaitingEndTurn && !isRolling) {
+          const stillNoMoves = !hasAnyValidMoves();
+          const allUsed = allDiceUsed();
+          if (stillNoMoves || allUsed) {
+            console.log('Auto-ending turn: no valid moves available or all dice used');
+            handleEndTurn();
+          }
         }
-      }, 500);
+      }, 1000);
       return () => clearTimeout(timeoutId);
     }
-  }, [hasRolled, usedDice, checkers, awaitingEndTurn, isRolling, firstRollPhase, gameOver, screen]);
+  }, [hasRolled, usedDice, checkers, bar, movesAllowed, awaitingEndTurn, isRolling, firstRollPhase, gameOver, screen, currentPlayer]);
 
   // Global click handler to deselect
   useEffect(() => {
@@ -1711,8 +1719,10 @@ function GameBoard() {
         }
         setFirstRollTurn(2);
       } else {
+        // Show result first, then close modal after delay
         if (newRolls[0] > newRolls[1]) {
           setFirstRollResult(1);
+          // Wait longer so both players can see the result
           setTimeout(() => {
             setCurrentPlayer(1);
             setFirstRollPhase(false);
@@ -1732,9 +1742,10 @@ function GameBoard() {
                 movesAllowed: newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]
               });
             }
-          }, 1500);
+          }, 2500);
         } else if (newRolls[1] > newRolls[0]) {
           setFirstRollResult(2);
+          // Wait longer so both players can see the result
           setTimeout(() => {
             setCurrentPlayer(2);
             setFirstRollPhase(false);
@@ -1754,7 +1765,7 @@ function GameBoard() {
                 movesAllowed: newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]
               });
             }
-          }, 1500);
+          }, 2500);
         } else {
           setFirstRollResult('tie');
           setTimeout(() => {
@@ -3092,10 +3103,10 @@ function GameBoard() {
         {/* Your move / Waiting text on left side */}
         {!gameOver && !firstRollPhase && hasRolled && !isRolling && screen === 'onlineGame' && (
           <foreignObject
-            x={boardX - 180}
-            y={boardY + boardH / 2 - 20}
-            width={160}
-            height={40}
+            x={boardX + 20}
+            y={boardY + boardH / 2 - 10}
+            width={200}
+            height={30}
             style={{ pointerEvents: 'none' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#fff', textAlign: 'left' }}>
@@ -5217,15 +5228,19 @@ function GameBoard() {
         setIsFirstRolling(false);
         setFirstRollAnimationFrame(0);
         
-        // Sync first roll completion
+        // Show result first, then close modal after delay
         setFirstRolls(data.firstRolls);
         setFirstRollResult(data.winner);
-        setCurrentPlayer(data.currentPlayer);
-        setFirstRollPhase(false);
-        setHasRolled(true);
-        setDice(data.dice);
-        setUsedDice([]);
-        setMovesAllowed(data.movesAllowed);
+        
+        // Wait to close modal so both players can see the result
+        setTimeout(() => {
+          setCurrentPlayer(data.currentPlayer);
+          setFirstRollPhase(false);
+          setHasRolled(true);
+          setDice(data.dice);
+          setUsedDice([]);
+          setMovesAllowed(data.movesAllowed);
+        }, 2000);
       }
     };
     

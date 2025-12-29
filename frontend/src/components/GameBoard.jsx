@@ -507,12 +507,16 @@ function GameBoard() {
                     const allUsed = currentUsedDice.length >= currentMovesAllowed.length;
                     const hasValid = hasAnyValidMoves();
                     
-                    // Only timeout forfeit if: has rolled, has valid moves, AND dice not all used
-                    // If all dice used OR no valid moves, just end turn
-                    if (currentHasRolled && hasValid && !allUsed) {
+                    // If player hasn't rolled yet: timeout forfeit
+                    if (!currentHasRolled) {
                       triggerGameOver('timeout', currentPlayer === 1 ? 2 : 1, currentPlayer);
-                    } else {
-                      // All dice used or no valid moves - just end turn
+                    }
+                    // If player has rolled AND has valid moves AND dice not all used: timeout forfeit
+                    else if (currentHasRolled && hasValid && !allUsed) {
+                      triggerGameOver('timeout', currentPlayer === 1 ? 2 : 1, currentPlayer);
+                    }
+                    // If player has rolled AND (all dice used OR no valid moves): auto-end turn
+                    else {
                       handleEndTurn();
                     }
                     return currentHasRolled;
@@ -3591,12 +3595,12 @@ function GameBoard() {
         background: '#f8f9fa',
         borderRadius: '8px',
         border: '2px solid #dee2e6',
-        minWidth: 400
+        width: 'fit-content'
       }}>
         {renderAvatar(isGuest, false, null, 50)}
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333' }}>{displayName}</div>
-          <div style={{ fontSize: 14, color: '#666', display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div style={{ textAlign: 'left' }}>
+          <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'left' }}>{displayName}</div>
+          <div style={{ fontSize: 14, color: '#666', display: 'flex', gap: 12, alignItems: 'center', textAlign: 'left' }}>
             <span>🌍 {displayCountry}</span>
             <span>⭐ {displayRating}</span>
           </div>
@@ -3666,22 +3670,22 @@ function GameBoard() {
         background: '#f8f9fa',
         borderRadius: '8px',
         border: '2px solid #dee2e6',
-        minWidth: 400
+        width: 'fit-content'
       }}>
         {renderAvatar(isGuest, isCpu, cpuDifficulty, 50)}
-        <div style={{ flex: 1 }}>
+        <div style={{ textAlign: 'left' }}>
           {isCpu && cpuDifficulty ? (
             <>
-              <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333' }}>{cpuName}</div>
-              <div style={{ fontSize: 14, color: '#666', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'left' }}>{cpuName}</div>
+              <div style={{ fontSize: 14, color: '#666', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', textAlign: 'left' }}>
                 <span>{difficultyName}</span>
                 <span>⭐ {displayRating}</span>
               </div>
             </>
           ) : (
             <>
-              <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333' }}>{displayName}</div>
-              <div style={{ fontSize: 14, color: '#666', display: 'flex', gap: 12, alignItems: 'center' }}>
+              <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'left' }}>{displayName}</div>
+              <div style={{ fontSize: 14, color: '#666', display: 'flex', gap: 12, alignItems: 'center', textAlign: 'left' }}>
                 {displayCountry && <span>🌍 {displayCountry}</span>}
                 <span>⭐ {displayRating}</span>
               </div>

@@ -1598,6 +1598,9 @@ function GameBoard() {
   };
 
   function handleFirstRoll() {
+    // Prevent rolling when it's not your turn in online games
+    if (isOnlineGame && firstRollTurn !== playerNumber) return;
+    
     setIsFirstRolling(true);
     setFirstRollAnimationFrame(0);
     
@@ -1614,6 +1617,17 @@ function GameBoard() {
       let newRolls = [...firstRolls];
       newRolls[firstRollTurn - 1] = roll;
       setFirstRolls(newRolls);
+      
+      // Send first roll to server for online games
+      if (isOnlineGame && socketRef.current && matchId) {
+        socketRef.current.emit('game:first-roll', {
+          matchId,
+          player: playerNumber,
+          roll: roll,
+          rollTurn: firstRollTurn
+        });
+      }
+      
       if (firstRollTurn === 1) {
         setFirstRollTurn(2);
       } else {
@@ -1626,6 +1640,18 @@ function GameBoard() {
             setDice([newRolls[0], newRolls[1]]);
             setUsedDice([]);
             setMovesAllowed(newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]);
+            
+            // Send first roll result to server for online games
+            if (isOnlineGame && socketRef.current && matchId) {
+              socketRef.current.emit('game:first-roll-complete', {
+                matchId,
+                firstRolls: newRolls,
+                winner: 1,
+                currentPlayer: 1,
+                dice: [newRolls[0], newRolls[1]],
+                movesAllowed: newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]
+              });
+            }
           }, 1200);
         } else if (newRolls[1] > newRolls[0]) {
           setFirstRollResult(2);
@@ -1636,6 +1662,18 @@ function GameBoard() {
             setDice([newRolls[0], newRolls[1]]);
             setUsedDice([]);
             setMovesAllowed(newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]);
+            
+            // Send first roll result to server for online games
+            if (isOnlineGame && socketRef.current && matchId) {
+              socketRef.current.emit('game:first-roll-complete', {
+                matchId,
+                firstRolls: newRolls,
+                winner: 2,
+                currentPlayer: 2,
+                dice: [newRolls[0], newRolls[1]],
+                movesAllowed: newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]
+              });
+            }
           }, 1200);
         } else {
           setFirstRollResult('tie');
@@ -1643,6 +1681,13 @@ function GameBoard() {
             setFirstRolls([null, null]);
             setFirstRollTurn(1);
             setFirstRollResult(null);
+            
+            // Send tie result to server for online games
+            if (isOnlineGame && socketRef.current && matchId) {
+              socketRef.current.emit('game:first-roll-tie', {
+                matchId
+              });
+            }
           }, 1200);
         }
       }
@@ -2419,12 +2464,20 @@ function GameBoard() {
             </div>
           </div>
           {(!firstRollResult && !isFirstRolling) && (
-            <button
-              style={{ ...buttonStyle, minWidth: 160, marginTop: 8 }}
-              onClick={handleFirstRoll}
-            >
-              {firstRollTurn === 1 ? 'Player 1: Roll' : (isCpuGame ? 'CPU: Roll' : 'Player 2: Roll')}
-            </button>
+            <>
+              {(!isOnlineGame || (isOnlineGame && firstRollTurn === playerNumber)) ? (
+                <button
+                  style={{ ...buttonStyle, minWidth: 160, marginTop: 8 }}
+                  onClick={handleFirstRoll}
+                >
+                  {firstRollTurn === 1 ? 'Player 1: Roll' : (isCpuGame ? 'CPU: Roll' : 'Player 2: Roll')}
+                </button>
+              ) : (
+                <div style={{ color: '#666', marginTop: 8, fontSize: 16 }}>
+                  Waiting for opponent to roll...
+                </div>
+              )}
+            </>
           )}
           {firstRollResult === 1 && <div style={{ color: '#28a745', fontWeight: 600, fontSize: 20, marginTop: 16 }}>Player 1 goes first!</div>}
           {firstRollResult === 2 && <div style={{ color: '#007bff', fontWeight: 600, fontSize: 20, marginTop: 16 }}>{isCpuGame ? 'CPU goes first!' : 'Player 2 goes first!'}</div>}
@@ -4904,12 +4957,53 @@ function GameBoard() {
       }
     };
     
+    // Listen for first roll events
+    const handleFirstRoll = (data) => {
+      if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
+        // Update opponent's first roll
+        setFirstRolls(prev => {
+          const newRolls = [...prev];
+          newRolls[data.rollTurn - 1] = data.roll;
+          return newRolls;
+        });
+        if (data.rollTurn === 1) {
+          setFirstRollTurn(2);
+        }
+      }
+    };
+    
+    const handleFirstRollComplete = (data) => {
+      if (data.matchId === currentMatchId) {
+        // Sync first roll completion
+        setFirstRolls(data.firstRolls);
+        setFirstRollResult(data.winner);
+        setCurrentPlayer(data.currentPlayer);
+        setFirstRollPhase(false);
+        setHasRolled(true);
+        setDice(data.dice);
+        setUsedDice([]);
+        setMovesAllowed(data.movesAllowed);
+      }
+    };
+    
+    const handleFirstRollTie = (data) => {
+      if (data.matchId === currentMatchId) {
+        // Reset for tie
+        setFirstRolls([null, null]);
+        setFirstRollTurn(1);
+        setFirstRollResult(null);
+      }
+    };
+    
     socket.on('game:move', handleMove);
     socket.on('game:dice-rolled', handleDiceRolled);
     socket.on('game:turn-changed', handleTurnChanged);
     socket.on('game:state-sync', handleStateSync);
     socket.on('game:double-offered', handleDoubleOffered);
     socket.on('game:over', handleGameOver);
+    socket.on('game:first-roll', handleFirstRoll);
+    socket.on('game:first-roll-complete', handleFirstRollComplete);
+    socket.on('game:first-roll-tie', handleFirstRollTie);
     
     return () => {
       socket.off('game:move', handleMove);
@@ -4918,6 +5012,9 @@ function GameBoard() {
       socket.off('game:state-sync', handleStateSync);
       socket.off('game:double-offered', handleDoubleOffered);
       socket.off('game:over', handleGameOver);
+      socket.off('game:first-roll', handleFirstRoll);
+      socket.off('game:first-roll-complete', handleFirstRollComplete);
+      socket.off('game:first-roll-tie', handleFirstRollTie);
     };
   }, [isOnlineGame, matchId, playerNumber]);
   

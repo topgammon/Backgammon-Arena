@@ -329,6 +329,79 @@ io.on('connection', (socket) => {
     
     console.log(`🔄 Player ${player} ended turn, now Player ${nextPlayer}'s turn in match ${matchId}`);
   });
+  
+  // First roll handlers
+  socket.on('game:first-roll', (data) => {
+    const { matchId, player, roll, rollTurn } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Invalid matchId for first roll:', matchId);
+      return;
+    }
+    
+    // Find opponent socket
+    const opponentSocketId = player === 1 ? match.player2.socketId : match.player1.socketId;
+    
+    // Broadcast first roll to opponent
+    io.to(opponentSocketId).emit('game:first-roll', {
+      matchId,
+      player,
+      roll,
+      rollTurn
+    });
+    
+    console.log(`🎲 Player ${player} rolled ${roll} in first roll phase (turn ${rollTurn}) for match ${matchId}`);
+  });
+  
+  socket.on('game:first-roll-complete', (data) => {
+    const { matchId, firstRolls, winner, currentPlayer, dice, movesAllowed } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Invalid matchId for first roll complete:', matchId);
+      return;
+    }
+    
+    // Find opponent socket
+    const opponentSocketId = match.player1.socketId === socket.id 
+      ? match.player2.socketId 
+      : match.player1.socketId;
+    
+    // Broadcast first roll completion to opponent
+    io.to(opponentSocketId).emit('game:first-roll-complete', {
+      matchId,
+      firstRolls,
+      winner,
+      currentPlayer,
+      dice,
+      movesAllowed
+    });
+    
+    console.log(`🎯 First roll complete in match ${matchId}, Player ${winner} goes first`);
+  });
+  
+  socket.on('game:first-roll-tie', (data) => {
+    const { matchId } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Invalid matchId for first roll tie:', matchId);
+      return;
+    }
+    
+    // Find opponent socket
+    const opponentSocketId = match.player1.socketId === socket.id 
+      ? match.player2.socketId 
+      : match.player1.socketId;
+    
+    // Broadcast tie to opponent
+    io.to(opponentSocketId).emit('game:first-roll-tie', {
+      matchId
+    });
+    
+    console.log(`🤝 First roll tie in match ${matchId}, rerolling...`);
+  });
 });
 
 const PORT = process.env.PORT || 3001;

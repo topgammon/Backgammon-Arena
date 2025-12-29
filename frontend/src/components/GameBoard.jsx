@@ -2465,7 +2465,8 @@ function GameBoard() {
           </div>
           {(!firstRollResult && !isFirstRolling) && (
             <>
-              {(!isOnlineGame || (isOnlineGame && firstRollTurn === playerNumber)) ? (
+              {!isOnlineGame ? (
+                // Not online game - show button for current turn
                 <button
                   style={{ ...buttonStyle, minWidth: 160, marginTop: 8 }}
                   onClick={handleFirstRoll}
@@ -2473,9 +2474,19 @@ function GameBoard() {
                   {firstRollTurn === 1 ? 'Player 1: Roll' : (isCpuGame ? 'CPU: Roll' : 'Player 2: Roll')}
                 </button>
               ) : (
-                <div style={{ color: '#666', marginTop: 8, fontSize: 16 }}>
-                  Waiting for opponent to roll...
-                </div>
+                // Online game - show button only if it's this player's turn
+                firstRollTurn === playerNumber ? (
+                  <button
+                    style={{ ...buttonStyle, minWidth: 160, marginTop: 8 }}
+                    onClick={handleFirstRoll}
+                  >
+                    {firstRollTurn === 1 ? 'Player 1: Roll' : 'Player 2: Roll'}
+                  </button>
+                ) : (
+                  <div style={{ color: '#666', marginTop: 8, fontSize: 16 }}>
+                    Waiting for opponent to roll... (Turn: {firstRollTurn}, You: {playerNumber})
+                  </div>
+                )
               )}
             </>
           )}
@@ -4959,20 +4970,22 @@ function GameBoard() {
     
     // Listen for first roll events
     const handleFirstRoll = (data) => {
+      console.log('Received first roll event:', data, 'currentPlayerNumber:', currentPlayerNumber);
       if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
-        // Update opponent's first roll
+        console.log('Processing opponent first roll, updating state...');
+        // Update opponent's first roll and turn together
         setFirstRolls(prev => {
           const newRolls = [...prev];
           newRolls[data.rollTurn - 1] = data.roll;
+          console.log('Updated firstRolls to:', newRolls);
           return newRolls;
         });
         // Update turn to nextRollTurn if provided, otherwise use fallback logic
-        if (data.nextRollTurn) {
-          setFirstRollTurn(data.nextRollTurn);
-        } else if (data.rollTurn === 1) {
-          // Fallback for backwards compatibility
-          setFirstRollTurn(2);
-        }
+        const newTurn = data.nextRollTurn || (data.rollTurn === 1 ? 2 : 1);
+        console.log('Setting firstRollTurn to:', newTurn);
+        setFirstRollTurn(newTurn);
+      } else {
+        console.log('Ignoring first roll event - wrong match or same player');
       }
     };
     

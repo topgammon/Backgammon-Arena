@@ -344,15 +344,16 @@ io.on('connection', (socket) => {
     const opponentSocketId = player === 1 ? match.player2.socketId : match.player1.socketId;
     
     // Broadcast first roll to opponent with next turn information
-    io.to(opponentSocketId).emit('game:first-roll', {
+    const eventData = {
       matchId,
       player,
       roll,
       rollTurn,
       nextRollTurn
-    });
-    
-    console.log(`🎲 Player ${player} rolled ${roll} in first roll phase (turn ${rollTurn}) for match ${matchId}`);
+    };
+    console.log(`🎲 Player ${player} rolled ${roll} in first roll phase (turn ${rollTurn}, nextTurn: ${nextRollTurn}) for match ${matchId}`);
+    console.log(`📤 Sending to opponent socket ${opponentSocketId}:`, eventData);
+    io.to(opponentSocketId).emit('game:first-roll', eventData);
   });
   
   socket.on('game:first-roll-complete', (data) => {

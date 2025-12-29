@@ -3654,7 +3654,7 @@ function GameBoard() {
   };
 
   // Opponent info component (for above board)
-  const renderOpponentInfo = (isGuest = false, isCpu = false, username = null, country = null, rating = null, cpuDifficulty = null) => {
+  const renderOpponentInfo = (isGuest = false, isCpu = false, username = null, country = null, rating = null, cpuDifficulty = null, opponentPlayerNum = 2) => {
     let displayName, displayCountry, displayRating, cpuName, difficultyName;
     
     if (isCpu && cpuDifficulty) {
@@ -3737,7 +3737,7 @@ function GameBoard() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0 20px', marginBottom: 16, maxWidth: 900, margin: '0 auto 16px', gap: 20 }}>
         {/* Opponent info (left side) */}
         <div style={{ flex: 1 }}>
-          {renderOpponentInfo(true, false, currentPlayer === 1 ? passPlayPlayer2Name : passPlayPlayer1Name, null, null, null)}
+          {renderOpponentInfo(true, false, currentPlayer === 1 ? passPlayPlayer2Name : passPlayPlayer1Name, null, null, null, currentPlayer === 1 ? 2 : 1)}
         </div>
           {/* Title and logo (right side) */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, minWidth: 200, flexWrap: 'wrap' }}>

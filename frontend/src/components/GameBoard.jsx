@@ -1706,38 +1706,55 @@ function GameBoard() {
     // Set up end game state: most pieces in home board, some borne off
     const newCheckers = [];
     const newBorneOff = { 1: 10, 2: 8 }; // Player 1 has 10 borne off, Player 2 has 8
+    const newBar = { 1: [], 2: [] };
     
     // Player 1: Place remaining 5 pieces in home board (points 18-23)
     for (let i = 0; i < 5; i++) {
       const point = 18 + (i % 6);
+      const existingAtPoint = newCheckers.filter(c => c.point === point && c.player === 1).length;
       newCheckers.push({
         id: `p1-${i}`,
         player: 1,
         point: point,
-        offset: newCheckers.filter(c => c.point === point && c.player === 1).length
+        offset: existingAtPoint
       });
     }
     
     // Player 2: Place remaining 7 pieces in home board (points 0-5)
     for (let i = 0; i < 7; i++) {
       const point = i % 6;
+      const existingAtPoint = newCheckers.filter(c => c.point === point && c.player === 2).length;
       newCheckers.push({
         id: `p2-${i}`,
         player: 2,
         point: point,
-        offset: newCheckers.filter(c => c.point === point && c.player === 2).length
+        offset: existingAtPoint
       });
     }
     
     setCheckers(newCheckers);
     setBorneOff(newBorneOff);
-    setBar({ 1: [], 2: [] });
+    setBar(newBar);
     setHasRolled(true);
     setUsedDice([]);
     setSelected(null);
     setLegalMoves([]);
     setDice([3, 4]); // Set some dice values
     setMovesAllowed([3, 4]);
+    setFirstRollPhase(false);
+    
+    // Sync state to server for online games so both players see it
+    if (isOnlineGame && socketRef.current && matchId) {
+      socketRef.current.emit('game:state-sync', {
+        matchId,
+        player: playerNumber,
+        checkers: newCheckers,
+        bar: newBar,
+        borneOff: newBorneOff,
+        currentPlayer: currentPlayer,
+        dice: [3, 4]
+      });
+    }
   };
   
   const doResign = () => {
@@ -5480,11 +5497,28 @@ function GameBoard() {
     // Listen for game state sync
     const handleStateSync = (data) => {
       if (data.matchId === currentMatchId) {
-        if (data.checkers) setCheckers(data.checkers);
-        if (data.bar) setBar(data.bar);
-        if (data.borneOff) setBorneOff(data.borneOff);
-        if (data.currentPlayer) setCurrentPlayer(data.currentPlayer);
-        if (data.dice) setDice(data.dice);
+        if (data.gameState) {
+          // Handle nested gameState object
+          const state = data.gameState;
+          if (state.checkers) setCheckers(state.checkers);
+          if (state.bar) setBar(state.bar);
+          if (state.borneOff) setBorneOff(state.borneOff);
+          if (state.currentPlayer) setCurrentPlayer(state.currentPlayer);
+          if (state.dice) setDice(state.dice);
+          if (state.hasRolled !== undefined) setHasRolled(state.hasRolled);
+          if (state.usedDice) setUsedDice(state.usedDice);
+          if (state.movesAllowed) setMovesAllowed(state.movesAllowed);
+        } else {
+          // Handle direct properties (for backward compatibility)
+          if (data.checkers) setCheckers(data.checkers);
+          if (data.bar) setBar(data.bar);
+          if (data.borneOff) setBorneOff(data.borneOff);
+          if (data.currentPlayer) setCurrentPlayer(data.currentPlayer);
+          if (data.dice) setDice(data.dice);
+          if (data.hasRolled !== undefined) setHasRolled(data.hasRolled);
+          if (data.usedDice) setUsedDice(data.usedDice);
+          if (data.movesAllowed) setMovesAllowed(data.movesAllowed);
+        }
         if (data.gameStakes) setGameStakes(data.gameStakes);
       }
     };

@@ -325,6 +325,34 @@ io.on('connection', (socket) => {
     console.log(`🎯 Player ${player} made a move in match ${matchId}`);
   });
   
+  // State sync handler (for testing/debugging)
+  socket.on('game:state-sync', (data) => {
+    const { matchId, player, gameState } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Invalid matchId for state sync:', matchId);
+      return;
+    }
+    
+    // Update match game state
+    if (gameState) {
+      match.gameState = gameState;
+    }
+    
+    // Find opponent socket
+    const opponentSocketId = player === 1 ? match.player2.socketId : match.player1.socketId;
+    
+    // Broadcast state sync to opponent (send gameState properties directly)
+    io.to(opponentSocketId).emit('game:state-sync', {
+      matchId,
+      player,
+      ...gameState
+    });
+    
+    console.log(`🔄 Player ${player} synced game state in match ${matchId}`);
+  });
+  
   socket.on('game:end-turn', (data) => {
     const { matchId, player, nextPlayer, gameState } = data;
     const match = activeMatches.get(matchId);

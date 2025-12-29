@@ -388,11 +388,24 @@ function GameBoard() {
         } else if (session.user && !profile) {
           // User exists but no profile - create one (for OAuth users)
           const email = session.user.email || '';
-          const username = session.user.user_metadata?.username || 
-                          session.user.user_metadata?.full_name?.split(' ')[0] || 
-                          email.split('@')[0] || 
-                          `User${session.user.id.substring(0, 6)}`;
+          const googleName = session.user.user_metadata?.full_name || session.user.user_metadata?.name || '';
+          // Generate username from Google name or email
+          let username = '';
+          if (googleName) {
+            // Use first name from Google, or full name if no space
+            const nameParts = googleName.trim().split(' ');
+            username = nameParts[0] || email.split('@')[0];
+            // Make it unique by adding a short ID if needed
+            if (nameParts.length > 1) {
+              username = nameParts[0] + nameParts[1].charAt(0).toUpperCase();
+            }
+          } else {
+            username = email.split('@')[0];
+          }
+          // Clean username (remove special chars, limit length)
+          username = username.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || `User${session.user.id.substring(0, 6)}`;
           const country = session.user.user_metadata?.country || 'US';
+          const googleAvatarUrl = session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null;
           
           const { error: insertError } = await supabase
             .from('users')
@@ -401,7 +414,8 @@ function GameBoard() {
               email: email,
               username: username,
               country: country,
-              avatar: 'Barry',
+              avatar: googleAvatarUrl ? 'google' : 'Barry', // Store 'google' as special marker
+              google_avatar_url: googleAvatarUrl, // Store Google photo URL
               elo_rating: 1000,
               wins: 0,
               losses: 0,
@@ -3570,7 +3584,7 @@ function GameBoard() {
   }, [screen, passPlayPlayer1Name]);
 
   // Avatar component
-  const renderAvatar = (isGuest = false, isCpu = false, cpuDifficulty = null, size = 60) => {
+  const renderAvatar = (isGuest = false, isCpu = false, cpuDifficulty = null, size = 60, userProfileData = null, userData = null) => {
     if (isCpu && cpuDifficulty) {
       // CPU avatar - use the actual avatar image from difficulty selector
       const avatarName = DIFFICULTY_LEVELS[cpuDifficulty]?.avatar || 'CPU';
@@ -3669,7 +3683,7 @@ function GameBoard() {
         border: '2px solid #dee2e6',
         width: 'fit-content'
       }}>
-        {renderAvatar(isGuest, false, null, 50)}
+        {renderAvatar(isGuest, false, null, 50, userProfile, user)}
         <div style={{ textAlign: 'left' }}>
           <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
             {displayName}
@@ -3755,7 +3769,7 @@ function GameBoard() {
         border: '2px solid #dee2e6',
         width: 'fit-content'
       }}>
-        {renderAvatar(isGuest, isCpu, cpuDifficulty, 50)}
+        {renderAvatar(isGuest, isCpu, cpuDifficulty, 50, userProfile, user)}
         <div style={{ textAlign: 'left' }}>
           {isCpu && cpuDifficulty ? (
             <>
@@ -3888,7 +3902,7 @@ function GameBoard() {
                   padding: '4px',
                   boxShadow: gameOver.winner === 1 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
                 }}>
-                  {renderAvatar(true, false, null, 80)}
+                  {renderAvatar(true, false, null, 80, null, null)}
                 </div>
                 <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>{passPlayPlayer1Name || 'Player 1'}</div>
                 {gameOver.winner === 1 && (
@@ -3904,7 +3918,7 @@ function GameBoard() {
                   padding: '4px',
                   boxShadow: gameOver.winner === 2 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
                 }}>
-                  {renderAvatar(true, false, null, 80)}
+                  {renderAvatar(true, false, null, 80, null, null)}
                 </div>
                 <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>{passPlayPlayer2Name || 'Player 2'}</div>
                 {gameOver.winner === 2 && (
@@ -4760,10 +4774,13 @@ function GameBoard() {
                   }
                   
                   try {
+                    // Use the current window location (should be localhost:5173 for dev)
+                    const redirectUrl = window.location.origin + window.location.pathname;
+                    
                     const { data, error } = await supabase.auth.signInWithOAuth({
                       provider: 'google',
                       options: {
-                        redirectTo: `${window.location.origin}${window.location.pathname}`,
+                        redirectTo: redirectUrl,
                         queryParams: {
                           access_type: 'offline',
                           prompt: 'consent',
@@ -5528,7 +5545,7 @@ function GameBoard() {
                     padding: '4px',
                     boxShadow: gameOver.winner === 1 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
                   }}>
-                    {renderAvatar(true, false, null, 80)}
+                    {renderAvatar(true, false, null, 80, null, null)}
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>{passPlayPlayer1Name || 'Player 1'}</div>
                   {gameOver.winner === 1 && (
@@ -6786,7 +6803,7 @@ function GameBoard() {
                     padding: '4px',
                     boxShadow: gameOver.winner === 1 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
                   }}>
-                    {renderAvatar(playerNumber === 1 ? (user ? false : true) : (opponent?.isGuest || false), false, null, 80)}
+                    {renderAvatar(playerNumber === 1 ? (user ? false : true) : (opponent?.isGuest || false), false, null, 80, playerNumber === 1 ? userProfile : null, playerNumber === 1 ? user : null)}
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>
                     {playerNumber === 1 ? (user?.username || `Guest ${playerNumber}`) : (opponentName || 'Opponent')}
@@ -6804,7 +6821,7 @@ function GameBoard() {
                     padding: '4px',
                     boxShadow: gameOver.winner === 2 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
                   }}>
-                    {renderAvatar(playerNumber === 2 ? (user ? false : true) : (opponent?.isGuest || false), false, null, 80)}
+                    {renderAvatar(playerNumber === 2 ? (user ? false : true) : (opponent?.isGuest || false), false, null, 80, playerNumber === 2 ? userProfile : null, playerNumber === 2 ? user : null)}
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>
                     {playerNumber === 2 ? (user?.username || `Guest ${playerNumber}`) : (opponentName || 'Opponent')}

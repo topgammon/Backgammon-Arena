@@ -169,6 +169,7 @@ function GameBoard() {
   const [rematchRequest, setRematchRequest] = useState(null); // { from: playerNumber, to: playerNumber }
   const firstRollIntervalRef = useRef(null);
   const firstRollTimerRef = useRef(null);
+  const rematchTimeoutRef = useRef(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSignupForm, setShowSignupForm] = useState(false);
   const [user, setUser] = useState(null);
@@ -4462,38 +4463,6 @@ function GameBoard() {
                 Continue with Google
               </button>
 
-              {/* Create Account Button */}
-              <button
-                onClick={() => {
-                  setShowSignupForm(true);
-                }}
-                style={{
-                  width: '100%',
-                  padding: '14px 24px',
-                  background: '#ff751f',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  color: '#fff',
-                  transition: 'all 0.2s',
-                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                  boxShadow: '0 2px 4px rgba(255, 117, 31, 0.3)',
-                  marginBottom: '16px'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.background = '#e6640f';
-                  e.target.style.boxShadow = '0 4px 8px rgba(255, 117, 31, 0.4)';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.background = '#ff751f';
-                  e.target.style.boxShadow = '0 2px 4px rgba(255, 117, 31, 0.3)';
-                }}
-              >
-                Create Account
-              </button>
-
               {/* Login Form */}
               <div style={{ marginBottom: '16px' }}>
                 <form onSubmit={handleLogin} style={{ textAlign: 'left' }}>
@@ -4584,6 +4553,38 @@ function GameBoard() {
                   </button>
                 </form>
               </div>
+
+              {/* Create Account Button */}
+              <button
+                onClick={() => {
+                  setShowSignupForm(true);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '14px 24px',
+                  background: '#ff751f',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  color: '#fff',
+                  transition: 'all 0.2s',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                  boxShadow: '0 2px 4px rgba(255, 117, 31, 0.3)',
+                  marginBottom: '16px'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#e6640f';
+                  e.target.style.boxShadow = '0 4px 8px rgba(255, 117, 31, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = '#ff751f';
+                  e.target.style.boxShadow = '0 2px 4px rgba(255, 117, 31, 0.3)';
+                }}
+              >
+                Create Account
+              </button>
 
               {/* Divider */}
               <div style={{ 
@@ -5764,6 +5765,11 @@ function GameBoard() {
     
     const handleRematchAccept = (data) => {
       if (data.matchId === currentMatchId) {
+        // Clear timeout if it exists
+        if (rematchTimeoutRef.current) {
+          clearTimeout(rematchTimeoutRef.current);
+          rematchTimeoutRef.current = null;
+        }
         // Reset game state for rematch
         setGameOver(null);
         setRematchRequest(null);
@@ -5799,6 +5805,11 @@ function GameBoard() {
     
     const handleRematchDecline = (data) => {
       if (data.matchId === currentMatchId && data.from === currentPlayerNumber) {
+        // Clear timeout if it exists
+        if (rematchTimeoutRef.current) {
+          clearTimeout(rematchTimeoutRef.current);
+          rematchTimeoutRef.current = null;
+        }
         // Opponent declined rematch - clear the request so sender can proceed
         setRematchRequest(null);
         setMessage('Opponent declined rematch');
@@ -6027,6 +6038,11 @@ function GameBoard() {
                   <>
                     <button style={buttonStyle} onClick={() => {
                       if (isOnlineGame && socketRef.current && matchId) {
+                        // Clear any existing timeout
+                        if (rematchTimeoutRef.current) {
+                          clearTimeout(rematchTimeoutRef.current);
+                          rematchTimeoutRef.current = null;
+                        }
                         const toPlayer = playerNumber === 1 ? 2 : 1;
                         setRematchRequest({ from: playerNumber, to: toPlayer });
                         socketRef.current.emit('game:rematch-request', {
@@ -6034,6 +6050,19 @@ function GameBoard() {
                           from: playerNumber,
                           to: toPlayer
                         });
+                        // Set timeout to auto-decline if no response within 5 seconds
+                        rematchTimeoutRef.current = setTimeout(() => {
+                          setRematchRequest(prev => {
+                            // Only clear if still waiting for response
+                            if (prev && prev.from === playerNumber) {
+                              setMessage('Rematch request timed out - opponent may have left');
+                              setTimeout(() => setMessage(''), 3000);
+                              return null;
+                            }
+                            return prev;
+                          });
+                          rematchTimeoutRef.current = null;
+                        }, 5000);
                       } else {
                         handleRematch();
                       }

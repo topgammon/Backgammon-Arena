@@ -562,6 +562,17 @@ io.on('connection', (socket) => {
       ? match.player2.socketId 
       : match.player1.socketId;
     
+    // Check if opponent socket is still connected
+    const opponentSocket = io.sockets.sockets.get(opponentSocketId);
+    if (!opponentSocket || !opponentSocket.connected) {
+      // Opponent is not connected, automatically decline
+      console.log(`⚠️ Opponent not connected for rematch request in match ${matchId}, auto-declining`);
+      io.to(socket.id).emit('game:rematch-decline', {
+        matchId, from, to
+      });
+      return;
+    }
+    
     // Send rematch request to opponent
     io.to(opponentSocketId).emit('game:rematch-request', {
       matchId, from, to

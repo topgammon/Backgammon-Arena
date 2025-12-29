@@ -424,7 +424,7 @@ function GameBoard() {
       prevPlayerRef.current = currentPlayer;
     }
     
-    if (!gameOver && screen === 'passplay' && !firstRollPhase && !gameOver && !isRolling && !doubleOffer) {
+    if (!gameOver && (screen === 'passplay' || screen === 'onlineGame') && !firstRollPhase && !gameOver && !isRolling && !doubleOffer) {
       timerRef.current = setInterval(() => {
         setTimer(t => {
           if (t <= 1) {
@@ -1559,11 +1559,20 @@ function GameBoard() {
     setIsRolling(true);
     setAnimationFrame(0);
     
+    // Send rolling animation start to server for online games
+    if (isOnlineGame && currentPlayer === playerNumber && socketRef.current && matchId) {
+      socketRef.current.emit('game:dice-roll-start', {
+        matchId,
+        player: playerNumber
+      });
+    }
+    
     const rollInterval = setInterval(() => {
-      setRollingDice([
+      const rollingValues = [
         1 + Math.floor(Math.random() * 6),
         1 + Math.floor(Math.random() * 6)
-      ]);
+      ];
+      setRollingDice(rollingValues);
       setAnimationFrame(prev => (prev + 1) % 7);
         }, 50);
     
@@ -1586,7 +1595,7 @@ function GameBoard() {
       setSelected(null);
       setLegalMoves([]);
       
-      // Send dice roll to server for online games
+      // Send dice roll result to server for online games
       if (isOnlineGame && currentPlayer === playerNumber && socketRef.current && matchId) {
         socketRef.current.emit('game:dice-roll', {
           matchId,
@@ -1604,6 +1613,15 @@ function GameBoard() {
     
     setIsFirstRolling(true);
     setFirstRollAnimationFrame(0);
+    
+    // Send first roll animation start to server for online games
+    if (isOnlineGame && socketRef.current && matchId) {
+      socketRef.current.emit('game:first-roll-start', {
+        matchId,
+        player: playerNumber,
+        rollTurn: firstRollTurn
+      });
+    }
     
     const firstRollInterval = setInterval(() => {
       setFirstRollAnimationFrame(prev => (prev + 1) % 7);
@@ -2300,6 +2318,8 @@ function GameBoard() {
     if (!hasRolled) return;
     // Prevent player interaction when it's CPU's turn
     if (isCpuGame && currentPlayer === cpuPlayer) return;
+    // Prevent selecting opponent's bar checkers in online games
+    if (isOnlineGame && (currentPlayer !== playerNumber || barChecker.player !== playerNumber)) return;
     if (bar[currentPlayer].length > 0) {
       setSelected(barChecker);
       calculateLegalMoves(barChecker);
@@ -2928,7 +2948,7 @@ function GameBoard() {
             onClick={canBearOff2 ? (e => { e.stopPropagation(); handlePointClick(bearoffSumMove2 || 'bearoff'); }) : undefined}
           >{pipCount(checkers, 2, bar, borneOff)}</text>
         </g>
-        {!hasRolled && !awaitingEndTurn && !isRolling && !autoRoll[currentPlayer] && canDouble[currentPlayer] && (
+        {!hasRolled && !awaitingEndTurn && !isRolling && !autoRoll[currentPlayer] && canDouble[currentPlayer] && (!isOnlineGame || (isOnlineGame && currentPlayer === playerNumber)) && (
           <foreignObject
             x={boardX + triangleW * 2}
             y={boardY + boardH / 2 - 40}
@@ -2967,14 +2987,19 @@ function GameBoard() {
             )}
             {(!hasRolled && !awaitingEndTurn && !isRolling) ? (
               <div style={{ display: 'flex', gap: 8 }}>
-                <button style={{ ...buttonStyle, minWidth: 0, width: 110, fontSize: 22, padding: '14px 0', margin: 0 }} onClick={rollDice}>Roll Dice</button>
+                {(!isOnlineGame || (isOnlineGame && currentPlayer === playerNumber)) && (
+                  <button style={{ ...buttonStyle, minWidth: 0, width: 110, fontSize: 22, padding: '14px 0', margin: 0 }} onClick={rollDice}>Roll Dice</button>
+                )}
+                {isOnlineGame && currentPlayer !== playerNumber && (
+                  <div style={{ fontSize: 18, color: '#fff', padding: '14px 0' }}>Waiting for opponent to roll...</div>
+                )}
               </div>
             ) : null}
             {(hasRolled || isRolling) && !showEndTurn && (
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '0 0 4px 0', gap: 7 }}>
                 {isRolling ? (
                   [0, 1].map(i => (
-                    <Dice key={i} value={rollingDice[i]} faded={false} shrunk={false} isRolling={true} frame={animationFrame} />
+                    <Dice key={i} value={isRolling ? rollingDice[i] : (dice[i] || 1)} faded={false} shrunk={false} isRolling={true} frame={animationFrame} />
                   ))
                 ) : (
                   (dice[0] === dice[1] && dice[0] !== 0)
@@ -4904,6 +4929,27 @@ function GameBoard() {
     );
   };
 
+  // Auto-resign on page leave for guest online play
+  useEffect(() => {
+    if (!isOnlineGame || !matchmakingType || matchmakingType !== 'guest') return;
+    
+    const handleBeforeUnload = () => {
+      // Auto-resign when leaving the page during a guest game
+      if (socketRef.current && matchId && playerNumber && !gameOver) {
+        socketRef.current.emit('game:resign', {
+          matchId,
+          player: playerNumber
+        });
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isOnlineGame, matchmakingType, matchId, playerNumber, gameOver]);
+  
   // Socket.io handlers for online game events
   useEffect(() => {
     if (!isOnlineGame || !socketRef.current || !matchId || !playerNumber) return;
@@ -4929,11 +4975,34 @@ function GameBoard() {
       }
     };
     
+    // Listen for dice roll animation start
+    const handleDiceRollStart = (data) => {
+      if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
+        setIsRolling(true);
+        setAnimationFrame(0);
+        // Animate opponent's dice roll
+        const rollInterval = setInterval(() => {
+          setRollingDice([
+            1 + Math.floor(Math.random() * 6),
+            1 + Math.floor(Math.random() * 6)
+          ]);
+          setAnimationFrame(prev => (prev + 1) % 7);
+        }, 50);
+        
+        // Clear interval after animation duration
+        setTimeout(() => {
+          clearInterval(rollInterval);
+        }, 600);
+      }
+    };
+    
     // Listen for dice rolls
     const handleDiceRolled = (data) => {
       if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
         setDice(data.dice);
         setHasRolled(true);
+        setIsRolling(false);
+        setAnimationFrame(0);
         if (data.movesAllowed) {
           setMovesAllowed(data.movesAllowed);
         }
@@ -4977,6 +5046,23 @@ function GameBoard() {
       }
     };
     
+    // Listen for first roll animation start
+    const handleFirstRollStart = (data) => {
+      if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
+        setIsFirstRolling(true);
+        setFirstRollAnimationFrame(0);
+        // Animate opponent's first roll
+        const firstRollInterval = setInterval(() => {
+          setFirstRollAnimationFrame(prev => (prev + 1) % 7);
+        }, 50);
+        
+        // Clear interval after animation duration
+        setTimeout(() => {
+          clearInterval(firstRollInterval);
+        }, 600);
+      }
+    };
+    
     // Listen for first roll events
     const handleFirstRoll = (data) => {
       console.log('Received first roll event:', data, 'currentPlayerNumber:', currentPlayerNumber);
@@ -4989,6 +5075,8 @@ function GameBoard() {
           console.log('Updated firstRolls to:', newRolls);
           return newRolls;
         });
+        setIsFirstRolling(false);
+        setFirstRollAnimationFrame(0);
         // Update turn to nextRollTurn if provided, otherwise use fallback logic
         const newTurn = data.nextRollTurn || (data.rollTurn === 1 ? 2 : 1);
         console.log('Setting firstRollTurn to:', newTurn);
@@ -5022,22 +5110,26 @@ function GameBoard() {
     };
     
     socket.on('game:move', handleMove);
+    socket.on('game:dice-roll-start', handleDiceRollStart);
     socket.on('game:dice-rolled', handleDiceRolled);
     socket.on('game:turn-changed', handleTurnChanged);
     socket.on('game:state-sync', handleStateSync);
     socket.on('game:double-offered', handleDoubleOffered);
     socket.on('game:over', handleGameOver);
+    socket.on('game:first-roll-start', handleFirstRollStart);
     socket.on('game:first-roll', handleFirstRoll);
     socket.on('game:first-roll-complete', handleFirstRollComplete);
     socket.on('game:first-roll-tie', handleFirstRollTie);
     
     return () => {
       socket.off('game:move', handleMove);
+      socket.off('game:dice-roll-start', handleDiceRollStart);
       socket.off('game:dice-rolled', handleDiceRolled);
       socket.off('game:turn-changed', handleTurnChanged);
       socket.off('game:state-sync', handleStateSync);
       socket.off('game:double-offered', handleDoubleOffered);
       socket.off('game:over', handleGameOver);
+      socket.off('game:first-roll-start', handleFirstRollStart);
       socket.off('game:first-roll', handleFirstRoll);
       socket.off('game:first-roll-complete', handleFirstRollComplete);
       socket.off('game:first-roll-tie', handleFirstRollTie);

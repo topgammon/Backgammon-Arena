@@ -253,6 +253,27 @@ io.on('connection', (socket) => {
   });
   
   // Game event handlers
+  socket.on('game:dice-roll-start', (data) => {
+    const { matchId, player } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Invalid matchId for dice roll start:', matchId);
+      return;
+    }
+    
+    // Find opponent socket
+    const opponentSocketId = player === 1 ? match.player2.socketId : match.player1.socketId;
+    
+    // Broadcast dice roll animation start to opponent
+    io.to(opponentSocketId).emit('game:dice-roll-start', {
+      matchId,
+      player
+    });
+    
+    console.log(`🎲 Player ${player} started rolling dice in match ${matchId}`);
+  });
+  
   socket.on('game:dice-roll', (data) => {
     const { matchId, player, dice, movesAllowed } = data;
     const match = activeMatches.get(matchId);
@@ -265,7 +286,7 @@ io.on('connection', (socket) => {
     // Find opponent socket
     const opponentSocketId = player === 1 ? match.player2.socketId : match.player1.socketId;
     
-    // Broadcast dice roll to opponent
+    // Broadcast dice roll result to opponent
     io.to(opponentSocketId).emit('game:dice-rolled', {
       matchId,
       player,
@@ -331,6 +352,28 @@ io.on('connection', (socket) => {
   });
   
   // First roll handlers
+  socket.on('game:first-roll-start', (data) => {
+    const { matchId, player, rollTurn } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Invalid matchId for first roll start:', matchId);
+      return;
+    }
+    
+    // Find opponent socket
+    const opponentSocketId = player === 1 ? match.player2.socketId : match.player1.socketId;
+    
+    // Broadcast first roll animation start to opponent
+    io.to(opponentSocketId).emit('game:first-roll-start', {
+      matchId,
+      player,
+      rollTurn
+    });
+    
+    console.log(`🎲 Player ${player} started first roll (turn ${rollTurn}) in match ${matchId}`);
+  });
+  
   socket.on('game:first-roll', (data) => {
     const { matchId, player, roll, rollTurn, nextRollTurn } = data;
     const match = activeMatches.get(matchId);

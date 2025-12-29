@@ -1618,17 +1618,17 @@ function GameBoard() {
       newRolls[firstRollTurn - 1] = roll;
       setFirstRolls(newRolls);
       
-      // Send first roll to server for online games
-      if (isOnlineGame && socketRef.current && matchId) {
-        socketRef.current.emit('game:first-roll', {
-          matchId,
-          player: playerNumber,
-          roll: roll,
-          rollTurn: firstRollTurn
-        });
-      }
-      
       if (firstRollTurn === 1) {
+        // Send first roll to server for online games BEFORE updating local state
+        if (isOnlineGame && socketRef.current && matchId) {
+          socketRef.current.emit('game:first-roll', {
+            matchId,
+            player: playerNumber,
+            roll: roll,
+            rollTurn: 1,
+            nextRollTurn: 2
+          });
+        }
         setFirstRollTurn(2);
       } else {
         if (newRolls[0] > newRolls[1]) {
@@ -4966,7 +4966,11 @@ function GameBoard() {
           newRolls[data.rollTurn - 1] = data.roll;
           return newRolls;
         });
-        if (data.rollTurn === 1) {
+        // Update turn to nextRollTurn if provided, otherwise use fallback logic
+        if (data.nextRollTurn) {
+          setFirstRollTurn(data.nextRollTurn);
+        } else if (data.rollTurn === 1) {
+          // Fallback for backwards compatibility
           setFirstRollTurn(2);
         }
       }

@@ -332,7 +332,7 @@ io.on('connection', (socket) => {
   
   // First roll handlers
   socket.on('game:first-roll', (data) => {
-    const { matchId, player, roll, rollTurn } = data;
+    const { matchId, player, roll, rollTurn, nextRollTurn } = data;
     const match = activeMatches.get(matchId);
     
     if (!match) {
@@ -343,12 +343,13 @@ io.on('connection', (socket) => {
     // Find opponent socket
     const opponentSocketId = player === 1 ? match.player2.socketId : match.player1.socketId;
     
-    // Broadcast first roll to opponent
+    // Broadcast first roll to opponent with next turn information
     io.to(opponentSocketId).emit('game:first-roll', {
       matchId,
       player,
       roll,
-      rollTurn
+      rollTurn,
+      nextRollTurn
     });
     
     console.log(`🎲 Player ${player} rolled ${roll} in first roll phase (turn ${rollTurn}) for match ${matchId}`);

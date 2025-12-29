@@ -3643,33 +3643,123 @@ function GameBoard() {
         </div>
       );
     } else {
-      // Registered user avatar (placeholder for now)
-      return (
-        <div style={{
-          width: size,
-          height: size,
-          borderRadius: '12px',
-          background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: size * 0.4,
-          fontWeight: 'bold',
-          color: '#fff',
-          border: '3px solid #333',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-        }}>
-          U
-        </div>
-      );
+      // Registered user avatar - check if they have a Google avatar
+      const googleAvatarUrl = userProfileData?.google_avatar_url || userData?.user_metadata?.avatar_url || userData?.user_metadata?.picture;
+      
+      if (googleAvatarUrl) {
+        // Use Google profile photo
+        return (
+          <div style={{
+            width: size,
+            height: size,
+            borderRadius: '12px',
+            overflow: 'hidden',
+            border: '3px solid #333',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            background: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <img 
+              src={googleAvatarUrl}
+              alt="User avatar"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block'
+              }}
+              onError={(e) => {
+                // Fallback if Google image fails to load
+                e.target.style.display = 'none';
+                e.target.parentElement.style.background = 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)';
+                const initial = userProfileData?.username?.[0]?.toUpperCase() || userData?.email?.[0]?.toUpperCase() || 'U';
+                e.target.parentElement.textContent = initial;
+                e.target.parentElement.style.fontSize = `${size * 0.4}px`;
+                e.target.parentElement.style.fontWeight = 'bold';
+                e.target.parentElement.style.color = '#fff';
+                e.target.parentElement.style.display = 'flex';
+                e.target.parentElement.style.alignItems = 'center';
+                e.target.parentElement.style.justifyContent = 'center';
+              }}
+            />
+          </div>
+        );
+      } else {
+        // Use default avatar based on stored avatar name
+        const avatarName = userProfileData?.avatar || 'Barry';
+        if (avatarName === 'google') {
+          // Fallback if avatar is set to 'google' but no URL
+          const initial = userProfileData?.username?.[0]?.toUpperCase() || userData?.email?.[0]?.toUpperCase() || 'U';
+          return (
+            <div style={{
+              width: size,
+              height: size,
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: size * 0.4,
+              fontWeight: 'bold',
+              color: '#fff',
+              border: '3px solid #333',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+            }}>
+              {initial}
+            </div>
+          );
+        }
+        return (
+          <div style={{
+            width: size,
+            height: size,
+            borderRadius: '12px',
+            overflow: 'hidden',
+            border: '3px solid #333',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            background: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <img 
+              src={`/avatars/${avatarName}.png`}
+              alt={avatarName}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block'
+              }}
+              onError={(e) => {
+                // Fallback if image fails to load
+                e.target.style.display = 'none';
+                e.target.parentElement.style.background = 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)';
+                const initial = userProfileData?.username?.[0]?.toUpperCase() || userData?.email?.[0]?.toUpperCase() || 'U';
+                e.target.parentElement.textContent = initial;
+                e.target.parentElement.style.fontSize = `${size * 0.4}px`;
+                e.target.parentElement.style.fontWeight = 'bold';
+                e.target.parentElement.style.color = '#fff';
+                e.target.parentElement.style.display = 'flex';
+                e.target.parentElement.style.alignItems = 'center';
+                e.target.parentElement.style.justifyContent = 'center';
+              }}
+            />
+          </div>
+        );
+      }
     }
   };
 
   // Player info component (for below board)
   const renderPlayerInfo = (playerNum, isGuest = false, username = null, country = null, rating = null, showControls = true, isPassPlay = false, showQuit = false) => {
-    const displayName = username || (isGuest ? (playerNum === 1 ? passPlayPlayer1Name : passPlayPlayer2Name) : `Player ${playerNum}`);
-    const displayCountry = country || (isGuest ? 'N/A' : 'N/A');
-    const displayRating = rating || (isGuest ? 'Unranked' : '1000');
+    // For logged-in users, use their profile data
+    const isLoggedInUser = !isGuest && user && userProfile && playerNum === playerNumber;
+    const displayName = username || (isLoggedInUser ? userProfile.username : (isGuest ? (playerNum === 1 ? passPlayPlayer1Name : passPlayPlayer2Name) : `Player ${playerNum}`));
+    const displayCountry = country || (isLoggedInUser ? userProfile.country : (isGuest ? 'N/A' : 'N/A'));
+    const displayRating = rating || (isLoggedInUser ? userProfile.elo_rating : (isGuest ? 'Unranked' : '1000'));
     const isCurrentPlayer = isPassPlay ? (currentPlayer === playerNum) : (playerNum === playerNumber);
     
     return (
@@ -3683,7 +3773,7 @@ function GameBoard() {
         border: '2px solid #dee2e6',
         width: 'fit-content'
       }}>
-        {renderAvatar(isGuest, false, null, 50, userProfile, user)}
+        {renderAvatar(isGuest && !isLoggedInUser, false, null, 50, isLoggedInUser ? userProfile : null, isLoggedInUser ? user : null)}
         <div style={{ textAlign: 'left' }}>
           <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
             {displayName}
@@ -4775,7 +4865,13 @@ function GameBoard() {
                   
                   try {
                     // Use the current window location (should be localhost:5173 for dev)
-                    const redirectUrl = window.location.origin + window.location.pathname;
+                    // Force port 5173 if we're in development
+                    let redirectUrl = window.location.origin + window.location.pathname;
+                    if (redirectUrl.includes('localhost') && !redirectUrl.includes(':5173') && !redirectUrl.includes(':3000')) {
+                      redirectUrl = redirectUrl.replace(/localhost(:\d+)?/, 'localhost:5173');
+                    } else if (redirectUrl.includes('localhost:3000')) {
+                      redirectUrl = redirectUrl.replace(':3000', ':5173');
+                    }
                     
                     const { data, error } = await supabase.auth.signInWithOAuth({
                       provider: 'google',
@@ -6477,7 +6573,7 @@ function GameBoard() {
             justifyContent: 'flex-start', 
             marginTop: 16
           }}>
-            {renderPlayerInfo(playerNumber, true, `Guest ${playerNumber}`, null, null, true)}
+            {renderPlayerInfo(playerNumber, !user, userProfile?.username || `Guest ${playerNumber}`, userProfile?.country, userProfile?.elo_rating, true)}
           </div>
           
           {/* Chat box below player info when narrow */}

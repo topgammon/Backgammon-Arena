@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './GameBoard.css';
 import { getCpuMove, getThinkingTime, shouldAcceptDouble, shouldOfferDouble } from './cpuAI';
 import { supabase } from '../lib/supabase';
+import { io } from 'socket.io-client';
 
 // TODO: Future feature - Track player records against each bot difficulty for signed-in users
 // This will display win/loss stats for each difficulty level when viewing the difficulty selection screen
@@ -190,6 +191,10 @@ function GameBoard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
   const timerRef = useRef();
+  const [isMatchmaking, setIsMatchmaking] = useState(false);
+  const [matchmakingStatus, setMatchmakingStatus] = useState('');
+  const [matchmakingType, setMatchmakingType] = useState(null); // 'guest' or 'ranked'
+  const socketRef = useRef(null);
   
   // Track window width for responsive design
   useEffect(() => {
@@ -3525,11 +3530,19 @@ function GameBoard() {
                         {getCountryFlag(userProfile?.country)}
                       </span>
                     </div>
-                    <button style={buttonStyle} onClick={() => alert('Coming soon!')}>Play Game</button>
+                    <button style={buttonStyle} onClick={() => {
+                      setMatchmakingType('ranked');
+                      setIsMatchmaking(true);
+                      setScreen('matchmaking');
+                    }}>Play Game (ranked)</button>
                   </>
                 ) : (
                   <>
-                    <button style={buttonStyle} onClick={() => alert('Coming soon!')}>Play as Guest</button>
+                    <button style={buttonStyle} onClick={() => {
+                      setMatchmakingType('guest');
+                      setIsMatchmaking(true);
+                      setScreen('matchmaking');
+                    }}>Play as Guest (unranked)</button>
                     <button style={buttonStyle} onClick={() => setShowLoginModal(true)}>Login / Signup</button>
                   </>
                 )}
@@ -4433,6 +4446,177 @@ function GameBoard() {
     );
   };
 
+  // Socket.io connection for matchmaking
+  useEffect(() => {
+    if (!isMatchmaking || socketRef.current) return;
+    
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+    const isGuest = matchmakingType === 'guest';
+    
+    const socket = io(backendUrl);
+    socketRef.current = socket;
+    
+    socket.on('connect', () => {
+      console.log('Connected to matchmaking server');
+      setMatchmakingStatus('Searching for opponent...');
+      
+      if (isGuest) {
+        socket.emit('matchmaking:guest:join');
+      } else {
+        // TODO: Implement ranked matchmaking
+        socket.emit('matchmaking:ranked:join', {
+          userId: user?.id,
+          elo: userProfile?.elo_rating || 1000
+        });
+      }
+    });
+    
+    socket.on('matchmaking:guest:queued', (data) => {
+      setMatchmakingStatus(`Waiting for opponent... (Position: ${data.position})`);
+    });
+    
+    socket.on('matchmaking:match-found', (data) => {
+      setMatchmakingStatus('Match found! Starting game...');
+      // TODO: Handle match creation and transition to online game
+      console.log('Match found:', data);
+      // For now, just show a message
+      setTimeout(() => {
+        setMatchmakingStatus('Match found! (Game integration coming soon)');
+      }, 1000);
+    });
+    
+    socket.on('disconnect', () => {
+      console.log('Disconnected from matchmaking server');
+      if (isMatchmaking) {
+        setMatchmakingStatus('Disconnected. Please try again.');
+      }
+    });
+    
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+      setMatchmakingStatus('Error connecting to server. Please try again.');
+    });
+    
+    return () => {
+      if (socketRef.current) {
+        const isGuestCleanup = matchmakingType === 'guest';
+        if (isGuestCleanup) {
+          socketRef.current.emit('matchmaking:guest:leave');
+        } else {
+          socketRef.current.emit('matchmaking:ranked:leave');
+        }
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
+  }, [isMatchmaking, matchmakingType, user, userProfile]);
+
+  // Matchmaking Screen
+  const renderMatchmaking = () => {
+    const isGuest = matchmakingType === 'guest';
+    
+    const handleCancelMatchmaking = () => {
+      if (socketRef.current) {
+        if (isGuest) {
+          socketRef.current.emit('matchmaking:guest:leave');
+        } else {
+          socketRef.current.emit('matchmaking:ranked:leave');
+        }
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      setIsMatchmaking(false);
+      setMatchmakingStatus('');
+      setMatchmakingType(null);
+      setScreen('home');
+    };
+    
+    return (
+      <div style={{ 
+        textAlign: 'center', 
+        marginTop: 30, 
+        paddingBottom: 40, 
+        background: '#a8a7a8', 
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{
+          ...sectionStyle,
+          maxWidth: 600,
+          width: '100%',
+          padding: '60px 40px',
+          textAlign: 'center'
+        }}>
+          <div style={{ marginBottom: '32px' }}>
+            <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '120px', marginBottom: '24px' }} />
+          </div>
+          
+          <h1 style={{ 
+            fontSize: '32px', 
+            fontWeight: 'bold', 
+            color: '#000',
+            marginBottom: '16px',
+            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+          }}>
+            {isGuest ? 'Guest Matchmaking' : 'Ranked Matchmaking'}
+          </h1>
+          
+          <div style={{
+            fontSize: '18px',
+            color: '#666',
+            marginBottom: '40px',
+            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+          }}>
+            {isGuest ? '(Unranked)' : '(Ranked - ELO Rating: ' + (userProfile?.elo_rating || 1000) + ')'}
+          </div>
+          
+          {/* Loading animation */}
+          <div style={{ marginBottom: '32px' }}>
+            <div style={{
+              width: '80px',
+              height: '80px',
+              border: '8px solid #f3f3f3',
+              borderTop: '8px solid #ff751f',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto 24px'
+            }} />
+            <style>{`
+              @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+              }
+            `}</style>
+          </div>
+          
+          <div style={{
+            fontSize: '20px',
+            color: '#000',
+            marginBottom: '40px',
+            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+            minHeight: '60px'
+          }}>
+            {matchmakingStatus || 'Connecting to matchmaking server...'}
+          </div>
+          
+          <button
+            style={{
+              ...buttonStyle,
+              background: '#dc3545',
+              minWidth: '200px'
+            }}
+            onClick={handleCancelMatchmaking}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // Profile Page
   const renderProfile = () => {
     if (!user) {
@@ -4914,6 +5098,7 @@ function GameBoard() {
   };
 
   if (screen === 'home') return renderHome();
+  if (screen === 'matchmaking') return renderMatchmaking();
   if (screen === 'passplay') return renderPassPlay();
   if (screen === 'cpu-difficulty') return renderCpuDifficultySelection();
   if (screen === 'cpu') return renderCpuGame();

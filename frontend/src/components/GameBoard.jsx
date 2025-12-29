@@ -293,6 +293,7 @@ function GameBoard() {
   const [isFirstRolling, setIsFirstRolling] = useState(false);
   const [firstRollAnimationFrame, setFirstRollAnimationFrame] = useState(0);
   const [autoRoll, setAutoRoll] = useState({ 1: false, 2: false });
+  const [muted, setMuted] = useState(false);
   const [doubleOffer, setDoubleOffer] = useState(null);
   const [doubleTimer, setDoubleTimer] = useState(12);
   const [canDouble, setCanDouble] = useState({ 1: true, 2: true });
@@ -400,6 +401,27 @@ function GameBoard() {
 
     fetchUserProfile();
   }, [user]);
+
+  // Sound effects - non-blocking, triggered by game actions
+  const playSound = (soundName) => {
+    if (muted) return;
+    try {
+      const soundMap = {
+        'Dice roll': 'Dice roll',
+        'Double Offer': 'Double Offer',
+        'Select': 'Select',
+        'Place': 'Place',
+        'Hit': 'Hit'
+      };
+      const fileName = soundMap[soundName] || soundName;
+      const encodedFileName = encodeURIComponent(fileName);
+      const audio = new Audio(`/SoundFX/${encodedFileName}.mp3`);
+      audio.volume = 0.5;
+      audio.play().catch(() => {}); // Silently fail if can't play
+    } catch (e) {
+      // Silently fail - don't block game
+    }
+  };
 
   // Reset first roll state on mount
   useEffect(() => {
@@ -1220,6 +1242,7 @@ function GameBoard() {
     setCheckers(newCheckers);
     setUsedDice(newUsedDice);
     setBorneOff(newBorneOff);
+    if (!(isCpuGame && currentPlayer === cpuPlayer)) playSound('Place');
     
     if (newBorneOff[currentPlayer] === 15) {
       triggerGameOver('win', currentPlayer, currentPlayer === 1 ? 2 : 1);
@@ -1281,6 +1304,7 @@ function GameBoard() {
     setCheckers(newCheckers);
     setUsedDice(newUsedDice);
     setBorneOff(newBorneOff);
+    if (!(isCpuGame && currentPlayer === cpuPlayer)) playSound('Place');
     
     if (newBorneOff[currentPlayer] === 15) {
       triggerGameOver('win', currentPlayer, currentPlayer === 1 ? 2 : 1);
@@ -1349,6 +1373,7 @@ function GameBoard() {
     setCheckers(newCheckers);
     setUsedDice(newUsedDice);
     setBorneOff(newBorneOff);
+    if (!(isCpuGame && currentPlayer === cpuPlayer)) playSound('Place');
     
     if (newBorneOff[currentPlayer] === 15) {
       triggerGameOver('win', currentPlayer, currentPlayer === 1 ? 2 : 1);
@@ -1393,7 +1418,9 @@ function GameBoard() {
           let dieIndex = parseInt(match.split('|')[3], 10);
           let newChecker = { ...checker, point: dest, offset: newCheckers.filter(c => c.point === dest).length };
           let pointCheckers = checkers.filter(c => c.point === dest);
+          let isHit = false;
           if (pointCheckers.length === 1 && pointCheckers[0].player !== currentPlayer) {
+            isHit = true;
             let hitChecker = pointCheckers[0];
             let opp = hitChecker.player;
             let newHitObj = { ...hitChecker, point: opp === 1 ? 24 : -1, offset: bar[opp].length };
@@ -1402,6 +1429,14 @@ function GameBoard() {
           }
           newCheckers.push(newChecker);
           newUsedDice.push(dieIndex);
+          setCheckers(newCheckers);
+          setBar(newBar);
+          setBorneOff(newBorneOff);
+          setUsedDice(newUsedDice);
+          setSelected(null);
+          setLegalMoves([]);
+          setMoveMade(true);
+          playSound(isHit ? 'Hit' : 'Place');
         } else if (steps === 2 && typeStr === 'sum') {
           // Prevent multimove bar entry if there are multiple pieces on the bar
           // All pieces must enter individually before any other moves
@@ -1428,15 +1463,19 @@ function GameBoard() {
           let newChecker = { ...checker, point: dest, offset: newCheckers.filter(c => c.point === dest).length };
           newCheckers.push(newChecker);
           newUsedDice.push(0, 1);
+          // Check if any hit occurred
+          let intermediatePointCheckers = checkers.filter(c => c.point === intermediatePoint);
+          let intermediateHit = intermediatePointCheckers.length === 1 && intermediatePointCheckers[0].player !== currentPlayer;
+          let anyHit = (pointCheckers.length === 1 && pointCheckers[0].player !== currentPlayer) || intermediateHit;
+          setCheckers(newCheckers);
+          setBar(newBar);
+          setBorneOff(newBorneOff);
+          setUsedDice(newUsedDice);
+          setSelected(null);
+          setLegalMoves([]);
+          setMoveMade(true);
+          playSound(anyHit ? 'Hit' : 'Place');
         }
-        
-        setCheckers(newCheckers);
-        setBar(newBar);
-        setBorneOff(newBorneOff);
-        setUsedDice(newUsedDice);
-        setSelected(null);
-        setLegalMoves([]);
-        setMoveMade(true);
         
         // Send move to server for online games
         if (isOnlineGame && currentPlayer === playerNumber && socketRef.current && matchId) {
@@ -1493,6 +1532,16 @@ function GameBoard() {
         }
         
         let newUsedDice = [...usedDice, ...dieIndexes];
+        // Check if any hit occurred during multimove
+        let hasHit = false;
+        for (let s = 1; s <= steps; s++) {
+          let next = s === steps ? destLocal : (currentPlayer === 1 ? from + (d * s) : from - (d * s));
+          let pointCheckers = checkers.filter(c => c.point === next);
+          if (pointCheckers.length === 1 && pointCheckers[0].player !== currentPlayer) {
+            hasHit = true;
+            break;
+          }
+        }
         setCheckers(newCheckers);
         setBar(newBar);
         setBorneOff(newBorneOff);
@@ -1500,6 +1549,7 @@ function GameBoard() {
         setSelected(null);
         setLegalMoves([]);
         setMoveMade(true);
+        playSound(hasHit ? 'Hit' : 'Place');
         
         // Send move to server for online games
         if (isOnlineGame && currentPlayer === playerNumber && socketRef.current && matchId) {
@@ -1556,6 +1606,18 @@ function GameBoard() {
             pos = next;
           }
           let newUsedDice = [...usedDice, 0, 1];
+          // Check if any hit occurred during multimove
+          let anyHit = false;
+          let checkPos = from;
+          for (let d of bestOrder) {
+            let next = currentPlayer === 1 ? checkPos + d : checkPos - d;
+            let pointCheckers = checkers.filter(c => c.point === next);
+            if (pointCheckers.length === 1 && pointCheckers[0].player !== currentPlayer) {
+              anyHit = true;
+              break;
+            }
+            checkPos = next;
+          }
           setCheckers(newCheckers);
           setBar(newBar);
           setBorneOff(newBorneOff);
@@ -1563,6 +1625,7 @@ function GameBoard() {
           setSelected(null);
           setLegalMoves([]);
           setMoveMade(true);
+          playSound(anyHit ? 'Hit' : 'Place');
           
           // Send move to server for online games
           if (isOnlineGame && currentPlayer === playerNumber && socketRef.current && matchId) {
@@ -1591,7 +1654,9 @@ function GameBoard() {
     let newBorneOff = { ...borneOff };
     
     let pointCheckers = newCheckers.filter(c => c.point === dest);
+    let isHit = false;
     if (pointCheckers.length === 1 && pointCheckers[0].player !== currentPlayer) {
+      isHit = true;
       let hitChecker = pointCheckers[0];
       let barChecker = { ...hitChecker, point: hitChecker.player === 1 ? 24 : -1, offset: newBar[hitChecker.player].length };
       newBar[hitChecker.player] = [...newBar[hitChecker.player], barChecker];
@@ -1609,6 +1674,7 @@ function GameBoard() {
     setSelected(null);
     setLegalMoves([]);
     setMoveMade(true);
+    playSound(isHit ? 'Hit' : 'Place');
     
     // Send move to server for online games
     if (isOnlineGame && currentPlayer === playerNumber && socketRef.current && matchId) {
@@ -1777,6 +1843,7 @@ function GameBoard() {
       setUsedDice([]);
       setHasRolled(true);
       setMovesAllowed(moves);
+      playSound('Dice roll');
       setSelected(null);
       setLegalMoves([]);
       
@@ -1833,6 +1900,7 @@ function GameBoard() {
       let newRolls = [...firstRolls];
       newRolls[firstRollTurn - 1] = roll;
       setFirstRolls(newRolls);
+      playSound('Dice roll');
       
       // Reset timer for next roll
       setFirstRollTimer(10);
@@ -2509,6 +2577,7 @@ function GameBoard() {
         const topChecker = stack.reduce((a, b) => a.offset > b.offset ? a : b);
         setSelected(topChecker);
         calculateLegalMoves(topChecker);
+        playSound('Select');
       } else {
         setSelected(null);
         setLegalMoves([]);
@@ -2522,6 +2591,8 @@ function GameBoard() {
           const topChecker = stack.reduce((a, b) => a.offset > b.offset ? a : b);
           setSelected(topChecker);
           calculateLegalMoves(topChecker);
+          playSound('Select');
+          playSound('Select');
         } else {
           setSelected(null);
           setLegalMoves([]);
@@ -2580,6 +2651,7 @@ function GameBoard() {
         const topChecker = stack.reduce((a, b) => a.offset > b.offset ? a : b);
         setSelected(topChecker);
         calculateLegalMoves(topChecker);
+        playSound('Select');
       }
     } else {
       setSelected(null);
@@ -2596,6 +2668,7 @@ function GameBoard() {
     if (bar[currentPlayer].length > 0) {
       setSelected(barChecker);
       calculateLegalMoves(barChecker);
+      playSound('Select');
       return;
     }
   }
@@ -3373,6 +3446,15 @@ function GameBoard() {
               onClick={() => setAutoRoll(prev => ({ ...prev, 2: !prev[2] }))}
             >
               {autoRoll[2] ? 'ON' : 'OFF'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16, fontWeight: 600 }}>Sound:</span>
+            <button 
+              style={{ ...buttonStyle, minWidth: 60, padding: '8px 12px', fontSize: 14, background: !muted ? '#28a745' : '#6c757d', color: '#fff' }} 
+              onClick={() => setMuted(prev => !prev)}
+            >
+              {muted ? 'OFF' : 'ON'}
             </button>
           </div>
         </div>
@@ -4963,6 +5045,15 @@ function GameBoard() {
                 {autoRoll[1] ? 'ON' : 'OFF'}
               </button>
             </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 16, fontWeight: 600 }}>Sound:</span>
+              <button 
+                style={{ ...buttonStyle, minWidth: 60, padding: '8px 12px', fontSize: 14, background: !muted ? '#28a745' : '#6c757d', color: '#fff' }} 
+                onClick={() => setMuted(prev => !prev)}
+              >
+                {muted ? 'OFF' : 'ON'}
+              </button>
+            </div>
             <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff' }} onClick={confirmResign}>Resign</button>
           </div>
         </div>
@@ -5362,6 +5453,7 @@ function GameBoard() {
           setDoubleOfferedThisTurn(prev => ({ ...prev, [data.doubleOffer.from]: true }));
         }
         setDoubleTimer(12);
+        playSound('Double Offer');
       }
     };
     
@@ -5645,6 +5737,15 @@ function GameBoard() {
                 onClick={() => setAutoRoll(prev => ({ ...prev, [playerNumber]: !prev[playerNumber] }))}
               >
                 {autoRoll[playerNumber] ? 'ON' : 'OFF'}
+              </button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+              <span style={{ fontSize: 16, fontWeight: 600 }}>Sound:</span>
+              <button 
+                style={{ ...buttonStyle, minWidth: 60, padding: '8px 12px', fontSize: 14, background: !muted ? '#28a745' : '#6c757d', color: '#fff' }} 
+                onClick={() => setMuted(prev => !prev)}
+              >
+                {muted ? 'OFF' : 'ON'}
               </button>
             </div>
           </div>

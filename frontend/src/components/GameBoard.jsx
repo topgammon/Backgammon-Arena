@@ -3599,7 +3599,18 @@ function GameBoard() {
       }}>
         {renderAvatar(isGuest, false, null, 50)}
         <div style={{ textAlign: 'left' }}>
-          <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'left' }}>{displayName}</div>
+          <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
+            {displayName}
+            <span style={{
+              display: 'inline-block',
+              width: 20,
+              height: 20,
+              borderRadius: '50%',
+              background: playerNum === 1 ? '#fff' : '#222',
+              border: '2px solid #b87333',
+              verticalAlign: 'middle',
+            }} />
+          </div>
           <div style={{ fontSize: 14, color: '#666', display: 'flex', gap: 12, alignItems: 'center', textAlign: 'left' }}>
             <span>🌍 {displayCountry}</span>
             <span>⭐ {displayRating}</span>
@@ -3676,7 +3687,18 @@ function GameBoard() {
         <div style={{ textAlign: 'left' }}>
           {isCpu && cpuDifficulty ? (
             <>
-              <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'left' }}>{cpuName}</div>
+              <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
+                {cpuName}
+                <span style={{
+                  display: 'inline-block',
+                  width: 20,
+                  height: 20,
+                  borderRadius: '50%',
+                  background: '#222',
+                  border: '2px solid #b87333',
+                  verticalAlign: 'middle',
+                }} />
+              </div>
               <div style={{ fontSize: 14, color: '#666', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', textAlign: 'left' }}>
                 <span>{difficultyName}</span>
                 <span>⭐ {displayRating}</span>
@@ -3684,7 +3706,18 @@ function GameBoard() {
             </>
           ) : (
             <>
-              <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'left' }}>{displayName}</div>
+              <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
+                {displayName}
+                <span style={{
+                  display: 'inline-block',
+                  width: 20,
+                  height: 20,
+                  borderRadius: '50%',
+                  background: opponentPlayerNum === 1 ? '#fff' : '#222',
+                  border: '2px solid #b87333',
+                  verticalAlign: 'middle',
+                }} />
+              </div>
               <div style={{ fontSize: 14, color: '#666', display: 'flex', gap: 12, alignItems: 'center', textAlign: 'left' }}>
                 {displayCountry && <span>🌍 {displayCountry}</span>}
                 <span>⭐ {displayRating}</span>
@@ -3706,11 +3739,11 @@ function GameBoard() {
         <div style={{ flex: 1 }}>
           {renderOpponentInfo(true, false, currentPlayer === 1 ? passPlayPlayer2Name : passPlayPlayer1Name, null, null, null)}
         </div>
-        {/* Title and logo (right side) */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, minWidth: 200 }}>
-          <h2 style={{ margin: 0, fontSize: 24 }}>Pass and Play Backgammon</h2>
-          <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '60px' }} />
-        </div>
+          {/* Title and logo (right side) */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, minWidth: 200, flexWrap: 'wrap' }}>
+            <h2 style={{ margin: 0, fontSize: 24 }}>Pass and Play Backgammon</h2>
+            <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '100px' }} />
+          </div>
       </div>
       
       {renderBoard()}
@@ -5293,12 +5326,12 @@ function GameBoard() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0 20px', marginBottom: 16, maxWidth: 900, margin: '0 auto 16px', gap: 20 }}>
           {/* CPU info (left side) */}
           <div style={{ flex: 1 }}>
-            {renderOpponentInfo(false, true, null, null, null, cpuDifficulty)}
+            {renderOpponentInfo(false, true, null, null, null, cpuDifficulty, 2)}
           </div>
           {/* Title and logo (right side) */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, minWidth: 200 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, minWidth: 200, flexWrap: 'wrap' }}>
             <h2 style={{ margin: 0, fontSize: 24 }}>Vs. CPU</h2>
-            <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '60px' }} />
+            <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '100px' }} />
           </div>
         </div>
         
@@ -6054,34 +6087,43 @@ function GameBoard() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0 20px', marginBottom: 16, maxWidth: 900, margin: '0 auto 16px', gap: 20 }}>
           {/* Opponent info (left side) */}
           <div style={{ flex: 1 }}>
-            {renderOpponentInfo(opponent?.isGuest || false, false, opponentName, null, null, null)}
+            {renderOpponentInfo(opponent?.isGuest || false, false, opponentName, null, null, null, playerNumber === 1 ? 2 : 1)}
           </div>
           {/* Title and logo (right side) */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, minWidth: 200 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, minWidth: 200, flexWrap: 'wrap' }}>
             <h2 style={{ margin: 0, fontSize: 24 }}>Online Guest Match - Unranked</h2>
-            <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '60px' }} />
+            <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '100px' }} />
           </div>
         </div>
         
-        {renderBoard()}
-        
-        {/* Player info below board (left side) */}
-        <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginTop: 16, maxWidth: 900, margin: '16px auto 0' }}>
-          {renderPlayerInfo(playerNumber, true, `Guest ${playerNumber}`, null, null, true)}
-        </div>
-        
-        {/* Chat box for online games */}
-        <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginTop: 16, maxWidth: 900, margin: '16px auto 0' }}>
-          <div style={{
-            width: '100%',
-            maxWidth: 400,
-            background: '#f8f9fa',
-            borderRadius: '8px',
-            border: '2px solid #dee2e6',
-            display: 'flex',
-            flexDirection: 'column',
-            maxHeight: 200
-          }}>
+        {/* Board and Chat container */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'flex-start', 
+          gap: 20, 
+          padding: '0 20px',
+          maxWidth: windowWidth > 1200 ? 1200 : 900,
+          margin: '0 auto',
+          flexWrap: windowWidth > 1200 ? 'nowrap' : 'wrap'
+        }}>
+          {/* Board */}
+          <div style={{ flexShrink: 0 }}>
+            {renderBoard()}
+          </div>
+          
+          {/* Chat box for online games - to the right if wide enough, otherwise below */}
+          {windowWidth > 1200 ? (
+            <div style={{
+              width: 300,
+              background: '#f8f9fa',
+              borderRadius: '8px',
+              border: '2px solid #dee2e6',
+              display: 'flex',
+              flexDirection: 'column',
+              height: boardH + 72, // Match board height
+              flexShrink: 0
+            }}>
             <div style={{
               padding: '8px 12px',
               background: '#e9ecef',
@@ -6097,14 +6139,13 @@ function GameBoard() {
               flex: 1,
               overflowY: 'auto',
               padding: '8px 12px',
-              minHeight: 100,
-              maxHeight: 120
+              minHeight: 100
             }}>
               {chatMessages.length === 0 ? (
                 <div style={{ color: '#999', fontSize: 12, fontStyle: 'italic' }}>No messages yet...</div>
               ) : (
                 chatMessages.map((msg, idx) => (
-                  <div key={idx} style={{ marginBottom: 4, fontSize: 13 }}>
+                  <div key={idx} style={{ marginBottom: 4, fontSize: 13, wordBreak: 'break-word' }}>
                     <span style={{ fontWeight: 600, color: '#333' }}>{msg.from}:</span> {msg.text}
                   </div>
                 ))
@@ -6132,7 +6173,7 @@ function GameBoard() {
                     setChatInput('');
                   }
                 }}
-                placeholder="Type a message..."
+                placeholder="Type a message... 😊"
                 style={{
                   flex: 1,
                   padding: '6px 10px',
@@ -6168,6 +6209,109 @@ function GameBoard() {
               </button>
             </div>
           </div>
+          ) : (
+            <div style={{
+              width: '100%',
+              maxWidth: 400,
+              background: '#f8f9fa',
+              borderRadius: '8px',
+              border: '2px solid #dee2e6',
+              display: 'flex',
+              flexDirection: 'column',
+              maxHeight: 200
+            }}>
+              <div style={{
+                padding: '8px 12px',
+                background: '#e9ecef',
+                borderBottom: '1px solid #dee2e6',
+                borderRadius: '8px 8px 0 0',
+                fontSize: 14,
+                fontWeight: 600,
+                color: '#333'
+              }}>
+                Chat
+              </div>
+              <div style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '8px 12px',
+                minHeight: 100,
+                maxHeight: 120
+              }}>
+                {chatMessages.length === 0 ? (
+                  <div style={{ color: '#999', fontSize: 12, fontStyle: 'italic' }}>No messages yet...</div>
+                ) : (
+                  chatMessages.map((msg, idx) => (
+                    <div key={idx} style={{ marginBottom: 4, fontSize: 13, wordBreak: 'break-word' }}>
+                      <span style={{ fontWeight: 600, color: '#333' }}>{msg.from}:</span> {msg.text}
+                    </div>
+                  ))
+                )}
+              </div>
+              <div style={{
+                display: 'flex',
+                gap: 8,
+                padding: '8px 12px',
+                borderTop: '1px solid #dee2e6'
+              }}>
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && chatInput.trim() && socketRef.current && matchId) {
+                      const message = chatInput.trim();
+                      socketRef.current.emit('game:chat', {
+                        matchId,
+                        player: playerNumber,
+                        message
+                      });
+                      setChatMessages(prev => [...prev, { from: `Player ${playerNumber}`, text: message }]);
+                      setChatInput('');
+                    }
+                  }}
+                  placeholder="Type a message... 😊"
+                  style={{
+                    flex: 1,
+                    padding: '6px 10px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: 13
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    if (chatInput.trim() && socketRef.current && matchId) {
+                      const message = chatInput.trim();
+                      socketRef.current.emit('game:chat', {
+                        matchId,
+                        player: playerNumber,
+                        message
+                      });
+                      setChatMessages(prev => [...prev, { from: `Player ${playerNumber}`, text: message }]);
+                      setChatInput('');
+                    }
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    background: '#ff751f',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    fontSize: 13,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Player info below board (left side) */}
+        <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginTop: 16, maxWidth: 900, margin: '16px auto 0' }}>
+          {renderPlayerInfo(playerNumber, true, `Guest ${playerNumber}`, null, null, true)}
         </div>
         
         {/* Test End Game button - Hidden for production, uncomment for testing */}

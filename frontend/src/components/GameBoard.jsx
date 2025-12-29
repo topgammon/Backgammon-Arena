@@ -414,8 +414,8 @@ function GameBoard() {
               email: email,
               username: username,
               country: country,
-              avatar: googleAvatarUrl ? 'google' : 'Barry', // Store 'google' as special marker
-              google_avatar_url: googleAvatarUrl, // Store Google photo URL
+              avatar: 'Barry', // Always default to first avatar
+              google_avatar_url: googleAvatarUrl, // Store Google photo URL separately
               elo_rating: 1000,
               wins: 0,
               losses: 0,
@@ -470,7 +470,8 @@ function GameBoard() {
               email: user.email,
               username: user.user_metadata.username,
               country: user.user_metadata.country || 'US',
-              avatar: 'Barry', // Default to first avatar
+              avatar: 'Barry', // Always default to first avatar
+              google_avatar_url: null, // No Google avatar for email signups
               elo_rating: 1000,
               wins: 0,
               losses: 0,
@@ -4323,7 +4324,8 @@ function GameBoard() {
           email: signupFormData.email,
           username: signupFormData.username,
           country: signupFormData.country,
-          avatar: 'Barry', // Default to first avatar
+          avatar: 'Barry', // Always default to first avatar
+          google_avatar_url: null, // No Google avatar for email signups
           elo_rating: 1000,
           wins: 0,
           losses: 0,
@@ -7056,11 +7058,21 @@ function GameBoard() {
     }
 
     const handleSignOut = async () => {
-      if (supabase) {
-        await supabase.auth.signOut();
-        setUser(null);
-        setUserProfile(null);
-        setScreen('home');
+      try {
+        if (supabase) {
+          const { error } = await supabase.auth.signOut();
+          if (error) {
+            console.error('Sign out error:', error);
+            alert('Failed to sign out: ' + error.message);
+            return;
+          }
+          setUser(null);
+          setUserProfile(null);
+          setScreen('home');
+        }
+      } catch (err) {
+        console.error('Sign out error:', err);
+        alert('An error occurred while signing out');
       }
     };
 
@@ -7083,18 +7095,22 @@ function GameBoard() {
     };
 
     const handleUpdateAvatar = async (avatarName) => {
-      if (!supabase) return;
+      if (!supabase || !user) return;
 
+      // When user selects a regular avatar, clear Google avatar URL
       const { error } = await supabase
         .from('users')
-        .update({ avatar: avatarName })
+        .update({ 
+          avatar: avatarName,
+          google_avatar_url: null // Clear Google avatar when selecting regular avatar
+        })
         .eq('id', user.id);
 
       if (error) {
         console.error('Error updating avatar:', error);
         alert('Failed to update avatar');
       } else {
-        setUserProfile({ ...userProfile, avatar: avatarName });
+        setUserProfile({ ...userProfile, avatar: avatarName, google_avatar_url: null });
         setShowAvatarSelector(false);
       }
     };
@@ -7131,34 +7147,74 @@ function GameBoard() {
             textAlign: 'left'
           }}>
             <div style={{ position: 'relative' }}>
-              {userProfile?.avatar ? (
-                <img 
-                  src={`/avatars/${userProfile.avatar}.png`}
-                  alt={userProfile.avatar}
-                  onClick={() => setShowAvatarSelector(true)}
-                  style={{
-                    width: '120px',
-                    height: '120px',
-                    borderRadius: '12px',
-                    objectFit: 'cover',
-                    cursor: 'pointer',
-                    border: '3px solid #ff751f',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.opacity = '0.8';
-                    e.target.style.transform = 'scale(1.05)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.opacity = '1';
-                    e.target.style.transform = 'scale(1)';
-                  }}
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.nextSibling.style.display = 'flex';
-                  }}
-                />
-              ) : null}
+              {(() => {
+                // Check if user has Google avatar
+                const googleAvatarUrl = userProfile?.google_avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
+                const avatarName = userProfile?.avatar || 'Barry';
+                
+                if (googleAvatarUrl) {
+                  // Show Google avatar
+                  return (
+                    <img 
+                      src={googleAvatarUrl}
+                      alt="User avatar"
+                      onClick={() => setShowAvatarSelector(true)}
+                      style={{
+                        width: '120px',
+                        height: '120px',
+                        borderRadius: '12px',
+                        objectFit: 'cover',
+                        cursor: 'pointer',
+                        border: '3px solid #ff751f',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.opacity = '0.8';
+                        e.target.style.transform = 'scale(1.05)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.opacity = '1';
+                        e.target.style.transform = 'scale(1)';
+                      }}
+                      onError={(e) => {
+                        // Fallback to regular avatar if Google image fails
+                        e.target.src = `/avatars/${avatarName}.png`;
+                      }}
+                    />
+                  );
+                } else if (avatarName) {
+                  // Show regular avatar
+                  return (
+                    <img 
+                      src={`/avatars/${avatarName}.png`}
+                      alt={avatarName}
+                      onClick={() => setShowAvatarSelector(true)}
+                      style={{
+                        width: '120px',
+                        height: '120px',
+                        borderRadius: '12px',
+                        objectFit: 'cover',
+                        cursor: 'pointer',
+                        border: '3px solid #ff751f',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.opacity = '0.8';
+                        e.target.style.transform = 'scale(1.05)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.opacity = '1';
+                        e.target.style.transform = 'scale(1)';
+                      }}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                  );
+                }
+                return null;
+              })()}
               <div 
                 onClick={() => setShowAvatarSelector(true)}
                 style={{

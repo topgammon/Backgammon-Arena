@@ -200,6 +200,7 @@ function GameBoard() {
   const [matchId, setMatchId] = useState(null);
   const [playerNumber, setPlayerNumber] = useState(null); // 1 or 2
   const [opponent, setOpponent] = useState(null); // { userId, isGuest }
+  const transitioningToGameRef = useRef(false);
   
   // Track window width for responsive design
   useEffect(() => {
@@ -4724,6 +4725,9 @@ function GameBoard() {
         console.log('Match found:', data);
         setMatchmakingStatus('Match found! Starting game...');
         
+        // Mark that we're transitioning to game (don't disconnect socket)
+        transitioningToGameRef.current = true;
+        
         // Set online game state
         setMatchId(data.matchId);
         setPlayerNumber(data.playerNumber);
@@ -4776,7 +4780,10 @@ function GameBoard() {
     });
     
     return () => {
-      if (socketRef.current) {
+      // Only cleanup/disconnect if we're canceling matchmaking, NOT when transitioning to game
+      // The socket needs to stay connected for the online game!
+      if (socketRef.current && isMatchmaking && !transitioningToGameRef.current) {
+        // Only disconnect if we're still in matchmaking and NOT transitioning to game
         const isGuestCleanup = matchmakingType === 'guest';
         if (isGuestCleanup) {
           socketRef.current.emit('matchmaking:guest:leave');
@@ -4786,6 +4793,8 @@ function GameBoard() {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
+      // Reset the ref after cleanup
+      transitioningToGameRef.current = false;
     };
   }, [isMatchmaking, matchmakingType, user, userProfile]);
 

@@ -3494,24 +3494,40 @@ function GameBoard() {
   // Avatar component
   const renderAvatar = (isGuest = false, isCpu = false, cpuDifficulty = null, size = 60) => {
     if (isCpu && cpuDifficulty) {
-      // CPU avatar - use the difficulty avatar name
+      // CPU avatar - use the actual avatar image from difficulty selector
       const avatarName = DIFFICULTY_LEVELS[cpuDifficulty]?.avatar || 'CPU';
       return (
         <div style={{
           width: size,
           height: size,
-          borderRadius: '50%',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          borderRadius: '12px',
+          overflow: 'hidden',
+          border: '3px solid #333',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+          background: '#fff',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: size * 0.4,
-          fontWeight: 'bold',
-          color: '#fff',
-          border: '3px solid #333',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+          justifyContent: 'center'
         }}>
-          {avatarName[0]}
+          <img 
+            src={`/avatars/${avatarName}.png`}
+            alt={avatarName}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: 'block'
+            }}
+            onError={(e) => {
+              // Fallback if image fails to load
+              e.target.style.display = 'none';
+              e.target.parentElement.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+              e.target.parentElement.textContent = avatarName[0];
+              e.target.parentElement.style.fontSize = `${size * 0.4}px`;
+              e.target.parentElement.style.fontWeight = 'bold';
+              e.target.parentElement.style.color = '#fff';
+            }}
+          />
         </div>
       );
     } else if (isGuest) {
@@ -3520,7 +3536,7 @@ function GameBoard() {
         <div style={{
           width: size,
           height: size,
-          borderRadius: '50%',
+          borderRadius: '12px',
           background: 'linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%)',
           display: 'flex',
           alignItems: 'center',
@@ -3540,7 +3556,7 @@ function GameBoard() {
         <div style={{
           width: size,
           height: size,
-          borderRadius: '50%',
+          borderRadius: '12px',
           background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
           display: 'flex',
           alignItems: 'center',
@@ -3592,7 +3608,7 @@ function GameBoard() {
               <button style={{ ...buttonStyle, minWidth: 0, padding: '8px 16px', fontSize: 14, background: '#dc3545', color: '#fff' }} onClick={confirmResign}>Resign</button>
             )}
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontSize: 14, fontWeight: 600 }}>Auto:</span>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>Auto Roll:</span>
               <button 
                 style={{ ...buttonStyle, minWidth: 50, padding: '6px 10px', fontSize: 12, background: autoRoll[playerNum] ? '#28a745' : '#6c757d', color: '#fff' }} 
                 onClick={() => setAutoRoll(prev => ({ ...prev, [playerNum]: !prev[playerNum] }))}
@@ -3660,15 +3676,18 @@ function GameBoard() {
 
   const renderPassPlay = () => (
     <div style={{ textAlign: 'center', marginTop: 30 }}>
-      <div style={{ marginBottom: '18px' }}>
-        <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '120px' }} />
-      </div>
-      <h2>Pass and Play Backgammon</h2>
       {message && <div style={{ color: 'red', margin: 10 }}>{message}</div>}
       
-      {/* Opponent info above board (left side) */}
-      <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginBottom: 16, maxWidth: 900, margin: '0 auto 16px' }}>
-        {renderOpponentInfo(true, false, currentPlayer === 1 ? passPlayPlayer2Name : passPlayPlayer1Name, null, null, null)}
+      {/* Title and opponent info above board */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0 20px', marginBottom: 16, maxWidth: 900, margin: '0 auto 16px', gap: 20 }}>
+        {/* Opponent info (left side) */}
+        <div style={{ flex: 1 }}>
+          {renderOpponentInfo(true, false, currentPlayer === 1 ? passPlayPlayer2Name : passPlayPlayer1Name, null, null, null)}
+        </div>
+        {/* Title (right side) */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: 200 }}>
+          <h2 style={{ margin: 0, fontSize: 24 }}>Pass and Play Backgammon</h2>
+        </div>
       </div>
       
       {renderBoard()}
@@ -3678,10 +3697,15 @@ function GameBoard() {
         {renderPlayerInfo(currentPlayer === 1 ? 1 : 2, true, currentPlayer === 1 ? passPlayPlayer1Name : passPlayPlayer2Name, null, null, true, true)}
       </div>
       
-      {/* Test End Game button */}
-      <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
-        <button style={{ ...buttonStyle, background: '#ff9800', color: '#fff', minWidth: 0, padding: '8px 16px', fontSize: 14 }} onClick={setEndGameState}>Test End Game</button>
+      {/* Logo at bottom */}
+      <div style={{ marginTop: 40, marginBottom: 20 }}>
+        <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '120px' }} />
       </div>
+      
+      {/* Test End Game button - Hidden for production, uncomment for testing */}
+      {/* <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+        <button style={{ ...buttonStyle, background: '#ff9800', color: '#fff', minWidth: 0, padding: '8px 16px', fontSize: 14 }} onClick={setEndGameState}>Test End Game</button>
+      </div> */}
       {noMoveOverlay && usedDice.length < movesAllowed.length && !gameOver && (
         <div style={{ position: 'absolute', top: '54.5%', left: 'calc(50% - 373px)', transform: 'translateY(-50%)', zIndex: 10, pointerEvents: 'none' }}>
           <div style={{ background: 'rgba(255,255,255,0.95)', border: '2px solid #28a745', borderRadius: 12, padding: 32, minWidth: 220, maxWidth: 340, textAlign: 'center', fontSize: 24, fontWeight: 'bold', color: '#222', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
@@ -5245,15 +5269,18 @@ function GameBoard() {
   const renderCpuGame = () => {
     return (
       <div style={{ textAlign: 'center', marginTop: 30 }}>
-        <div style={{ marginBottom: '18px' }}>
-          <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '120px' }} />
-        </div>
-        <h2>Vs. CPU</h2>
         {message && <div style={{ color: 'red', margin: 10 }}>{message}</div>}
         
-        {/* CPU info above board (left side) */}
-        <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginBottom: 16, maxWidth: 900, margin: '0 auto 16px' }}>
-          {renderOpponentInfo(false, true, null, null, null, cpuDifficulty)}
+        {/* Title and CPU info above board */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0 20px', marginBottom: 16, maxWidth: 900, margin: '0 auto 16px', gap: 20 }}>
+          {/* CPU info (left side) */}
+          <div style={{ flex: 1 }}>
+            {renderOpponentInfo(false, true, null, null, null, cpuDifficulty)}
+          </div>
+          {/* Title (right side) */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: 200 }}>
+            <h2 style={{ margin: 0, fontSize: 24 }}>Vs. CPU</h2>
+          </div>
         </div>
         
         {renderBoard()}
@@ -5263,10 +5290,20 @@ function GameBoard() {
           {renderPlayerInfo(1, true, passPlayPlayer1Name || 'Guest Player', null, null, true, false)}
         </div>
         
-        {/* Test End Game button */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
-          <button style={{ ...buttonStyle, background: '#ff9800', color: '#fff', minWidth: 0, padding: '8px 16px', fontSize: 14 }} onClick={setEndGameState}>Test End Game</button>
+        {/* Quit button */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12, gap: 12 }}>
+          <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', minWidth: 0, padding: '8px 16px', fontSize: 14 }} onClick={handleQuit}>Quit</button>
         </div>
+        
+        {/* Logo at bottom */}
+        <div style={{ marginTop: 40, marginBottom: 20 }}>
+          <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '120px' }} />
+        </div>
+        
+        {/* Test End Game button - Hidden for production, uncomment for testing */}
+        {/* <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+          <button style={{ ...buttonStyle, background: '#ff9800', color: '#fff', minWidth: 0, padding: '8px 16px', fontSize: 14 }} onClick={setEndGameState}>Test End Game</button>
+        </div> */}
         {firstRollPhase && renderFirstRollModal()}
         {doubleOffer && !(isCpuGame && doubleOffer.to === cpuPlayer && doubleOffer.from !== cpuPlayer) && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
@@ -5989,15 +6026,18 @@ function GameBoard() {
     
     return (
       <div style={{ textAlign: 'center', marginTop: 30 }}>
-        <div style={{ marginBottom: '18px' }}>
-          <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '120px' }} />
-        </div>
-        <h2>Online Guest Match - Unranked</h2>
         {message && <div style={{ color: 'red', margin: 10 }}>{message}</div>}
         
-        {/* Opponent info above board (left side) */}
-        <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginBottom: 16, maxWidth: 900, margin: '0 auto 16px' }}>
-          {renderOpponentInfo(opponent?.isGuest || false, false, opponentName, null, null, null)}
+        {/* Title and opponent info above board */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0 20px', marginBottom: 16, maxWidth: 900, margin: '0 auto 16px', gap: 20 }}>
+          {/* Opponent info (left side) */}
+          <div style={{ flex: 1 }}>
+            {renderOpponentInfo(opponent?.isGuest || false, false, opponentName, null, null, null)}
+          </div>
+          {/* Title (right side) */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: 200 }}>
+            <h2 style={{ margin: 0, fontSize: 24 }}>Online Guest Match - Unranked</h2>
+          </div>
         </div>
         
         {renderBoard()}
@@ -6007,10 +6047,15 @@ function GameBoard() {
           {renderPlayerInfo(playerNumber, true, `Guest ${playerNumber}`, null, null, true)}
         </div>
         
-        {/* Test End Game button */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
-          <button style={{ ...buttonStyle, background: '#ff9800', color: '#fff', minWidth: 0, padding: '8px 16px', fontSize: 14 }} onClick={setEndGameState}>Test End Game</button>
+        {/* Logo at bottom */}
+        <div style={{ marginTop: 40, marginBottom: 20 }}>
+          <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '120px' }} />
         </div>
+        
+        {/* Test End Game button - Hidden for production, uncomment for testing */}
+        {/* <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+          <button style={{ ...buttonStyle, background: '#ff9800', color: '#fff', minWidth: 0, padding: '8px 16px', fontSize: 14 }} onClick={setEndGameState}>Test End Game</button>
+        </div> */}
         {firstRollPhase && renderFirstRollModal()}
         {doubleOffer && doubleOffer.to === playerNumber && (
           <div 

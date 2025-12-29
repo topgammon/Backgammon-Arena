@@ -1256,18 +1256,20 @@ function GameBoard() {
     }
     
     // Send move to server for online games
-    if (isOnlineGame && !allowCpu && currentPlayer === playerNumber && socketRef.current && matchId) {
-      socketRef.current.emit('game:move', {
-        matchId,
-        player: playerNumber,
-        move: { moveType: 'bearoff', checker: checker.id },
-        gameState: {
-          checkers: newCheckers,
-          bar: bar,
-          borneOff: newBorneOff,
-          usedDice: newUsedDice
-        }
-      });
+    if (isOnlineGame && socketRef.current && matchId) {
+      if (currentPlayer === playerNumber) {
+        socketRef.current.emit('game:move', {
+          matchId,
+          player: playerNumber,
+          move: { moveType: 'bearoff', checker: checker.id },
+          gameState: {
+            checkers: newCheckers,
+            bar: bar,
+            borneOff: newBorneOff,
+            usedDice: newUsedDice
+          }
+        });
+      }
     }
   }
 
@@ -5431,10 +5433,11 @@ function GameBoard() {
         // Apply opponent's move by syncing game state
         console.log('Opponent move received:', data);
         if (data.gameState) {
-          setCheckers(data.gameState.checkers);
-          setBar(data.gameState.bar);
-          setBorneOff(data.gameState.borneOff);
-          setUsedDice(data.gameState.usedDice);
+          // Update all game state from opponent's move
+          setCheckers(data.gameState.checkers || []);
+          setBar(data.gameState.bar || { 1: [], 2: [] });
+          setBorneOff(data.gameState.borneOff || { 1: 0, 2: 0 });
+          setUsedDice(data.gameState.usedDice || []);
           setSelected(null);
           setLegalMoves([]);
           setMoveMade(true);

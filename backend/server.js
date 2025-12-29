@@ -11,15 +11,22 @@ const PYTHON_AI_SERVICE_URL = process.env.PYTHON_AI_SERVICE_URL || 'http://local
 
 const app = express();
 const httpServer = createServer(app);
+
+// Configure CORS for Socket.io - allow all origins for public matchmaking service
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
-    methods: ["GET", "POST"]
-  }
+    origin: "*", // Allow all origins for public service
+    methods: ["GET", "POST"],
+    credentials: false
+  },
+  transports: ['websocket', 'polling']
 });
 
-// Middleware
-app.use(cors());
+// Middleware - CORS for HTTP requests
+app.use(cors({
+  origin: "*", // Allow all origins for public API
+  credentials: false
+}));
 app.use(express.json());
 
 // Basic health check
@@ -106,11 +113,33 @@ function matchPlayers(queue, player1, player2) {
 
 // Socket.io connection handling
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+  console.log('✅ User connected:', socket.id);
+  console.log('📊 Current guest queue size:', guestQueue.length);
+  
+  socket.on('error', (error) => {
+    console.error('❌ Socket error:', error);
+  });
+  
+  socket.on('disconnect', (reason) => {
+    console.log('🔌 User disconnected:', socket.id, 'Reason:', reason);
+    
+    // Remove from guest queue
+    const guestIndex = guestQueue.findIndex(p => p.socketId === socket.id);
+    if (guestIndex !== -1) {
+      guestQueue.splice(guestIndex, 1);
+      console.log('👤 Removed from guest queue, new size:', guestQueue.length);
+    }
+    
+    // Remove from ranked queue
+    if (rankedQueue.has(socket.id)) {
+      rankedQueue.delete(socket.id);
+      console.log('👤 Removed from ranked queue');
+    }
+  });
 
   // Guest matchmaking
   socket.on('matchmaking:guest:join', () => {
-    console.log('Guest joining matchmaking queue:', socket.id);
+    console.log('🎮 Guest joining matchmaking queue:', socket.id);
     
     // Remove from any existing queue position
     const existingIndex = guestQueue.findIndex(p => p.socketId === socket.id);
@@ -163,10 +192,11 @@ io.on('connection', (socket) => {
   
   // Guest matchmaking leave
   socket.on('matchmaking:guest:leave', () => {
-    console.log('Guest leaving matchmaking queue:', socket.id);
+    console.log('🚪 Guest leaving matchmaking queue:', socket.id);
     const index = guestQueue.findIndex(p => p.socketId === socket.id);
     if (index !== -1) {
       guestQueue.splice(index, 1);
+      console.log('👤 Removed from guest queue, new size:', guestQueue.length);
     }
     socket.emit('matchmaking:guest:left');
   });
@@ -179,22 +209,9 @@ io.on('connection', (socket) => {
   });
   
   socket.on('matchmaking:ranked:leave', () => {
-    console.log('User leaving ranked matchmaking queue:', socket.id);
+    console.log('🚪 User leaving ranked matchmaking queue:', socket.id);
     rankedQueue.delete(socket.id);
     socket.emit('matchmaking:ranked:left');
-  });
-
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    
-    // Remove from guest queue
-    const guestIndex = guestQueue.findIndex(p => p.socketId === socket.id);
-    if (guestIndex !== -1) {
-      guestQueue.splice(guestIndex, 1);
-    }
-    
-    // Remove from ranked queue
-    rankedQueue.delete(socket.id);
   });
 });
 

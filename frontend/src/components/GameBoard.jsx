@@ -162,11 +162,13 @@ function GameBoard() {
   const [firstRolls, setFirstRolls] = useState([null, null]);
   const [firstRollTurn, setFirstRollTurn] = useState(1);
   const [firstRollResult, setFirstRollResult] = useState(null);
+  const [firstRollTimer, setFirstRollTimer] = useState(10); // 10 second timer for break the dice
   const [showConfirmResign, setShowConfirmResign] = useState(false);
   const [gameOver, setGameOver] = useState(null);
   const [timer, setTimer] = useState(45);
   const [rematchRequest, setRematchRequest] = useState(null); // { from: playerNumber, to: playerNumber }
   const firstRollIntervalRef = useRef(null);
+  const firstRollTimerRef = useRef(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSignupForm, setShowSignupForm] = useState(false);
   const [user, setUser] = useState(null);
@@ -1759,6 +1761,31 @@ function GameBoard() {
     // Prevent rolling when it's not your turn in online games
     if (isOnlineGame && firstRollTurn !== playerNumber) return;
     
+    // Clear any existing timer
+    if (firstRollTimerRef.current) {
+      clearInterval(firstRollTimerRef.current);
+      firstRollTimerRef.current = null;
+    }
+    
+    // Reset timer to 10 seconds
+    setFirstRollTimer(10);
+    
+    // Start countdown timer
+    firstRollTimerRef.current = setInterval(() => {
+      setFirstRollTimer(prev => {
+        if (prev <= 1) {
+          // Timeout - resign
+          if (firstRollTimerRef.current) {
+            clearInterval(firstRollTimerRef.current);
+            firstRollTimerRef.current = null;
+          }
+          triggerGameOver('timeout', firstRollTurn === 1 ? 2 : 1, firstRollTurn);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
     setIsFirstRolling(true);
     setFirstRollAnimationFrame(0);
     
@@ -1780,10 +1807,19 @@ function GameBoard() {
       setIsFirstRolling(false);
       setFirstRollAnimationFrame(0);
       
+      // Clear timer
+      if (firstRollTimerRef.current) {
+        clearInterval(firstRollTimerRef.current);
+        firstRollTimerRef.current = null;
+      }
+      
       const roll = 1 + Math.floor(Math.random() * 6);
       let newRolls = [...firstRolls];
       newRolls[firstRollTurn - 1] = roll;
       setFirstRolls(newRolls);
+      
+      // Reset timer for next roll
+      setFirstRollTimer(10);
       
       if (firstRollTurn === 1) {
         // Send first roll to server for online games BEFORE updating local state
@@ -1797,6 +1833,20 @@ function GameBoard() {
           });
         }
         setFirstRollTurn(2);
+        // Start timer for player 2
+        firstRollTimerRef.current = setInterval(() => {
+          setFirstRollTimer(prev => {
+            if (prev <= 1) {
+              if (firstRollTimerRef.current) {
+                clearInterval(firstRollTimerRef.current);
+                firstRollTimerRef.current = null;
+              }
+              triggerGameOver('timeout', 1, 2);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
         } else {
           // Show result and send to server immediately
           if (newRolls[0] > newRolls[1]) {
@@ -1845,12 +1895,18 @@ function GameBoard() {
             }, 1500);
         } else {
           setFirstRollResult('tie');
+          // Clear timer
+          if (firstRollTimerRef.current) {
+            clearInterval(firstRollTimerRef.current);
+            firstRollTimerRef.current = null;
+          }
           setTimeout(() => {
             setFirstRolls([null, null]);
             setFirstRollTurn(1);
             setFirstRollResult(null);
             setIsFirstRolling(false);
             setFirstRollAnimationFrame(0);
+            setFirstRollTimer(10);
             
             // Send tie result to server for online games
             if (isOnlineGame && socketRef.current && matchId) {
@@ -2613,12 +2669,14 @@ function GameBoard() {
           alignItems: 'center',
         }}>
           <h2 style={{ marginBottom: 6, fontSize: 28, letterSpacing: 1 }}>Break the Dice</h2>
-          <div style={{ fontSize: 15, color: '#555', marginBottom: 18 }}>
+          <div style={{ fontSize: 15, color: '#555', marginBottom: 6 }}>
             roll to see who goes first
           </div>
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ width: 48, height: 48, background: 'linear-gradient(135deg, #b3e0ff 60%, #e0f7fa 100%)', borderRadius: 12, display: 'inline-block', opacity: 0.5 }} />
-          </div>
+          {isOnlineGame && firstRollTurn === playerNumber && (
+            <div style={{ fontSize: 14, color: firstRollTimer <= 3 ? '#d32f2f' : '#666', marginBottom: 12, fontWeight: 600 }}>
+              Time: {firstRollTimer}s
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 32, marginBottom: 18 }}>
             <div style={{ textAlign: 'center' }}>
               <svg width="38" height="38" style={{ display: 'block', margin: '0 auto 4px auto' }}>
@@ -2992,8 +3050,8 @@ function GameBoard() {
 
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0 }}>
-        {/* Evaluation Bar */}
-        <div style={{ width: evalBarWidth + 20, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        {/* Evaluation Bar - Hidden for now, will be used in game review section */}
+        <div style={{ width: evalBarWidth + 20, display: 'none', flexDirection: 'column', alignItems: 'center' }}>
           <svg width={evalBarWidth + 20} height={evalBarHeight + boardY * 2} style={{ margin: 10 }}>
             {/* White section (Player 1) on top */}
             <rect
@@ -5355,6 +5413,11 @@ function GameBoard() {
         }
         
         console.log('Processing opponent first roll, updating state...');
+        // Clear timer for this roll
+        if (firstRollTimerRef.current) {
+          clearInterval(firstRollTimerRef.current);
+          firstRollTimerRef.current = null;
+        }
         // Update opponent's first roll and turn together
         setFirstRolls(prev => {
           const newRolls = [...prev];
@@ -5363,6 +5426,9 @@ function GameBoard() {
           
           // Check if both rolls are complete and if it's a tie
           if (newRolls[0] !== null && newRolls[1] !== null && newRolls[0] === newRolls[1]) {
+            // Stop animation immediately
+            setIsFirstRolling(false);
+            setFirstRollAnimationFrame(0);
             // Show tie result for waiting player
             setFirstRollResult('tie');
             // Reset after delay (same as rolling player)
@@ -5370,13 +5436,33 @@ function GameBoard() {
               setFirstRolls([null, null]);
               setFirstRollTurn(1);
               setFirstRollResult(null);
+              setFirstRollTimer(10);
             }, 1500);
+          } else {
+            // Not a tie, stop animation normally
+            setIsFirstRolling(false);
+            setFirstRollAnimationFrame(0);
+            // If it's player 1's roll, start timer for player 2
+            if (data.rollTurn === 1) {
+              setFirstRollTimer(10);
+              firstRollTimerRef.current = setInterval(() => {
+                setFirstRollTimer(prev => {
+                  if (prev <= 1) {
+                    if (firstRollTimerRef.current) {
+                      clearInterval(firstRollTimerRef.current);
+                      firstRollTimerRef.current = null;
+                    }
+                    triggerGameOver('timeout', 1, 2);
+                    return 0;
+                  }
+                  return prev - 1;
+                });
+              }, 1000);
+            }
           }
           
           return newRolls;
         });
-        setIsFirstRolling(false);
-        setFirstRollAnimationFrame(0);
         // Update turn to nextRollTurn if provided, otherwise use fallback logic
         const newTurn = data.nextRollTurn || (data.rollTurn === 1 ? 2 : 1);
         console.log('Setting firstRollTurn to:', newTurn);
@@ -5447,6 +5533,21 @@ function GameBoard() {
     socket.on('game:first-roll-complete', handleFirstRollComplete);
     socket.on('game:first-roll-tie', handleFirstRollTie);
     
+    // Listen for opponent disconnect during break the dice
+    const handleOpponentDisconnected = (data) => {
+      if (data.matchId === currentMatchId && firstRollPhase) {
+        // Clear timer
+        if (firstRollTimerRef.current) {
+          clearInterval(firstRollTimerRef.current);
+          firstRollTimerRef.current = null;
+        }
+        // End game with opponent resignation
+        triggerGameOver('resignation', currentPlayerNumber, currentPlayerNumber === 1 ? 2 : 1);
+      }
+    };
+    
+    socket.on('game:opponent-disconnected', handleOpponentDisconnected);
+    
     return () => {
       socket.off('game:move', handleMove);
       socket.off('game:dice-roll-start', handleDiceRollStart);
@@ -5460,6 +5561,13 @@ function GameBoard() {
       socket.off('game:first-roll', handleFirstRoll);
       socket.off('game:first-roll-complete', handleFirstRollComplete);
       socket.off('game:first-roll-tie', handleFirstRollTie);
+      socket.off('game:opponent-disconnected', handleOpponentDisconnected);
+      
+      // Clean up timer
+      if (firstRollTimerRef.current) {
+        clearInterval(firstRollTimerRef.current);
+        firstRollTimerRef.current = null;
+      }
       socket.off('game:rematch-request', handleRematchRequest);
       socket.off('game:rematch-accept', handleRematchAccept);
       socket.off('game:rematch-decline', handleRematchDecline);

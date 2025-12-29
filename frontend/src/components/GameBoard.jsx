@@ -301,6 +301,26 @@ function GameBoard() {
   const [chatInput, setChatInput] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const emojiPickerRef = useRef(null);
+  
+  // Scroll to top when game mode screen changes
+  useEffect(() => {
+    if (screen === 'onlineGame' || screen === 'passplay' || screen === 'cpu' || screen === 'cpu-difficulty') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [screen]);
+  
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    if (showEmojiPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showEmojiPicker]);
   const [doubleOffer, setDoubleOffer] = useState(null);
   const [doubleTimer, setDoubleTimer] = useState(12);
   const [canDouble, setCanDouble] = useState({ 1: true, 2: true });
@@ -6089,19 +6109,6 @@ function GameBoard() {
       setChatInput(prev => prev + emoji);
       setShowEmojiPicker(false);
     };
-
-    // Close emoji picker when clicking outside
-    useEffect(() => {
-      const handleClickOutside = (event) => {
-        if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
-          setShowEmojiPicker(false);
-        }
-      };
-      if (showEmojiPicker) {
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-      }
-    }, [showEmojiPicker]);
 
     return (
       <div style={{ textAlign: 'center', marginTop: 30 }}>

@@ -5755,6 +5755,61 @@ function GameBoard() {
     
     socket.on('game:opponent-disconnected', handleOpponentDisconnected);
     
+    // Rematch handlers
+    const handleRematchRequest = (data) => {
+      if (data.matchId === currentMatchId && data.to === currentPlayerNumber) {
+        setRematchRequest({ from: data.from, to: data.to });
+      }
+    };
+    
+    const handleRematchAccept = (data) => {
+      if (data.matchId === currentMatchId) {
+        // Reset game state for rematch
+        setGameOver(null);
+        setRematchRequest(null);
+        setCheckers(getInitialCheckers());
+        setSelected(null);
+        setLegalMoves([]);
+        setDice([0, 0]);
+        setUsedDice([]);
+        setCurrentPlayer(1);
+        setHasRolled(false);
+        setBar({ 1: [], 2: [] });
+        setBorneOff({ 1: 0, 2: 0 });
+        setMessage('');
+        setTimer(45);
+        setUndoStack([]);
+        setMoveMade(false);
+        setAwaitingEndTurn(false);
+        setDoubleOffer(null);
+        setDoubleTimer(12);
+        setCanDouble({ 1: true, 2: true });
+        setLastDoubleOfferer(null);
+        setDoubleOfferedThisTurn({ 1: false, 2: false });
+        setGameStakes(1);
+        setNoMoveOverlay(false);
+        setShowConfirmResign(false);
+        setFirstRollPhase(true);
+        setFirstRolls([null, null]);
+        setFirstRollTurn(1);
+        setFirstRollResult(null);
+        if (timerRef.current) clearInterval(timerRef.current);
+      }
+    };
+    
+    const handleRematchDecline = (data) => {
+      if (data.matchId === currentMatchId && data.from === currentPlayerNumber) {
+        // Opponent declined rematch - clear the request so sender can proceed
+        setRematchRequest(null);
+        setMessage('Opponent declined rematch');
+        setTimeout(() => setMessage(''), 3000);
+      }
+    };
+    
+    socket.on('game:rematch-request', handleRematchRequest);
+    socket.on('game:rematch-accept', handleRematchAccept);
+    socket.on('game:rematch-decline', handleRematchDecline);
+    
     return () => {
       socket.off('game:move', handleMove);
       socket.off('game:dice-roll-start', handleDiceRollStart);
@@ -5997,10 +6052,10 @@ function GameBoard() {
                         setMatchId(null);
                         setPlayerNumber(null);
                         setOpponent(null);
-                        // Start matchmaking
+                        // Start matchmaking (same as "Play as Guest")
                         setIsMatchmaking(true);
                         setMatchmakingType('guest');
-                        setScreen('onlineMatchmaking');
+                        setScreen('matchmaking');
                         setMatchmakingStatus('Connecting...');
                       } else {
                         handleQuit();
@@ -6024,10 +6079,10 @@ function GameBoard() {
                       setMatchId(null);
                       setPlayerNumber(null);
                       setOpponent(null);
-                      // Start matchmaking
+                      // Start matchmaking (same as "Play as Guest")
                       setIsMatchmaking(true);
                       setMatchmakingType('guest');
-                      setScreen('onlineMatchmaking');
+                      setScreen('matchmaking');
                       setMatchmakingStatus('Connecting...');
                     }}>New Game</button>
                     <button style={{ ...buttonStyle, background: '#6c757d' }} onClick={handleQuit}>Quit</button>
@@ -6043,36 +6098,7 @@ function GameBoard() {
                             from: rematchRequest.from,
                             to: playerNumber
                           });
-                          // Reset game state for rematch
-                          setGameOver(null);
-                          setCheckers(getInitialCheckers());
-                          setSelected(null);
-                          setLegalMoves([]);
-                          setDice([0, 0]);
-                          setUsedDice([]);
-                          setCurrentPlayer(1);
-                          setHasRolled(false);
-                          setBar({ 1: [], 2: [] });
-                          setBorneOff({ 1: 0, 2: 0 });
-                          setMessage('');
-                          setTimer(45);
-                          setUndoStack([]);
-                          setMoveMade(false);
-                          setAwaitingEndTurn(false);
-                          setDoubleOffer(null);
-                          setDoubleTimer(12);
-    setCanDouble({ 1: true, 2: true });
-    setLastDoubleOfferer(null);
-    setDoubleOfferedThisTurn({ 1: false, 2: false });
-    setGameStakes(1);
-    setNoMoveOverlay(false);
-    setShowConfirmResign(false);
-                          setFirstRollPhase(true);
-                          setFirstRolls([null, null]);
-                          setFirstRollTurn(1);
-                          setFirstRollResult(null);
-                          setRematchRequest(null);
-                          if (timerRef.current) clearInterval(timerRef.current);
+                          // The handleRematchAccept handler will reset the game state for both players
                         }
                       }}>Accept</button>
                       <button style={{ ...buttonStyle, flex: 1, background: '#dc3545' }} onClick={() => {

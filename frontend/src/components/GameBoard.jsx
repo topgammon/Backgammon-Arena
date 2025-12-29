@@ -1027,8 +1027,8 @@ function GameBoard() {
       if (movesAllowed.length === 2 && movesAllowed[0] !== movesAllowed[1] && usedDice.length === 0) {
         let d1 = movesAllowed[0], d2 = movesAllowed[1];
         let sum = d1 + d2;
-        // Allow bearoff if sum equals distance, or if sum > distance and this is the farthest checker
-        if (sum === distance || (sum > distance && isFarthest)) {
+        // For multimove bearoff, sum must EXACTLY equal distance (no "greater than" rule)
+        if (sum === distance) {
           let mid = currentPlayer === 1 ? from + d1 : from - d1;
           if (mid >= 0 && mid <= 23) {
             let midCheckers = checkers.filter(c => c.point === mid);
@@ -1044,8 +1044,8 @@ function GameBoard() {
         let maxSteps = 4 - usedDice.length;
         for (let steps = 2; steps <= maxSteps; steps++) {
           let totalMove = steps * d;
-          // Allow bearoff if total move equals distance, or if total move > distance and this is the farthest checker
-          if (totalMove === distance || (totalMove > distance && isFarthest)) {
+          // For multimove bearoff, total move must EXACTLY equal distance (no "greater than" rule)
+          if (totalMove === distance) {
             // For bearoff, we need to check if all intermediate points are valid
             // But we don't need to check the final point since we're bearing off
             let valid = true;

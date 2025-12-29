@@ -23,16 +23,17 @@ const buttonStyle = {
 // CPU Difficulty Levels (1-9) - Removed "Perfect" to make 9 levels for 3x3 grid
 // TODO: Future feature - Track player records against each bot difficulty for signed-in users
 // This will display win/loss stats for each difficulty level when viewing the difficulty selection screen
+// Avatar mapping: Each difficulty level has a unique avatar
 const DIFFICULTY_LEVELS = {
-  1: { name: 'Beginner', description: 'Makes many mistakes, often misses obvious moves.', skillRating: 800 },
-  2: { name: 'Novice', description: 'Plays poorly, but occasionally finds good moves.', skillRating: 1000 },
-  3: { name: 'Amateur', description: 'Makes frequent errors, but understands basic strategy.', skillRating: 1200 },
-  4: { name: 'Intermediate', description: 'Understands fundamental strategy, but lacks depth.', skillRating: 1400 },
-  5: { name: 'Skilled', description: 'Plays solid, but can be outmaneuvered by experienced players.', skillRating: 1600 },
-  6: { name: 'Advanced', description: 'Strong player, rarely makes obvious mistakes.', skillRating: 1800 },
-  7: { name: 'Expert', description: 'Consistently makes good moves, challenging opponent.', skillRating: 2000 },
-  8: { name: 'Master', description: 'Plays near-perfect, very difficult to beat.', skillRating: 2200 },
-  9: { name: 'Grandmaster', description: 'Plays optimally, almost impossible to defeat.', skillRating: 2400 },
+  1: { name: 'Beginner', description: 'Makes many mistakes, often misses obvious moves.', skillRating: 800, avatar: 'Barry' },
+  2: { name: 'Novice', description: 'Plays poorly, but occasionally finds good moves.', skillRating: 1000, avatar: 'Bruce' },
+  3: { name: 'Amateur', description: 'Makes frequent errors, but understands basic strategy.', skillRating: 1200, avatar: 'Charles' },
+  4: { name: 'Intermediate', description: 'Understands fundamental strategy, but lacks depth.', skillRating: 1400, avatar: 'Dennis' },
+  5: { name: 'Skilled', description: 'Plays solid, but can be outmaneuvered by experienced players.', skillRating: 1600, avatar: 'Edward' },
+  6: { name: 'Advanced', description: 'Strong player, rarely makes obvious mistakes.', skillRating: 1800, avatar: 'Gregory' },
+  7: { name: 'Expert', description: 'Consistently makes good moves, challenging opponent.', skillRating: 2000, avatar: 'Martin' },
+  8: { name: 'Master', description: 'Plays near-perfect, very difficult to beat.', skillRating: 2200, avatar: 'Milo' },
+  9: { name: 'Grandmaster', description: 'Plays optimally, almost impossible to defeat. You have to get lucky to win.', skillRating: 2400, avatar: 'Ronald' },
 };
 
 const triangleW = 58;
@@ -3543,7 +3544,7 @@ function GameBoard() {
                       setIsMatchmaking(true);
                       setScreen('matchmaking');
                     }}>Play as Guest (unranked)</button>
-                    <button style={buttonStyle} onClick={() => setShowLoginModal(true)}>Login / Signup</button>
+                    <button style={buttonStyle} onClick={() => setShowLoginModal(true)}>Login / Signup (ranked)</button>
                   </>
                 )}
               </div>
@@ -4317,29 +4318,88 @@ function GameBoard() {
                 }
               }}
             >
-              {/* Avatar placeholder - will be replaced with character images later */}
+              {/* Avatar Image */}
               <div style={{
-                width: '80px',
-                height: '80px',
-                borderRadius: '50%',
-                backgroundColor: cpuDifficulty === parseInt(level) ? '#fff' : '#ddd',
+                width: '100px',
+                height: '100px',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                border: `3px solid ${cpuDifficulty === parseInt(level) ? '#fff' : '#ddd'}`,
+                boxShadow: cpuDifficulty === parseInt(level) ? '0 4px 12px rgba(0,0,0,0.2)' : '0 2px 6px rgba(0,0,0,0.1)',
+                transition: 'all 0.2s ease',
+                background: '#fff',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '32px',
-                color: cpuDifficulty === parseInt(level) ? '#ff751f' : '#666',
-                border: `3px solid ${cpuDifficulty === parseInt(level) ? '#ff751f' : '#bbb'}`,
+                justifyContent: 'center'
               }}>
-                {info.skillRating}
+                <img 
+                  src={`/avatars/${info.avatar}.png`}
+                  alt={info.avatar}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    display: 'block'
+                  }}
+                  onError={(e) => {
+                    // Fallback if image fails to load
+                    e.target.style.display = 'none';
+                    e.target.parentElement.style.background = cpuDifficulty === parseInt(level) ? '#ff751f' : '#ddd';
+                    e.target.parentElement.textContent = info.avatar[0];
+                    e.target.parentElement.style.fontSize = '36px';
+                    e.target.parentElement.style.fontWeight = 'bold';
+                    e.target.parentElement.style.color = cpuDifficulty === parseInt(level) ? '#fff' : '#666';
+                  }}
+                />
               </div>
-              <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
+              
+              {/* Opponent Name */}
+              <div style={{ 
+                fontSize: '20px', 
+                fontWeight: 'bold',
+                color: cpuDifficulty === parseInt(level) ? '#fff' : '#000',
+                marginTop: '4px'
+              }}>
+                {info.avatar}
+              </div>
+              
+              {/* Difficulty Name */}
+              <div style={{ 
+                fontSize: '16px', 
+                fontWeight: '600',
+                color: cpuDifficulty === parseInt(level) ? '#fff' : '#333',
+                marginTop: '-4px'
+              }}>
                 {info.name}
               </div>
-              <div style={{ fontSize: '14px', color: cpuDifficulty === parseInt(level) ? '#fff' : '#666', fontWeight: 'normal', textAlign: 'center' }}>
-                {info.description}
-              </div>
-              <div style={{ fontSize: '12px', color: cpuDifficulty === parseInt(level) ? '#fff' : '#888', marginTop: '4px' }}>
+              
+              {/* Rating Badge */}
+              <div style={{ 
+                fontSize: '13px', 
+                color: cpuDifficulty === parseInt(level) ? '#fff' : '#666', 
+                fontWeight: '600',
+                marginTop: '4px',
+                padding: '4px 12px',
+                borderRadius: '12px',
+                background: cpuDifficulty === parseInt(level) ? 'rgba(255,255,255,0.2)' : '#f0f0f0'
+              }}>
                 Rating: {info.skillRating}
+              </div>
+              
+              {/* Description */}
+              <div style={{ 
+                fontSize: '13px', 
+                color: cpuDifficulty === parseInt(level) ? 'rgba(255,255,255,0.95)' : '#666', 
+                fontWeight: 'normal', 
+                textAlign: 'center',
+                lineHeight: '1.4',
+                marginTop: '8px',
+                minHeight: '40px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                {info.description}
               </div>
             </button>
           ))}

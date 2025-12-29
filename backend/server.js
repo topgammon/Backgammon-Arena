@@ -5,7 +5,14 @@ import { Server } from 'socket.io';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
 
+// Load environment variables
 dotenv.config();
+
+// Log startup info (non-sensitive)
+console.log('🔧 Starting Backend Server...');
+console.log('📦 Node version:', process.version);
+console.log('📁 Working directory:', process.cwd());
+console.log('🔐 Environment:', process.env.NODE_ENV || 'development');
 
 const PYTHON_AI_SERVICE_URL = process.env.PYTHON_AI_SERVICE_URL || 'http://localhost:5000';
 
@@ -216,6 +223,10 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3001;
+
+// Log PORT environment variable for debugging
+console.log('🔌 PORT environment variable:', process.env.PORT || 'not set (using default 3001)');
+console.log('🔌 Server will listen on port:', PORT);
 
 // Add error handling for server startup
 httpServer.on('error', (error) => {

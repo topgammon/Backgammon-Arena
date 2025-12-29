@@ -217,7 +217,18 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3001;
 
-httpServer.listen(PORT, () => {
+// Add error handling for server startup
+httpServer.on('error', (error) => {
+  console.error('❌ Server error:', error);
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use`);
+  }
+});
+
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Backend server running on port ${PORT}`);
+  console.log(`📡 Socket.io server ready for connections`);
+  console.log(`🌐 CORS enabled for all origins`);
+  console.log(`🔗 Health check available at: http://0.0.0.0:${PORT}/api/health`);
 });
 

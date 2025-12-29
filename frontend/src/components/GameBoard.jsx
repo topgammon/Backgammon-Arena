@@ -1026,7 +1026,9 @@ function GameBoard() {
       
       if (movesAllowed.length === 2 && movesAllowed[0] !== movesAllowed[1] && usedDice.length === 0) {
         let d1 = movesAllowed[0], d2 = movesAllowed[1];
-        if (d1 + d2 === distance) {
+        let sum = d1 + d2;
+        // Allow bearoff if sum equals distance, or if sum > distance and this is the farthest checker
+        if (sum === distance || (sum > distance && isFarthest)) {
           let mid = currentPlayer === 1 ? from + d1 : from - d1;
           if (mid >= 0 && mid <= 23) {
             let midCheckers = checkers.filter(c => c.point === mid);
@@ -1041,22 +1043,25 @@ function GameBoard() {
         let d = movesAllowed[0];
         let maxSteps = 4 - usedDice.length;
         for (let steps = 2; steps <= maxSteps; steps++) {
-          let valid = true;
-          let pos = from;
-          for (let s = 1; s <= steps; s++) {
-            let next = currentPlayer === 1 ? pos + d : pos - d;
-            if (next < 0 || next > 23) { valid = false; break; }
-            let pointCheckers = checkers.filter(c => c.point === next);
-            if (pointCheckers.length === 0 || pointCheckers[0].player === currentPlayer || pointCheckers.length === 1) {
-              // valid
-            } else {
-              valid = false; break;
+          let totalMove = steps * d;
+          // Allow bearoff if total move equals distance, or if total move > distance and this is the farthest checker
+          if (totalMove === distance || (totalMove > distance && isFarthest)) {
+            // For bearoff, we need to check if all intermediate points are valid
+            // But we don't need to check the final point since we're bearing off
+            let valid = true;
+            let pos = from;
+            for (let s = 1; s < steps; s++) { // Check up to steps-1, since last step is bearoff
+              let next = currentPlayer === 1 ? pos + d : pos - d;
+              if (next < 0 || next > 23) { valid = false; break; }
+              let pointCheckers = checkers.filter(c => c.point === next);
+              if (pointCheckers.length === 0 || pointCheckers[0].player === currentPlayer || pointCheckers.length === 1) {
+                // valid intermediate point
+              } else {
+                valid = false; break;
+              }
+              pos = next;
             }
-            pos = next;
-          }
-          if (valid) {
-            let finalDistance = currentPlayer === 1 ? 24 - pos : pos + 1;
-            if (finalDistance <= d) {
+            if (valid) {
               moves.add(`bearoff|multimove|${steps}`);
             }
           }

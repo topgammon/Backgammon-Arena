@@ -294,6 +294,8 @@ function GameBoard() {
   const [doubleOffer, setDoubleOffer] = useState(null);
   const [doubleTimer, setDoubleTimer] = useState(12);
   const [canDouble, setCanDouble] = useState({ 1: true, 2: true });
+  const [lastDoubleOfferer, setLastDoubleOfferer] = useState(null); // Track who last offered a double
+  const [doubleOfferedThisTurn, setDoubleOfferedThisTurn] = useState({ 1: false, 2: false }); // Track if player offered this turn
   const [gameStakes, setGameStakes] = useState(1);
   const [isCpuGame, setIsCpuGame] = useState(false);
   const [cpuPlayer, setCpuPlayer] = useState(2); // CPU plays as Player 2
@@ -432,18 +434,30 @@ function GameBoard() {
           if (t <= 1) {
             clearInterval(timerRef.current);
             setTimer(0);
-            // Check state directly - if all dice used, always end turn (not timeout)
-            const allUsed = allDiceUsed();
-            const hasValid = hasAnyValidMoves();
-            
-            // Only timeout forfeit if: has rolled, has valid moves, AND dice not all used
-            // If all dice used OR no valid moves, just end turn
-            if (hasRolled && hasValid && !allUsed) {
-              triggerGameOver('timeout', currentPlayer === 1 ? 2 : 1, currentPlayer);
-            } else {
-              // All dice used or no valid moves - just end turn
-              handleEndTurn();
-            }
+            // Use functional updates to get current state
+            setTimeout(() => {
+              setUsedDice(currentUsedDice => {
+                setMovesAllowed(currentMovesAllowed => {
+                  setHasRolled(currentHasRolled => {
+                    // Check with current state
+                    const allUsed = currentUsedDice.length >= currentMovesAllowed.length;
+                    const hasValid = hasAnyValidMoves();
+                    
+                    // Only timeout forfeit if: has rolled, has valid moves, AND dice not all used
+                    // If all dice used OR no valid moves, just end turn
+                    if (currentHasRolled && hasValid && !allUsed) {
+                      triggerGameOver('timeout', currentPlayer === 1 ? 2 : 1, currentPlayer);
+                    } else {
+                      // All dice used or no valid moves - just end turn
+                      handleEndTurn();
+                    }
+                    return currentHasRolled;
+                  });
+                  return currentMovesAllowed;
+                });
+                return currentUsedDice;
+              });
+            }, 50);
             return 0;
           }
           return t - 1;
@@ -1590,14 +1604,23 @@ function GameBoard() {
   };
 
   const offerDouble = () => {
+    // Check if player can offer (hasn't already this turn, wasn't last to offer, and has permission)
     if (!canDouble[currentPlayer]) return;
+    if (doubleOfferedThisTurn[currentPlayer]) return; // Already offered this turn
+    if (lastDoubleOfferer === currentPlayer) return; // Was last to offer, must wait for opponent
+    
     // Check 16x limit
     if (gameStakes >= 16) {
       setMessage('Maximum doubling limit (16x) reached');
       return;
     }
+    
     const toPlayer = currentPlayer === 1 ? 2 : 1;
     const doubleOfferData = { from: currentPlayer, to: toPlayer };
+    
+    // Mark that this player has offered this turn
+    setDoubleOfferedThisTurn(prev => ({ ...prev, [currentPlayer]: true }));
+    setLastDoubleOfferer(currentPlayer);
     
     // Send double offer to server for online games
     if (isOnlineGame && socketRef.current && matchId) {
@@ -1631,9 +1654,12 @@ function GameBoard() {
       const newStakes = gameStakes * 2;
       setGameStakes(newStakes);
       // When a double is accepted:
-      // - The person who accepted (currentPlayer/doubleOffer.to) gains the right to offer next
-      // - The person who offered (doubleOffer.from) loses the right until the other player offers
+      // - The person who accepted (toPlayer) gains the right to offer next
+      // - The person who offered (fromPlayer) loses the right until the other player offers
       setCanDouble(prev => ({ ...prev, [fromPlayer]: false, [toPlayer]: true }));
+      // lastDoubleOfferer stays as fromPlayer (they were last to offer)
+      // Reset "offered this turn" for the accepter since they can now offer
+      setDoubleOfferedThisTurn(prev => ({ ...prev, [toPlayer]: false }));
       setDoubleOffer(null);
       setDoubleTimer(12);
       
@@ -2291,6 +2317,8 @@ function GameBoard() {
     setDoubleOffer(null);
     setDoubleTimer(12);
     setCanDouble({ 1: true, 2: true });
+    setLastDoubleOfferer(null);
+    setDoubleOfferedThisTurn({ 1: false, 2: false });
     setGameStakes(1);
     setNoMoveOverlay(false);
     setShowConfirmResign(false);
@@ -3086,7 +3114,7 @@ function GameBoard() {
             onClick={canBearOff2 ? (e => { e.stopPropagation(); handlePointClick(bearoffSumMove2 || 'bearoff'); }) : undefined}
           >{pipCount(checkers, 2, bar, borneOff)}</text>
         </g>
-        {!hasRolled && !awaitingEndTurn && !isRolling && !autoRoll[currentPlayer] && canDouble[currentPlayer] && (!isOnlineGame || (isOnlineGame && currentPlayer === playerNumber)) && (
+        {!hasRolled && !awaitingEndTurn && !isRolling && !autoRoll[currentPlayer] && canDouble[currentPlayer] && !doubleOfferedThisTurn[currentPlayer] && lastDoubleOfferer !== currentPlayer && gameStakes < 16 && (!isOnlineGame || (isOnlineGame && currentPlayer === playerNumber)) && (
           <foreignObject
             x={boardX + triangleW * 2}
             y={boardY + boardH / 2 - 40}
@@ -4939,6 +4967,8 @@ function GameBoard() {
         setGameOver(null);
         setDoubleOffer(null);
         setCanDouble({ 1: true, 2: true });
+        setLastDoubleOfferer(null);
+        setDoubleOfferedThisTurn({ 1: false, 2: false });
         setGameStakes(1);
         setMessage('');
         setSelected(null);
@@ -5188,6 +5218,8 @@ function GameBoard() {
         } else {
           setTimer(45);
         }
+        // Reset "offered this turn" flag when turn changes
+        setDoubleOfferedThisTurn({ 1: false, 2: false });
       }
     };
     
@@ -5211,6 +5243,11 @@ function GameBoard() {
         if (data.gameStakes) {
           setGameStakes(data.gameStakes);
         }
+        // Mark that the opponent has offered (they are the "from" player)
+        if (data.doubleOffer?.from) {
+          setLastDoubleOfferer(data.doubleOffer.from);
+          setDoubleOfferedThisTurn(prev => ({ ...prev, [data.doubleOffer.from]: true }));
+        }
         setDoubleTimer(12);
       }
     };
@@ -5224,6 +5261,9 @@ function GameBoard() {
           // The person who offered loses the right until the other player offers
           const fromPlayer = data.doubleOffer?.from || (currentPlayerNumber === 1 ? 2 : 1);
           setCanDouble(prev => ({ ...prev, [fromPlayer]: false, [currentPlayerNumber]: true }));
+          setLastDoubleOfferer(fromPlayer);
+          // Reset "offered this turn" for the accepter since they can now offer
+          setDoubleOfferedThisTurn(prev => ({ ...prev, [currentPlayerNumber]: false }));
           setDoubleOffer(null);
           setDoubleTimer(12);
         } else {
@@ -5329,12 +5369,18 @@ function GameBoard() {
           clearInterval(firstRollIntervalRef.current);
           firstRollIntervalRef.current = null;
         }
-        // Reset for tie
-        setFirstRolls([null, null]);
-        setFirstRollTurn(1);
-        setFirstRollResult(null);
         setIsFirstRolling(false);
         setFirstRollAnimationFrame(0);
+        
+        // Show tie result for waiting player
+        setFirstRollResult('tie');
+        
+        // Reset after delay (same as rolling player)
+        setTimeout(() => {
+          setFirstRolls([null, null]);
+          setFirstRollTurn(1);
+          setFirstRollResult(null);
+        }, 1500);
       }
     };
     
@@ -5636,10 +5682,12 @@ function GameBoard() {
                           setAwaitingEndTurn(false);
                           setDoubleOffer(null);
                           setDoubleTimer(12);
-                          setCanDouble({ 1: true, 2: true });
-                          setGameStakes(1);
-                          setNoMoveOverlay(false);
-                          setShowConfirmResign(false);
+    setCanDouble({ 1: true, 2: true });
+    setLastDoubleOfferer(null);
+    setDoubleOfferedThisTurn({ 1: false, 2: false });
+    setGameStakes(1);
+    setNoMoveOverlay(false);
+    setShowConfirmResign(false);
                           setFirstRollPhase(true);
                           setFirstRolls([null, null]);
                           setFirstRollTurn(1);

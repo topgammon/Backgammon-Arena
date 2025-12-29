@@ -4450,6 +4450,9 @@ function GameBoard() {
   useEffect(() => {
     if (!isMatchmaking || socketRef.current) return;
     
+    // Backend URL: In production, this should be set to your Railway backend URL
+    // Example: https://your-backend-name.railway.app
+    // For local development, defaults to http://localhost:3001
     const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
     const isGuest = matchmakingType === 'guest';
     

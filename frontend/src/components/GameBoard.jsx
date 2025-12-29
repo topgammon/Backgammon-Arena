@@ -165,7 +165,8 @@ function GameBoard() {
   const [showConfirmResign, setShowConfirmResign] = useState(false);
   const [gameOver, setGameOver] = useState(null);
   const [timer, setTimer] = useState(45);
-  const [opponentTimer, setOpponentTimer] = useState(45);
+  const [rematchRequest, setRematchRequest] = useState(null); // { from: playerNumber, to: playerNumber }
+  const firstRollIntervalRef = useRef(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSignupForm, setShowSignupForm] = useState(false);
   const [user, setUser] = useState(null);
@@ -433,16 +434,7 @@ function GameBoard() {
             triggerGameOver('timeout', currentPlayer === 1 ? 2 : 1, currentPlayer);
             return 0;
           }
-          const newTime = t - 1;
-          // Send timer update to server for online games
-          if (isOnlineGame && currentPlayer === playerNumber && socketRef.current && matchId) {
-            socketRef.current.emit('game:timer-update', {
-              matchId,
-              player: playerNumber,
-              timer: newTime
-            });
-          }
-          return newTime;
+          return t - 1;
         });
       }, 1000);
     }
@@ -3029,7 +3021,7 @@ function GameBoard() {
           style={{ pointerEvents: 'none' }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pointerEvents: 'auto', background: 'none', borderRadius: 0, boxShadow: 'none', padding: 0, minWidth: 0 }}>
-            {!gameOver && screen === 'passplay' && !firstRollPhase && (
+            {!gameOver && (screen === 'passplay' || screen === 'onlineGame') && !firstRollPhase && (
               <div style={{ fontSize: 28, fontWeight: 700, color: timer <= 5 ? '#dc3545' : '#fff', marginBottom: 6, letterSpacing: 1, textShadow: timer <= 5 ? '0 0 8px #fff, 0 0 16px #fff' : 'none' }}>
                 <span style={{ color: '#fff', marginRight: 4, textShadow: 'none' }}>⏰</span>
                 <span style={timer <= 5 ? { color: '#dc3545', textShadow: '0 0 8px #fff, 0 0 16px #fff' } : { color: '#fff', textShadow: 'none' }}>{timer}</span>
@@ -3047,19 +3039,38 @@ function GameBoard() {
               </div>
             ) : null}
             {(hasRolled || isRolling) && !showEndTurn && (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '0 0 4px 0', gap: 7 }}>
-                {isRolling ? (
-                  [0, 1].map(i => (
-                    <Dice key={i} value={isRolling ? rollingDice[i] : (dice[i] || 1)} faded={false} shrunk={false} isRolling={true} frame={animationFrame} />
-                  ))
-                ) : (
-                  (dice[0] === dice[1] && dice[0] !== 0)
-                    ? [0, 1, 2, 3].map(i => (
-                        <Dice key={i} value={dice[0]} faded={usedDice.includes(i)} shrunk={usedDice.includes(i)} />
-                      ))
-                    : [0, 1].map(i => (
-                        <Dice key={i} value={dice[i]} faded={usedDice.includes(i)} shrunk={usedDice.includes(i)} />
-                      ))
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '0 0 4px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 7 }}>
+                  {isRolling ? (
+                    [0, 1].map(i => (
+                      <Dice key={i} value={isRolling ? rollingDice[i] : (dice[i] || 1)} faded={false} shrunk={false} isRolling={true} frame={animationFrame} />
+                    ))
+                  ) : (
+                    (dice[0] === dice[1] && dice[0] !== 0)
+                      ? [0, 1, 2, 3].map(i => (
+                          <Dice key={i} value={dice[0]} faded={usedDice.includes(i)} shrunk={usedDice.includes(i)} />
+                        ))
+                      : [0, 1].map(i => (
+                          <Dice key={i} value={dice[i]} faded={usedDice.includes(i)} shrunk={usedDice.includes(i)} />
+                        ))
+                  )}
+                </div>
+                {!isRolling && hasRolled && screen === 'onlineGame' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: 16, color: '#fff' }}>
+                    <span style={{
+                      display: 'inline-block',
+                      width: 20,
+                      height: 20,
+                      borderRadius: '50%',
+                      background: currentPlayer === 1 ? '#fff' : '#222',
+                      border: '2px solid #b87333',
+                    }} />
+                    {currentPlayer === playerNumber ? (
+                      <span>Your move</span>
+                    ) : (
+                      <span>Waiting for opponent's move</span>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -5068,22 +5079,16 @@ function GameBoard() {
         setUsedDice([]);
         setSelected(null);
         setLegalMoves([]);
+        // Reset timer when turn changes
         if (data.timer !== undefined) {
-          setOpponentTimer(data.timer);
+          setTimer(data.timer);
         } else {
-          // Reset opponent timer when turn changes
-          setOpponentTimer(45);
+          setTimer(45);
         }
       }
     };
     
     // Listen for timer updates
-    const handleTimerUpdate = (data) => {
-      if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
-        setOpponentTimer(data.timer);
-      }
-    };
-    
     // Listen for game state sync
     const handleStateSync = (data) => {
       if (data.matchId === currentMatchId) {
@@ -5113,17 +5118,26 @@ function GameBoard() {
     // Listen for first roll animation start
     const handleFirstRollStart = (data) => {
       if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
+        // Clear any existing interval
+        if (firstRollIntervalRef.current) {
+          clearInterval(firstRollIntervalRef.current);
+          firstRollIntervalRef.current = null;
+        }
+        
         setIsFirstRolling(true);
         setFirstRollAnimationFrame(0);
-        // Animate opponent's first roll
-        const firstRollInterval = setInterval(() => {
+        // Animate opponent's first roll - continue until roll value is received
+        firstRollIntervalRef.current = setInterval(() => {
           setFirstRollAnimationFrame(prev => (prev + 1) % 7);
         }, 50);
         
-        // Clear interval after animation duration
+        // Backup timeout in case roll event is delayed (shouldn't happen but safety net)
         setTimeout(() => {
-          clearInterval(firstRollInterval);
-        }, 600);
+          if (firstRollIntervalRef.current) {
+            clearInterval(firstRollIntervalRef.current);
+            firstRollIntervalRef.current = null;
+          }
+        }, 3000);
       }
     };
     
@@ -5132,9 +5146,9 @@ function GameBoard() {
       console.log('Received first roll event:', data, 'currentPlayerNumber:', currentPlayerNumber);
       if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
         // Clear animation interval if it exists
-        if (window.firstRollIntervalRef && window.firstRollIntervalRef.current) {
-          clearInterval(window.firstRollIntervalRef.current);
-          window.firstRollIntervalRef.current = null;
+        if (firstRollIntervalRef.current) {
+          clearInterval(firstRollIntervalRef.current);
+          firstRollIntervalRef.current = null;
         }
         
         console.log('Processing opponent first roll, updating state...');
@@ -5188,7 +5202,6 @@ function GameBoard() {
     socket.on('game:state-sync', handleStateSync);
     socket.on('game:double-offered', handleDoubleOffered);
     socket.on('game:over', handleGameOver);
-    socket.on('game:timer-update', handleTimerUpdate);
     socket.on('game:first-roll-start', handleFirstRollStart);
     socket.on('game:first-roll', handleFirstRoll);
     socket.on('game:first-roll-complete', handleFirstRollComplete);
@@ -5202,11 +5215,13 @@ function GameBoard() {
       socket.off('game:state-sync', handleStateSync);
       socket.off('game:double-offered', handleDoubleOffered);
       socket.off('game:over', handleGameOver);
-      socket.off('game:timer-update', handleTimerUpdate);
       socket.off('game:first-roll-start', handleFirstRollStart);
       socket.off('game:first-roll', handleFirstRoll);
       socket.off('game:first-roll-complete', handleFirstRollComplete);
       socket.off('game:first-roll-tie', handleFirstRollTie);
+      socket.off('game:rematch-request', handleRematchRequest);
+      socket.off('game:rematch-accept', handleRematchAccept);
+      socket.off('game:rematch-decline', handleRematchDecline);
     };
   }, [isOnlineGame, matchId, playerNumber]);
   
@@ -5237,25 +5252,7 @@ function GameBoard() {
               verticalAlign: 'middle',
               border: '2px solid #b87333',
             }} />
-            {currentPlayer === playerNumber && (
-              <span style={{ marginLeft: 8, fontSize: 14, color: '#28a745' }}>(Your Turn)</span>
-            )}
-            {currentPlayer !== playerNumber && (
-              <span style={{ marginLeft: 8, fontSize: 14, color: '#666' }}>(Waiting...)</span>
-            )}
           </div>
-          {!firstRollPhase && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
-              <div style={{ fontSize: 16, color: '#666' }}>Your Timer</div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: timer <= 5 ? '#dc3545' : '#333' }}>
-                {timer}s
-              </div>
-              <div style={{ fontSize: 16, color: '#666', marginTop: 8 }}>Opponent Timer</div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: opponentTimer <= 5 ? '#dc3545' : '#333' }}>
-                {opponentTimer}s
-              </div>
-            </div>
-          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', gap: 12 }}>
               {undoStack.length > 0 && hasRolled && currentPlayer === playerNumber && (
@@ -5305,9 +5302,100 @@ function GameBoard() {
             <div style={{ background: 'rgba(255,255,255,0.97)', border: '2px solid #28a745', borderRadius: 12, padding: 32, minWidth: 260, maxWidth: 340, textAlign: 'center', fontSize: 24, fontWeight: 'bold', color: '#222', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
               <h2>{getGameOverMessage(gameOver)}</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, justifyContent: 'center', marginTop: 20, width: '100%' }}>
-                <button style={buttonStyle} onClick={handleRematch}>Rematch</button>
-                <button style={{ ...buttonStyle, background: '#007bff' }} onClick={() => { setScreen('onlineMatchmaking'); setGameOver(null); }}>New Game</button>
-                <button style={{ ...buttonStyle, background: '#6c757d' }} onClick={handleQuit}>Quit</button>
+                {!rematchRequest ? (
+                  <>
+                    <button style={buttonStyle} onClick={() => {
+                      if (isOnlineGame && socketRef.current && matchId) {
+                        const toPlayer = playerNumber === 1 ? 2 : 1;
+                        setRematchRequest({ from: playerNumber, to: toPlayer });
+                        socketRef.current.emit('game:rematch-request', {
+                          matchId,
+                          from: playerNumber,
+                          to: toPlayer
+                        });
+                      } else {
+                        handleRematch();
+                      }
+                    }}>Rematch</button>
+                    <button style={{ ...buttonStyle, background: '#007bff' }} onClick={() => { 
+                      if (isOnlineGame) {
+                        setIsMatchmaking(true);
+                        setMatchmakingType('guest');
+                        setScreen('onlineMatchmaking');
+                        setGameOver(null);
+                        setRematchRequest(null);
+                      } else {
+                        handleQuit();
+                      }
+                    }}>New Game</button>
+                    <button style={{ ...buttonStyle, background: '#6c757d' }} onClick={handleQuit}>Quit</button>
+                  </>
+                ) : rematchRequest.from === playerNumber ? (
+                  <>
+                    <div style={{ marginBottom: 10, color: '#666', fontSize: 16 }}>Rematch request sent...</div>
+                    <button style={{ ...buttonStyle, background: '#007bff' }} onClick={() => { 
+                      setIsMatchmaking(true);
+                      setMatchmakingType('guest');
+                      setScreen('onlineMatchmaking');
+                      setGameOver(null);
+                      setRematchRequest(null);
+                    }}>New Game</button>
+                    <button style={{ ...buttonStyle, background: '#6c757d' }} onClick={handleQuit}>Quit</button>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ marginBottom: 10, color: '#666', fontSize: 16 }}>Opponent requested rematch</div>
+                    <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+                      <button style={{ ...buttonStyle, flex: 1, background: '#28a745' }} onClick={() => {
+                        if (isOnlineGame && socketRef.current && matchId) {
+                          socketRef.current.emit('game:rematch-accept', {
+                            matchId,
+                            from: rematchRequest.from,
+                            to: playerNumber
+                          });
+                          // Reset game state for rematch
+                          setGameOver(null);
+                          setCheckers(getInitialCheckers());
+                          setSelected(null);
+                          setLegalMoves([]);
+                          setDice([0, 0]);
+                          setUsedDice([]);
+                          setCurrentPlayer(1);
+                          setHasRolled(false);
+                          setBar({ 1: [], 2: [] });
+                          setBorneOff({ 1: 0, 2: 0 });
+                          setMessage('');
+                          setTimer(45);
+                          setUndoStack([]);
+                          setMoveMade(false);
+                          setAwaitingEndTurn(false);
+                          setDoubleOffer(null);
+                          setDoubleTimer(12);
+                          setCanDouble({ 1: true, 2: true });
+                          setGameStakes(1);
+                          setNoMoveOverlay(false);
+                          setShowConfirmResign(false);
+                          setFirstRollPhase(true);
+                          setFirstRolls([null, null]);
+                          setFirstRollTurn(1);
+                          setFirstRollResult(null);
+                          setRematchRequest(null);
+                          if (timerRef.current) clearInterval(timerRef.current);
+                        }
+                      }}>Accept</button>
+                      <button style={{ ...buttonStyle, flex: 1, background: '#dc3545' }} onClick={() => {
+                        if (isOnlineGame && socketRef.current && matchId) {
+                          socketRef.current.emit('game:rematch-decline', {
+                            matchId,
+                            from: rematchRequest.from,
+                            to: playerNumber
+                          });
+                          setRematchRequest(null);
+                        }
+                      }}>Decline</button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>

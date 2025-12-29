@@ -6114,43 +6114,43 @@ function GameBoard() {
       <div style={{ textAlign: 'center', marginTop: 30 }}>
         {message && <div style={{ color: 'red', margin: 10 }}>{message}</div>}
         
-        {/* Title and opponent info above board - aligned with board */}
+        {/* Main content wrapper - centers everything */}
         <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'flex-start', 
-          padding: '0 20px', 
-          marginBottom: 16, 
-          maxWidth: boardContainerWidth,
-          margin: '0 auto 16px', 
-          gap: 20 
-        }}>
-          {/* Opponent info (left side) */}
-          <div style={{ flex: 1 }}>
-            {renderOpponentInfo(opponent?.isGuest || false, false, opponentName, null, null, null, playerNumber === 1 ? 2 : 1)}
-          </div>
-          {/* Title and logo (right side) */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, minWidth: 200, flexWrap: 'wrap' }}>
-            <h2 style={{ margin: 0, fontSize: 24 }}>Online Guest Match - Unranked</h2>
-            <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '100px' }} />
-          </div>
-        </div>
-        
-        {/* Board and Chat container */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'flex-start', 
-          gap: 20, 
-          padding: '0 20px',
-          maxWidth: isWideScreen ? boardContainerWidth + 320 : boardContainerWidth, // Board width + chat width when wide
+          maxWidth: isWideScreen ? boardContainerWidth + 320 : boardContainerWidth,
           margin: '0 auto',
-          flexWrap: isWideScreen ? 'nowrap' : 'wrap'
+          padding: '0 20px'
         }}>
-          {/* Board */}
-          <div style={{ flexShrink: 0 }}>
-            {renderBoard()}
+          {/* Title and opponent info above board - aligned with board */}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'flex-start', 
+            marginBottom: 16, 
+            gap: 20 
+          }}>
+            {/* Opponent info (left side) */}
+            <div style={{ flex: 1 }}>
+              {renderOpponentInfo(opponent?.isGuest || false, false, opponentName, null, null, null, playerNumber === 1 ? 2 : 1)}
+            </div>
+            {/* Title and logo (right side) */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, minWidth: 200, flexWrap: 'wrap' }}>
+              <h2 style={{ margin: 0, fontSize: 24 }}>Online Guest Match - Unranked</h2>
+              <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '100px' }} />
+            </div>
           </div>
+          
+          {/* Board and Chat container */}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'flex-start', 
+            alignItems: 'flex-start', 
+            gap: 20, 
+            flexWrap: isWideScreen ? 'nowrap' : 'wrap'
+          }}>
+            {/* Board - aligned to left edge */}
+            <div style={{ flexShrink: 0 }}>
+              {renderBoard()}
+            </div>
           
           {/* Chat box for online games - to the right if wide enough */}
           {isWideScreen && (
@@ -6308,29 +6308,23 @@ function GameBoard() {
           </div>
           )}
         </div>
-        
+          
         {/* Player info below board - aligned with board */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'flex-start', 
-          padding: '0 20px', 
-          marginTop: 16, 
-          maxWidth: boardContainerWidth,
-          margin: '16px auto 0' 
-        }}>
-          {renderPlayerInfo(playerNumber, true, `Guest ${playerNumber}`, null, null, true)}
-        </div>
-        
-        {/* Chat box below player info when narrow */}
-        {!isWideScreen && (
           <div style={{ 
             display: 'flex', 
             justifyContent: 'flex-start', 
-            padding: '0 20px', 
-            marginTop: 16, 
-            maxWidth: boardContainerWidth,
-            margin: '16px auto 0' 
+            marginTop: 16
           }}>
+            {renderPlayerInfo(playerNumber, true, `Guest ${playerNumber}`, null, null, true)}
+          </div>
+          
+          {/* Chat box below player info when narrow */}
+          {!isWideScreen && (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'flex-start', 
+              marginTop: 16
+            }}>
             <div style={{
               width: '100%',
               maxWidth: 400,
@@ -6486,6 +6480,7 @@ function GameBoard() {
             </div>
           </div>
         )}
+        </div>
         
         {/* Test End Game button - Hidden for production, uncomment for testing */}
         {/* <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>

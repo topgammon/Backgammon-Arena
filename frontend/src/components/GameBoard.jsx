@@ -362,6 +362,39 @@ function GameBoard() {
   useEffect(() => {
     if (!supabase) return;
 
+    // Handle OAuth callback - check for hash in URL
+    const handleOAuthCallback = async () => {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const error = hashParams.get('error');
+      
+      if (error) {
+        console.error('OAuth error:', error);
+        alert('Authentication failed: ' + error);
+        // Clean up URL
+        window.history.replaceState(null, '', window.location.pathname);
+        return;
+      }
+      
+      if (accessToken) {
+        // OAuth callback detected - Supabase should handle this automatically
+        // But let's make sure we get the session
+        console.log('OAuth callback detected, getting session...');
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+          console.error('Error getting session after OAuth:', sessionError);
+        } else if (session) {
+          console.log('Session retrieved after OAuth:', session.user.email);
+          setUser(session.user);
+        }
+        // Clean up URL hash
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    };
+
+    // Check for OAuth callback on mount
+    handleOAuthCallback();
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -4875,6 +4908,8 @@ function GameBoard() {
                       redirectUrl = redirectUrl.replace(':3000', ':5173');
                     }
                     
+                    console.log('Starting Google OAuth with redirect URL:', redirectUrl);
+                    
                     const { data, error } = await supabase.auth.signInWithOAuth({
                       provider: 'google',
                       options: {
@@ -4882,13 +4917,17 @@ function GameBoard() {
                         queryParams: {
                           access_type: 'offline',
                           prompt: 'consent',
-                        }
+                        },
+                        skipBrowserRedirect: false,
                       }
                     });
                     
                     if (error) {
                       console.error('Google sign in error:', error);
                       alert('Failed to sign in with Google: ' + error.message);
+                    } else if (data?.url) {
+                      console.log('OAuth URL generated, redirecting...');
+                      // Supabase should handle the redirect automatically
                     }
                     // If successful, user will be redirected to Google, then back to the app
                     // The onAuthStateChange handler will take care of the rest
@@ -7060,19 +7099,32 @@ function GameBoard() {
     const handleSignOut = async () => {
       try {
         if (supabase) {
+          // Clear all state first
+          setUser(null);
+          setUserProfile(null);
+          
+          // Sign out from Supabase
           const { error } = await supabase.auth.signOut();
           if (error) {
             console.error('Sign out error:', error);
             alert('Failed to sign out: ' + error.message);
+            // Reload page to force clear state
+            window.location.reload();
             return;
           }
-          setUser(null);
-          setUserProfile(null);
+          
+          // Navigate to home
           setScreen('home');
+          
+          // Force reload to clear any cached state
+          setTimeout(() => {
+            window.location.reload();
+          }, 100);
         }
       } catch (err) {
         console.error('Sign out error:', err);
-        alert('An error occurred while signing out');
+        alert('An error occurred while signing out. Reloading page...');
+        window.location.reload();
       }
     };
 
@@ -7222,7 +7274,7 @@ function GameBoard() {
                   height: '120px',
                   borderRadius: '12px',
                   background: '#ff751f',
-                  display: userProfile?.avatar ? 'none' : 'flex',
+                  display: 'none', // Always hidden - avatar is shown above
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: '48px',

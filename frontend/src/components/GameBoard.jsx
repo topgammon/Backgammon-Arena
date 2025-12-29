@@ -297,6 +297,8 @@ function GameBoard() {
   const [muted, setMuted] = useState(false);
   const [passPlayPlayer1Name, setPassPlayPlayer1Name] = useState(null);
   const [passPlayPlayer2Name, setPassPlayPlayer2Name] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
   const [doubleOffer, setDoubleOffer] = useState(null);
   const [doubleTimer, setDoubleTimer] = useState(12);
   const [canDouble, setCanDouble] = useState({ 1: true, 2: true });
@@ -3574,7 +3576,7 @@ function GameBoard() {
   };
 
   // Player info component (for below board)
-  const renderPlayerInfo = (playerNum, isGuest = false, username = null, country = null, rating = null, showControls = true, isPassPlay = false) => {
+  const renderPlayerInfo = (playerNum, isGuest = false, username = null, country = null, rating = null, showControls = true, isPassPlay = false, showQuit = false) => {
     const displayName = username || (isGuest ? (playerNum === 1 ? passPlayPlayer1Name : passPlayPlayer2Name) : `Player ${playerNum}`);
     const displayCountry = country || (isGuest ? 'N/A' : 'N/A');
     const displayRating = rating || (isGuest ? 'Unranked' : '1000');
@@ -3616,6 +3618,9 @@ function GameBoard() {
                 {autoRoll[playerNum] ? 'ON' : 'OFF'}
               </button>
             </div>
+            {showQuit && (
+              <button style={{ ...buttonStyle, minWidth: 0, padding: '8px 16px', fontSize: 14, background: '#6c757d', color: '#fff' }} onClick={handleQuit}>Quit</button>
+            )}
             {isCurrentPlayer && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ fontSize: 14, fontWeight: 600 }}>Sound:</span>
@@ -3635,10 +3640,11 @@ function GameBoard() {
 
   // Opponent info component (for above board)
   const renderOpponentInfo = (isGuest = false, isCpu = false, username = null, country = null, rating = null, cpuDifficulty = null) => {
-    let displayName, displayCountry, displayRating;
+    let displayName, displayCountry, displayRating, cpuName, difficultyName;
     
     if (isCpu && cpuDifficulty) {
-      displayName = DIFFICULTY_LEVELS[cpuDifficulty]?.name || 'CPU';
+      cpuName = DIFFICULTY_LEVELS[cpuDifficulty]?.avatar || 'CPU';
+      difficultyName = DIFFICULTY_LEVELS[cpuDifficulty]?.name || 'CPU';
       displayCountry = null; // No country for CPU
       displayRating = DIFFICULTY_LEVELS[cpuDifficulty]?.skillRating || 'N/A';
     } else if (isGuest) {
@@ -3664,11 +3670,23 @@ function GameBoard() {
       }}>
         {renderAvatar(isGuest, isCpu, cpuDifficulty, 50)}
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333' }}>{displayName}</div>
-          <div style={{ fontSize: 14, color: '#666', display: 'flex', gap: 12, alignItems: 'center' }}>
-            {displayCountry && <span>🌍 {displayCountry}</span>}
-            <span>⭐ {displayRating}</span>
-          </div>
+          {isCpu && cpuDifficulty ? (
+            <>
+              <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333' }}>{cpuName}</div>
+              <div style={{ fontSize: 14, color: '#666', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span>{difficultyName}</span>
+                <span>⭐ {displayRating}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333' }}>{displayName}</div>
+              <div style={{ fontSize: 14, color: '#666', display: 'flex', gap: 12, alignItems: 'center' }}>
+                {displayCountry && <span>🌍 {displayCountry}</span>}
+                <span>⭐ {displayRating}</span>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
@@ -3684,9 +3702,10 @@ function GameBoard() {
         <div style={{ flex: 1 }}>
           {renderOpponentInfo(true, false, currentPlayer === 1 ? passPlayPlayer2Name : passPlayPlayer1Name, null, null, null)}
         </div>
-        {/* Title (right side) */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: 200 }}>
+        {/* Title and logo (right side) */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, minWidth: 200 }}>
           <h2 style={{ margin: 0, fontSize: 24 }}>Pass and Play Backgammon</h2>
+          <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '60px' }} />
         </div>
       </div>
       
@@ -3695,11 +3714,6 @@ function GameBoard() {
       {/* Player info below board (left side) */}
       <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginTop: 16, maxWidth: 900, margin: '16px auto 0' }}>
         {renderPlayerInfo(currentPlayer === 1 ? 1 : 2, true, currentPlayer === 1 ? passPlayPlayer1Name : passPlayPlayer2Name, null, null, true, true)}
-      </div>
-      
-      {/* Logo at bottom */}
-      <div style={{ marginTop: 40, marginBottom: 20 }}>
-        <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '120px' }} />
       </div>
       
       {/* Test End Game button - Hidden for production, uncomment for testing */}
@@ -5277,9 +5291,10 @@ function GameBoard() {
           <div style={{ flex: 1 }}>
             {renderOpponentInfo(false, true, null, null, null, cpuDifficulty)}
           </div>
-          {/* Title (right side) */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: 200 }}>
+          {/* Title and logo (right side) */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, minWidth: 200 }}>
             <h2 style={{ margin: 0, fontSize: 24 }}>Vs. CPU</h2>
+            <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '60px' }} />
           </div>
         </div>
         
@@ -5287,17 +5302,7 @@ function GameBoard() {
         
         {/* Player info below board (left side) */}
         <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginTop: 16, maxWidth: 900, margin: '16px auto 0' }}>
-          {renderPlayerInfo(1, true, passPlayPlayer1Name || 'Guest Player', null, null, true, false)}
-        </div>
-        
-        {/* Quit button */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12, gap: 12 }}>
-          <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', minWidth: 0, padding: '8px 16px', fontSize: 14 }} onClick={handleQuit}>Quit</button>
-        </div>
-        
-        {/* Logo at bottom */}
-        <div style={{ marginTop: 40, marginBottom: 20 }}>
-          <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '120px' }} />
+          {renderPlayerInfo(1, true, passPlayPlayer1Name || 'Guest Player', null, null, true, false, true)}
         </div>
         
         {/* Test End Game button - Hidden for production, uncomment for testing */}
@@ -5992,6 +5997,18 @@ function GameBoard() {
     socket.on('game:rematch-accept', handleRematchAccept);
     socket.on('game:rematch-decline', handleRematchDecline);
     
+    // Chat handler
+    const handleChat = (data) => {
+      if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
+        setChatMessages(prev => [...prev, { 
+          from: data.player === 1 ? 'Player 1' : 'Player 2', 
+          text: data.message 
+        }]);
+      }
+    };
+    
+    socket.on('game:chat', handleChat);
+    
     return () => {
       socket.off('game:move', handleMove);
       socket.off('game:dice-roll-start', handleDiceRollStart);
@@ -6015,6 +6032,7 @@ function GameBoard() {
       socket.off('game:rematch-request', handleRematchRequest);
       socket.off('game:rematch-accept', handleRematchAccept);
       socket.off('game:rematch-decline', handleRematchDecline);
+      socket.off('game:chat', handleChat);
     };
   }, [isOnlineGame, matchId, playerNumber]);
   
@@ -6034,9 +6052,10 @@ function GameBoard() {
           <div style={{ flex: 1 }}>
             {renderOpponentInfo(opponent?.isGuest || false, false, opponentName, null, null, null)}
           </div>
-          {/* Title (right side) */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: 200 }}>
+          {/* Title and logo (right side) */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, minWidth: 200 }}>
             <h2 style={{ margin: 0, fontSize: 24 }}>Online Guest Match - Unranked</h2>
+            <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '60px' }} />
           </div>
         </div>
         
@@ -6047,9 +6066,104 @@ function GameBoard() {
           {renderPlayerInfo(playerNumber, true, `Guest ${playerNumber}`, null, null, true)}
         </div>
         
-        {/* Logo at bottom */}
-        <div style={{ marginTop: 40, marginBottom: 20 }}>
-          <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '120px' }} />
+        {/* Chat box for online games */}
+        <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginTop: 16, maxWidth: 900, margin: '16px auto 0' }}>
+          <div style={{
+            width: '100%',
+            maxWidth: 400,
+            background: '#f8f9fa',
+            borderRadius: '8px',
+            border: '2px solid #dee2e6',
+            display: 'flex',
+            flexDirection: 'column',
+            maxHeight: 200
+          }}>
+            <div style={{
+              padding: '8px 12px',
+              background: '#e9ecef',
+              borderBottom: '1px solid #dee2e6',
+              borderRadius: '8px 8px 0 0',
+              fontSize: 14,
+              fontWeight: 600,
+              color: '#333'
+            }}>
+              Chat
+            </div>
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '8px 12px',
+              minHeight: 100,
+              maxHeight: 120
+            }}>
+              {chatMessages.length === 0 ? (
+                <div style={{ color: '#999', fontSize: 12, fontStyle: 'italic' }}>No messages yet...</div>
+              ) : (
+                chatMessages.map((msg, idx) => (
+                  <div key={idx} style={{ marginBottom: 4, fontSize: 13 }}>
+                    <span style={{ fontWeight: 600, color: '#333' }}>{msg.from}:</span> {msg.text}
+                  </div>
+                ))
+              )}
+            </div>
+            <div style={{
+              display: 'flex',
+              gap: 8,
+              padding: '8px 12px',
+              borderTop: '1px solid #dee2e6'
+            }}>
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && chatInput.trim() && socketRef.current && matchId) {
+                    const message = chatInput.trim();
+                    socketRef.current.emit('game:chat', {
+                      matchId,
+                      player: playerNumber,
+                      message
+                    });
+                    setChatMessages(prev => [...prev, { from: `Player ${playerNumber}`, text: message }]);
+                    setChatInput('');
+                  }
+                }}
+                placeholder="Type a message..."
+                style={{
+                  flex: 1,
+                  padding: '6px 10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: 13
+                }}
+              />
+              <button
+                onClick={() => {
+                  if (chatInput.trim() && socketRef.current && matchId) {
+                    const message = chatInput.trim();
+                    socketRef.current.emit('game:chat', {
+                      matchId,
+                      player: playerNumber,
+                      message
+                    });
+                    setChatMessages(prev => [...prev, { from: `Player ${playerNumber}`, text: message }]);
+                    setChatInput('');
+                  }
+                }}
+                style={{
+                  padding: '6px 12px',
+                  background: '#ff751f',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: 13,
+                  cursor: 'pointer'
+                }}
+              >
+                Send
+              </button>
+            </div>
+          </div>
         </div>
         
         {/* Test End Game button - Hidden for production, uncomment for testing */}

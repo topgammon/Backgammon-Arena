@@ -651,6 +651,31 @@ io.on('connection', (socket) => {
     
     console.log(`🏁 Game over in match ${matchId}: ${gameOver.type}, Winner: Player ${gameOver.winner}`);
   });
+  
+  // Chat handler
+  socket.on('game:chat', (data) => {
+    const { matchId, player, message } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Invalid matchId for chat:', matchId);
+      return;
+    }
+    
+    // Find opponent socket
+    const opponentSocketId = match.player1.socketId === socket.id 
+      ? match.player2.socketId 
+      : match.player1.socketId;
+    
+    // Broadcast chat message to opponent
+    io.to(opponentSocketId).emit('game:chat', {
+      matchId,
+      player,
+      message
+    });
+    
+    console.log(`💬 Chat message in match ${matchId} from Player ${player}`);
+  });
 });
 
 const PORT = process.env.PORT || 3001;

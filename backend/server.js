@@ -351,6 +351,70 @@ io.on('connection', (socket) => {
     console.log(`🔄 Player ${player} ended turn, now Player ${nextPlayer}'s turn in match ${matchId}`);
   });
   
+  // Double offer handlers
+  socket.on('game:double-offer', (data) => {
+    const { matchId, player, doubleOffer, gameStakes } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Invalid matchId for double offer:', matchId);
+      return;
+    }
+    
+    // Find opponent socket
+    const opponentSocketId = player === 1 ? match.player2.socketId : match.player1.socketId;
+    
+    // Broadcast double offer to opponent
+    io.to(opponentSocketId).emit('game:double-offered', {
+      matchId,
+      doubleOffer,
+      gameStakes,
+      to: doubleOffer.to
+    });
+    
+    console.log(`💰 Player ${player} offered double in match ${matchId}`);
+  });
+  
+  socket.on('game:double-response', (data) => {
+    const { matchId, player, accepted, gameStakes, gameOver } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Invalid matchId for double response:', matchId);
+      return;
+    }
+    
+    // Find opponent socket
+    const opponentSocketId = player === 1 ? match.player2.socketId : match.player1.socketId;
+    
+    if (accepted) {
+      // Broadcast double acceptance to opponent
+      io.to(opponentSocketId).emit('game:double-response', {
+        matchId,
+        player,
+        accepted: true,
+        gameStakes,
+        doubleOffer: { from: player === 1 ? 2 : 1, to: player }
+      });
+      console.log(`✅ Player ${player} accepted double in match ${matchId}, new stakes: ${gameStakes}`);
+    } else {
+      // Broadcast double decline (game over) to both players
+      io.to(opponentSocketId).emit('game:double-response', {
+        matchId,
+        player,
+        accepted: false,
+        gameOver
+      });
+      io.to(socket.id).emit('game:double-response', {
+        matchId,
+        player,
+        accepted: false,
+        gameOver
+      });
+      console.log(`❌ Player ${player} declined double in match ${matchId}`);
+    }
+  });
+  
   // First roll handlers
   socket.on('game:first-roll-start', (data) => {
     const { matchId, player, rollTurn } = data;

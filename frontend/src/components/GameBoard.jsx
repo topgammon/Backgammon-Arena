@@ -429,8 +429,12 @@ function GameBoard() {
     if (!gameOver && (screen === 'passplay' || screen === 'onlineGame') && !firstRollPhase && !gameOver && !isRolling && !doubleOffer) {
       timerRef.current = setInterval(() => {
         setTimer(t => {
-            if (t <= 1) {
-              clearInterval(timerRef.current);
+          if (t <= 1) {
+            clearInterval(timerRef.current);
+            // Check current state when timer expires
+            setTimer(0);
+            // Use a small delay to ensure state is current
+            setTimeout(() => {
               // Only trigger timeout forfeit if player has valid moves available AND dice are not all used
               // If all dice are used OR no valid moves, auto-end turn instead
               if (hasRolled && hasAnyValidMoves() && !allDiceUsed()) {
@@ -439,8 +443,9 @@ function GameBoard() {
                 // Auto-end turn if all dice used or no moves available
                 handleEndTurn();
               }
-              return 0;
-            }
+            }, 100);
+            return 0;
+          }
           return t - 1;
         });
       }, 1000);
@@ -1574,40 +1579,88 @@ function GameBoard() {
   const cancelResign = () => setShowConfirmResign(false);
   const doResign = () => {
     setShowConfirmResign(false);
+    // Send resignation to server immediately for online games
+    if (isOnlineGame && socketRef.current && matchId) {
+      socketRef.current.emit('game:over', {
+        matchId,
+        gameOver: { type: 'resign', winner: currentPlayer === 1 ? 2 : 1, loser: currentPlayer }
+      });
+    }
     triggerGameOver('resign', currentPlayer === 1 ? 2 : 1, currentPlayer);
   };
 
   const offerDouble = () => {
     if (!canDouble[currentPlayer]) return;
+    // Check 16x limit
+    if (gameStakes >= 16) {
+      setMessage('Maximum doubling limit (16x) reached');
+      return;
+    }
     const toPlayer = currentPlayer === 1 ? 2 : 1;
+    const doubleOfferData = { from: currentPlayer, to: toPlayer };
+    
+    // Send double offer to server for online games
+    if (isOnlineGame && socketRef.current && matchId) {
+      socketRef.current.emit('game:double-offer', {
+        matchId,
+        player: currentPlayer,
+        doubleOffer: doubleOfferData,
+        gameStakes: gameStakes
+      });
+    }
     
     // In CPU games, if player is offering to CPU, CPU will decide automatically via useEffect
     // Don't show player decision prompt in this case
     if (isCpuGame && toPlayer === cpuPlayer) {
       // CPU will decide automatically - just set the offer state
-      setDoubleOffer({ from: currentPlayer, to: toPlayer });
+      setDoubleOffer(doubleOfferData);
       // Timer won't run for CPU decisions (handled in timer useEffect)
       setDoubleTimer(12);
     } else {
       // Normal flow: show decision prompt
-      setDoubleOffer({ from: currentPlayer, to: toPlayer });
+      setDoubleOffer(doubleOfferData);
       setDoubleTimer(12);
     }
   };
 
   const handleDoubleResponse = (accepted) => {
+    const fromPlayer = doubleOffer.from;
+    const toPlayer = doubleOffer.to;
+    
     if (accepted) {
-      setGameStakes(prev => prev * 2);
+      const newStakes = gameStakes * 2;
+      setGameStakes(newStakes);
       // When a double is accepted:
       // - The person who accepted (currentPlayer/doubleOffer.to) gains the right to offer next
       // - The person who offered (doubleOffer.from) loses the right until the other player offers
-      setCanDouble(prev => ({ ...prev, [doubleOffer.from]: false, [doubleOffer.to]: true }));
+      setCanDouble(prev => ({ ...prev, [fromPlayer]: false, [toPlayer]: true }));
       setDoubleOffer(null);
       setDoubleTimer(12);
+      
+      // Send double acceptance to server for online games
+      if (isOnlineGame && socketRef.current && matchId) {
+        socketRef.current.emit('game:double-response', {
+          matchId,
+          player: toPlayer,
+          accepted: true,
+          gameStakes: newStakes
+        });
+      }
     } else {
       setDoubleOffer(null);
       setDoubleTimer(12);
-      triggerGameOver('double', doubleOffer.from, doubleOffer.to);
+      
+      // Send double decline to server for online games
+      if (isOnlineGame && socketRef.current && matchId) {
+        socketRef.current.emit('game:double-response', {
+          matchId,
+          player: toPlayer,
+          accepted: false,
+          gameOver: { type: 'double', winner: fromPlayer, loser: toPlayer }
+        });
+      }
+      
+      triggerGameOver('double', fromPlayer, toPlayer);
     }
   };
 
@@ -5151,6 +5204,27 @@ function GameBoard() {
     const handleDoubleOffered = (data) => {
       if (data.matchId === currentMatchId && data.to === currentPlayerNumber) {
         setDoubleOffer(data.doubleOffer);
+        if (data.gameStakes) {
+          setGameStakes(data.gameStakes);
+        }
+        setDoubleTimer(12);
+      }
+    };
+    
+    // Listen for double responses
+    const handleDoubleResponseReceived = (data) => {
+      if (data.matchId === currentMatchId) {
+        if (data.accepted) {
+          setGameStakes(data.gameStakes);
+          const fromPlayer = data.doubleOffer?.from || (currentPlayerNumber === 1 ? 2 : 1);
+          setCanDouble(prev => ({ ...prev, [fromPlayer]: false, [currentPlayerNumber]: true }));
+          setDoubleOffer(null);
+          setDoubleTimer(12);
+        } else {
+          // Double was declined - game over
+          setGameOver(data.gameOver);
+          setDoubleOffer(null);
+        }
       }
     };
     
@@ -5264,6 +5338,7 @@ function GameBoard() {
     socket.on('game:turn-changed', handleTurnChanged);
     socket.on('game:state-sync', handleStateSync);
     socket.on('game:double-offered', handleDoubleOffered);
+    socket.on('game:double-response', handleDoubleResponseReceived);
     socket.on('game:over', handleGameOver);
     socket.on('game:first-roll-start', handleFirstRollStart);
     socket.on('game:first-roll', handleFirstRoll);
@@ -5277,6 +5352,7 @@ function GameBoard() {
       socket.off('game:turn-changed', handleTurnChanged);
       socket.off('game:state-sync', handleStateSync);
       socket.off('game:double-offered', handleDoubleOffered);
+      socket.off('game:double-response', handleDoubleResponseReceived);
       socket.off('game:over', handleGameOver);
       socket.off('game:first-roll-start', handleFirstRollStart);
       socket.off('game:first-roll', handleFirstRoll);

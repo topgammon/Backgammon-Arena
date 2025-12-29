@@ -1809,6 +1809,7 @@ function GameBoard() {
     
     setIsRolling(true);
     setAnimationFrame(0);
+    playSound('Dice roll');
     
     // Send rolling animation start to server for online games
     if (isOnlineGame && currentPlayer === playerNumber && socketRef.current && matchId) {
@@ -1843,7 +1844,6 @@ function GameBoard() {
       setUsedDice([]);
       setHasRolled(true);
       setMovesAllowed(moves);
-      playSound('Dice roll');
       setSelected(null);
       setLegalMoves([]);
       
@@ -1871,6 +1871,7 @@ function GameBoard() {
     
     setIsFirstRolling(true);
     setFirstRollAnimationFrame(0);
+    playSound('Dice roll');
     
     // Send first roll animation start to server for online games
     if (isOnlineGame && socketRef.current && matchId) {
@@ -1900,7 +1901,6 @@ function GameBoard() {
       let newRolls = [...firstRolls];
       newRolls[firstRollTurn - 1] = roll;
       setFirstRolls(newRolls);
-      playSound('Dice roll');
       
       // Reset timer for next roll
       setFirstRollTimer(10);
@@ -5379,6 +5379,7 @@ function GameBoard() {
       if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
         setIsRolling(true);
         setAnimationFrame(0);
+        playSound('Dice roll');
         // Animate opponent's dice roll
         const rollInterval = setInterval(() => {
           setRollingDice([
@@ -5497,6 +5498,7 @@ function GameBoard() {
         
         setIsFirstRolling(true);
         setFirstRollAnimationFrame(0);
+        playSound('Dice roll');
         // Animate opponent's first roll - continue until roll value is received
         firstRollIntervalRef.current = setInterval(() => {
           setFirstRollAnimationFrame(prev => (prev + 1) % 7);

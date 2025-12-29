@@ -421,6 +421,41 @@ function GameBoard() {
     setAwaitingEndTurn(false);
   }, [currentPlayer, hasRolled]);
 
+  // Break the dice timer - start when phase begins and it's player's turn
+  useEffect(() => {
+    if (firstRollPhase && isOnlineGame && firstRollTurn === playerNumber) {
+      // Clear any existing timer
+      if (firstRollTimerRef.current) {
+        clearInterval(firstRollTimerRef.current);
+        firstRollTimerRef.current = null;
+      }
+      // Reset timer to 10
+      setFirstRollTimer(10);
+      // Start countdown
+      firstRollTimerRef.current = setInterval(() => {
+        setFirstRollTimer(prev => {
+          if (prev <= 1) {
+            if (firstRollTimerRef.current) {
+              clearInterval(firstRollTimerRef.current);
+              firstRollTimerRef.current = null;
+            }
+            triggerGameOver('timeout', firstRollTurn === 1 ? 2 : 1, firstRollTurn);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    
+    // Clean up timer when phase ends
+    return () => {
+      if (firstRollTimerRef.current) {
+        clearInterval(firstRollTimerRef.current);
+        firstRollTimerRef.current = null;
+      }
+    };
+  }, [firstRollPhase, firstRollTurn, isOnlineGame, playerNumber]);
+
   // Timer countdown
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -1761,30 +1796,11 @@ function GameBoard() {
     // Prevent rolling when it's not your turn in online games
     if (isOnlineGame && firstRollTurn !== playerNumber) return;
     
-    // Clear any existing timer
+    // Clear timer when rolling
     if (firstRollTimerRef.current) {
       clearInterval(firstRollTimerRef.current);
       firstRollTimerRef.current = null;
     }
-    
-    // Reset timer to 10 seconds
-    setFirstRollTimer(10);
-    
-    // Start countdown timer
-    firstRollTimerRef.current = setInterval(() => {
-      setFirstRollTimer(prev => {
-        if (prev <= 1) {
-          // Timeout - resign
-          if (firstRollTimerRef.current) {
-            clearInterval(firstRollTimerRef.current);
-            firstRollTimerRef.current = null;
-          }
-          triggerGameOver('timeout', firstRollTurn === 1 ? 2 : 1, firstRollTurn);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
     
     setIsFirstRolling(true);
     setFirstRollAnimationFrame(0);
@@ -1833,20 +1849,6 @@ function GameBoard() {
           });
         }
         setFirstRollTurn(2);
-        // Start timer for player 2
-        firstRollTimerRef.current = setInterval(() => {
-          setFirstRollTimer(prev => {
-            if (prev <= 1) {
-              if (firstRollTimerRef.current) {
-                clearInterval(firstRollTimerRef.current);
-                firstRollTimerRef.current = null;
-              }
-              triggerGameOver('timeout', 1, 2);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
         } else {
           // Show result and send to server immediately
           if (newRolls[0] > newRolls[1]) {
@@ -1864,6 +1866,11 @@ function GameBoard() {
             }
             // Close modal after same delay for both players
             setTimeout(() => {
+              // Clear timer when phase ends
+              if (firstRollTimerRef.current) {
+                clearInterval(firstRollTimerRef.current);
+                firstRollTimerRef.current = null;
+              }
               setCurrentPlayer(1);
               setFirstRollPhase(false);
               setHasRolled(true);
@@ -1886,6 +1893,11 @@ function GameBoard() {
             }
             // Close modal after same delay for both players
             setTimeout(() => {
+              // Clear timer when phase ends
+              if (firstRollTimerRef.current) {
+                clearInterval(firstRollTimerRef.current);
+                firstRollTimerRef.current = null;
+              }
               setCurrentPlayer(2);
               setFirstRollPhase(false);
               setHasRolled(true);
@@ -1900,6 +1912,12 @@ function GameBoard() {
             clearInterval(firstRollTimerRef.current);
             firstRollTimerRef.current = null;
           }
+          // Send tie result to server for online games
+          if (isOnlineGame && socketRef.current && matchId) {
+            socketRef.current.emit('game:first-roll-tie', {
+              matchId
+            });
+          }
           setTimeout(() => {
             setFirstRolls([null, null]);
             setFirstRollTurn(1);
@@ -1907,13 +1925,6 @@ function GameBoard() {
             setIsFirstRolling(false);
             setFirstRollAnimationFrame(0);
             setFirstRollTimer(10);
-            
-            // Send tie result to server for online games
-            if (isOnlineGame && socketRef.current && matchId) {
-              socketRef.current.emit('game:first-roll-tie', {
-                matchId
-              });
-            }
           }, 1500);
         }
       }
@@ -4816,8 +4827,8 @@ function GameBoard() {
             >
               {/* Avatar Image */}
               <div style={{
-                width: '100px',
-                height: '100px',
+                width: '140px',
+                height: '140px',
                 borderRadius: '12px',
                 overflow: 'hidden',
                 border: `3px solid ${cpuDifficulty === parseInt(level) ? '#fff' : '#ddd'}`,
@@ -4851,31 +4862,31 @@ function GameBoard() {
               
               {/* Opponent Name */}
               <div style={{ 
-                fontSize: '20px', 
+                fontSize: '18px', 
                 fontWeight: 'bold',
                 color: cpuDifficulty === parseInt(level) ? '#fff' : '#000',
-                marginTop: '4px'
+                marginTop: '2px'
               }}>
                 {info.avatar}
               </div>
               
               {/* Difficulty Name */}
               <div style={{ 
-                fontSize: '16px', 
+                fontSize: '14px', 
                 fontWeight: '600',
                 color: cpuDifficulty === parseInt(level) ? '#fff' : '#333',
-                marginTop: '-4px'
+                marginTop: '-2px'
               }}>
                 {info.name}
               </div>
               
               {/* Rating Badge */}
               <div style={{ 
-                fontSize: '13px', 
+                fontSize: '12px', 
                 color: cpuDifficulty === parseInt(level) ? '#fff' : '#666', 
                 fontWeight: '600',
-                marginTop: '4px',
-                padding: '4px 12px',
+                marginTop: '2px',
+                padding: '3px 10px',
                 borderRadius: '12px',
                 background: cpuDifficulty === parseInt(level) ? 'rgba(255,255,255,0.2)' : '#f0f0f0'
               }}>
@@ -4884,13 +4895,13 @@ function GameBoard() {
               
               {/* Description */}
               <div style={{ 
-                fontSize: '13px', 
+                fontSize: '12px', 
                 color: cpuDifficulty === parseInt(level) ? 'rgba(255,255,255,0.95)' : '#666', 
                 fontWeight: 'normal', 
                 textAlign: 'center',
-                lineHeight: '1.4',
-                marginTop: '8px',
-                minHeight: '40px',
+                lineHeight: '1.3',
+                marginTop: '4px',
+                minHeight: '32px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
@@ -4988,10 +4999,14 @@ function GameBoard() {
           </div>
         )}
         {gameOver && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-            <div style={{ background: '#fff', padding: 30, borderRadius: 10, textAlign: 'center', maxWidth: 400 }}>
-              <h2>{getGameOverMessage(gameOver)}</h2>
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20 }}>
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
+            <div style={{ background: '#fff', padding: 40, borderRadius: 16, textAlign: 'center', maxWidth: 400, boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)' }}>
+              <h2 style={{ marginBottom: gameOver.type === 'resignation' ? 8 : 0, fontSize: 28 }}>Game Over</h2>
+              {gameOver.type === 'resignation' && (
+                <div style={{ fontSize: 14, color: '#666', marginBottom: 20 }}>Opponent left the game</div>
+              )}
+              <div style={{ fontSize: 18, marginBottom: 24, color: '#333' }}>{getGameOverMessage(gameOver)}</div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                 <button style={buttonStyle} onClick={handleRematch}>Rematch</button>
                 <button style={{ ...buttonStyle, background: '#6c757d' }} onClick={handleQuit}>Quit</button>
               </div>
@@ -5505,6 +5520,11 @@ function GameBoard() {
           clearInterval(firstRollIntervalRef.current);
           firstRollIntervalRef.current = null;
         }
+        // Clear timer
+        if (firstRollTimerRef.current) {
+          clearInterval(firstRollTimerRef.current);
+          firstRollTimerRef.current = null;
+        }
         setIsFirstRolling(false);
         setFirstRollAnimationFrame(0);
         
@@ -5516,6 +5536,7 @@ function GameBoard() {
           setFirstRolls([null, null]);
           setFirstRollTurn(1);
           setFirstRollResult(null);
+          setFirstRollTimer(10);
         }, 1500);
       }
     };
@@ -5745,7 +5766,11 @@ function GameBoard() {
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 style={{ marginBottom: 20, fontSize: 24, fontWeight: 'bold', color: '#222' }}>{getGameOverMessage(gameOver)}</h2>
+              <h2 style={{ marginBottom: gameOver.type === 'resignation' ? 8 : 20, fontSize: 28, fontWeight: 'bold', color: '#222' }}>Game Over</h2>
+              {gameOver.type === 'resignation' && (
+                <div style={{ fontSize: 14, color: '#666', marginBottom: 12 }}>Opponent left the game</div>
+              )}
+              <div style={{ fontSize: 18, marginBottom: 20, color: '#333' }}>{getGameOverMessage(gameOver)}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, justifyContent: 'center', marginTop: 20, width: '100%' }}>
                 {!rematchRequest ? (
                   <>

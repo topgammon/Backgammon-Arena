@@ -1752,7 +1752,10 @@ function GameBoard() {
         bar: newBar,
         borneOff: newBorneOff,
         currentPlayer: currentPlayer,
-        dice: [3, 4]
+        dice: [3, 4],
+        hasRolled: true,
+        usedDice: [],
+        movesAllowed: [3, 4]
       });
     }
   };
@@ -5496,30 +5499,21 @@ function GameBoard() {
     // Listen for timer updates
     // Listen for game state sync
     const handleStateSync = (data) => {
-      if (data.matchId === currentMatchId) {
-        if (data.gameState) {
-          // Handle nested gameState object
-          const state = data.gameState;
-          if (state.checkers) setCheckers(state.checkers);
-          if (state.bar) setBar(state.bar);
-          if (state.borneOff) setBorneOff(state.borneOff);
-          if (state.currentPlayer) setCurrentPlayer(state.currentPlayer);
-          if (state.dice) setDice(state.dice);
-          if (state.hasRolled !== undefined) setHasRolled(state.hasRolled);
-          if (state.usedDice) setUsedDice(state.usedDice);
-          if (state.movesAllowed) setMovesAllowed(state.movesAllowed);
-        } else {
-          // Handle direct properties (for backward compatibility)
-          if (data.checkers) setCheckers(data.checkers);
-          if (data.bar) setBar(data.bar);
-          if (data.borneOff) setBorneOff(data.borneOff);
-          if (data.currentPlayer) setCurrentPlayer(data.currentPlayer);
-          if (data.dice) setDice(data.dice);
-          if (data.hasRolled !== undefined) setHasRolled(data.hasRolled);
-          if (data.usedDice) setUsedDice(data.usedDice);
-          if (data.movesAllowed) setMovesAllowed(data.movesAllowed);
-        }
+      if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
+        // Only update if this is from the opponent
+        if (data.checkers) setCheckers(data.checkers);
+        if (data.bar) setBar(data.bar);
+        if (data.borneOff) setBorneOff(data.borneOff);
+        if (data.currentPlayer) setCurrentPlayer(data.currentPlayer);
+        if (data.dice) setDice(data.dice);
+        if (data.hasRolled !== undefined) setHasRolled(data.hasRolled);
+        if (data.usedDice) setUsedDice(data.usedDice);
+        if (data.movesAllowed) setMovesAllowed(data.movesAllowed);
         if (data.gameStakes) setGameStakes(data.gameStakes);
+        // Clear selection and legal moves when state syncs
+        setSelected(null);
+        setLegalMoves([]);
+        setFirstRollPhase(false);
       }
     };
     

@@ -327,7 +327,7 @@ io.on('connection', (socket) => {
   
   // State sync handler (for testing/debugging)
   socket.on('game:state-sync', (data) => {
-    const { matchId, player, gameState } = data;
+    const { matchId, player, checkers, bar, borneOff, currentPlayer, dice, hasRolled, usedDice, movesAllowed } = data;
     const match = activeMatches.get(matchId);
     
     if (!match) {
@@ -336,18 +336,24 @@ io.on('connection', (socket) => {
     }
     
     // Update match game state
-    if (gameState) {
-      match.gameState = gameState;
-    }
+    const gameState = { checkers, bar, borneOff, currentPlayer, dice, hasRolled, usedDice, movesAllowed };
+    match.gameState = gameState;
     
     // Find opponent socket
     const opponentSocketId = player === 1 ? match.player2.socketId : match.player1.socketId;
     
-    // Broadcast state sync to opponent (send gameState properties directly)
+    // Broadcast state sync to opponent (send properties directly)
     io.to(opponentSocketId).emit('game:state-sync', {
       matchId,
       player,
-      ...gameState
+      checkers,
+      bar,
+      borneOff,
+      currentPlayer,
+      dice,
+      hasRolled,
+      usedDice,
+      movesAllowed
     });
     
     console.log(`🔄 Player ${player} synced game state in match ${matchId}`);

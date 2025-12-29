@@ -2381,11 +2381,10 @@ function GameBoard() {
     if (!hasRolled) return;
     // Prevent player interaction when it's CPU's turn
     if (isCpuGame && currentPlayer === cpuPlayer) return;
-    // Prevent selecting opponent's pieces in online games
-    if (isOnlineGame && (currentPlayer !== playerNumber || checker.player !== playerNumber)) return;
-    // Prevent selecting opponent's pieces in general
-    if (checker.player !== currentPlayer) return;
+    // Prevent interaction when it's not your turn in online games
+    if (isOnlineGame && currentPlayer !== playerNumber) return;
     
+    // If we have a selected piece, check if clicking this checker is a legal move
     if (selected && selected.id !== checker.id) {
       const legalMovesArray = Array.from(legalMoves);
       const isLegalMove = legalMovesArray.some(move => {
@@ -2399,23 +2398,41 @@ function GameBoard() {
         return false;
       });
       
+      // Allow clicking opponent's piece if it's a legal move target (hitting a blot)
       if (isLegalMove) {
         handlePointClick(checker.point);
         return;
       } else {
-        setSelected(null);
-        setLegalMoves([]);
+        // If not a legal move, try to select this checker if it's our piece
+        if (checker.player === currentPlayer) {
+          const legalFrom = getLegalFromPoints();
+          if (legalFrom.includes(checker.point)) {
+            const stack = checkers.filter(c => c.point === checker.point && c.player === currentPlayer);
+            const topChecker = stack.reduce((a, b) => a.offset > b.offset ? a : b);
+            setSelected(topChecker);
+            calculateLegalMoves(topChecker);
+          } else {
+            setSelected(null);
+            setLegalMoves([]);
+          }
+        } else {
+          setSelected(null);
+          setLegalMoves([]);
+        }
         return;
       }
     }
     
+    // If clicking the same checker that's selected, deselect it
     if (selected && selected.id === checker.id) {
       setSelected(null);
       setLegalMoves([]);
       return;
     }
     
+    // If no piece selected, only allow selecting our own pieces
     if (!selected) {
+      if (checker.player !== currentPlayer) return;
       const legalFrom = getLegalFromPoints();
       if (legalFrom.includes(checker.point)) {
         const stack = checkers.filter(c => c.point === checker.point && c.player === currentPlayer);
@@ -2427,15 +2444,18 @@ function GameBoard() {
         setLegalMoves([]);
       }
     } else {
-      const legalFrom = getLegalFromPoints();
-      if (legalFrom.includes(checker.point)) {
-        const stack = checkers.filter(c => c.point === checker.point && c.player === currentPlayer);
-        const topChecker = stack.reduce((a, b) => a.offset > b.offset ? a : b);
-        setSelected(topChecker);
-        calculateLegalMoves(topChecker);
-      } else {
-        setSelected(null);
-        setLegalMoves([]);
+      // If we have a selected piece and click another, try to select it if it's our piece
+      if (checker.player === currentPlayer) {
+        const legalFrom = getLegalFromPoints();
+        if (legalFrom.includes(checker.point)) {
+          const stack = checkers.filter(c => c.point === checker.point && c.player === currentPlayer);
+          const topChecker = stack.reduce((a, b) => a.offset > b.offset ? a : b);
+          setSelected(topChecker);
+          calculateLegalMoves(topChecker);
+        } else {
+          setSelected(null);
+          setLegalMoves([]);
+        }
       }
     }
   }
@@ -2444,9 +2464,12 @@ function GameBoard() {
     if (!hasRolled) return;
     // Prevent player interaction when it's CPU's turn
     if (isCpuGame && currentPlayer === cpuPlayer) return;
+    // Prevent interaction when it's not your turn in online games
+    if (isOnlineGame && currentPlayer !== playerNumber) return;
     
     if (selected) {
-      const isLegalMove = legalMoves.some(move => {
+      const legalMovesArray = Array.from(legalMoves);
+      const isLegalMove = legalMovesArray.some(move => {
         if (typeof move === 'number') {
           return move === idx;
         }
@@ -2460,8 +2483,22 @@ function GameBoard() {
       if (isLegalMove) {
         handlePointClick(idx);
       } else {
-        setSelected(null);
-        setLegalMoves([]);
+        // If not a legal move, try to select a checker at this point if it's our piece
+        const legalFrom = getLegalFromPoints();
+        if (legalFrom.includes(idx)) {
+          const stack = checkers.filter(c => c.point === idx && c.player === currentPlayer);
+          if (stack.length > 0) {
+            const topChecker = stack.reduce((a, b) => a.offset > b.offset ? a : b);
+            setSelected(topChecker);
+            calculateLegalMoves(topChecker);
+          } else {
+            setSelected(null);
+            setLegalMoves([]);
+          }
+        } else {
+          setSelected(null);
+          setLegalMoves([]);
+        }
       }
       return;
     }
@@ -5323,6 +5360,19 @@ function GameBoard() {
           const newRolls = [...prev];
           newRolls[data.rollTurn - 1] = data.roll;
           console.log('Updated firstRolls to:', newRolls);
+          
+          // Check if both rolls are complete and if it's a tie
+          if (newRolls[0] !== null && newRolls[1] !== null && newRolls[0] === newRolls[1]) {
+            // Show tie result for waiting player
+            setFirstRollResult('tie');
+            // Reset after delay (same as rolling player)
+            setTimeout(() => {
+              setFirstRolls([null, null]);
+              setFirstRollTurn(1);
+              setFirstRollResult(null);
+            }, 1500);
+          }
+          
           return newRolls;
         });
         setIsFirstRolling(false);

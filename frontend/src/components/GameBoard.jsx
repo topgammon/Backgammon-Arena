@@ -429,18 +429,18 @@ function GameBoard() {
     if (!gameOver && (screen === 'passplay' || screen === 'onlineGame') && !firstRollPhase && !gameOver && !isRolling && !doubleOffer) {
       timerRef.current = setInterval(() => {
         setTimer(t => {
-          if (t <= 1) {
-            clearInterval(timerRef.current);
-            // Only trigger timeout forfeit if player has valid moves available
-            // If no valid moves, auto-end turn instead
-            if (hasRolled && hasAnyValidMoves() && !allDiceUsed()) {
-              triggerGameOver('timeout', currentPlayer === 1 ? 2 : 1, currentPlayer);
-            } else if (hasRolled && (!hasAnyValidMoves() || allDiceUsed())) {
-              // Auto-end turn if no moves available
-              handleEndTurn();
+            if (t <= 1) {
+              clearInterval(timerRef.current);
+              // Only trigger timeout forfeit if player has valid moves available AND dice are not all used
+              // If all dice are used OR no valid moves, auto-end turn instead
+              if (hasRolled && hasAnyValidMoves() && !allDiceUsed()) {
+                triggerGameOver('timeout', currentPlayer === 1 ? 2 : 1, currentPlayer);
+              } else {
+                // Auto-end turn if all dice used or no moves available
+                handleEndTurn();
+              }
+              return 0;
             }
-            return 0;
-          }
           return t - 1;
         });
       }, 1000);
@@ -1718,19 +1718,10 @@ function GameBoard() {
           });
         }
         setFirstRollTurn(2);
-      } else {
-        // Show result first, then close modal after delay
-        if (newRolls[0] > newRolls[1]) {
-          setFirstRollResult(1);
-          // Wait longer so both players can see the result
-          setTimeout(() => {
-            setCurrentPlayer(1);
-            setFirstRollPhase(false);
-            setHasRolled(true);
-            setDice([newRolls[0], newRolls[1]]);
-            setUsedDice([]);
-            setMovesAllowed(newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]);
-            
+        } else {
+          // Show result and send to server immediately
+          if (newRolls[0] > newRolls[1]) {
+            setFirstRollResult(1);
             // Send first roll result to server for online games
             if (isOnlineGame && socketRef.current && matchId) {
               socketRef.current.emit('game:first-roll-complete', {
@@ -1742,18 +1733,17 @@ function GameBoard() {
                 movesAllowed: newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]
               });
             }
-          }, 2500);
-        } else if (newRolls[1] > newRolls[0]) {
-          setFirstRollResult(2);
-          // Wait longer so both players can see the result
-          setTimeout(() => {
-            setCurrentPlayer(2);
-            setFirstRollPhase(false);
-            setHasRolled(true);
-            setDice([newRolls[0], newRolls[1]]);
-            setUsedDice([]);
-            setMovesAllowed(newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]);
-            
+            // Close modal after same delay for both players
+            setTimeout(() => {
+              setCurrentPlayer(1);
+              setFirstRollPhase(false);
+              setHasRolled(true);
+              setDice([newRolls[0], newRolls[1]]);
+              setUsedDice([]);
+              setMovesAllowed(newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]);
+            }, 1500);
+          } else if (newRolls[1] > newRolls[0]) {
+            setFirstRollResult(2);
             // Send first roll result to server for online games
             if (isOnlineGame && socketRef.current && matchId) {
               socketRef.current.emit('game:first-roll-complete', {
@@ -1765,7 +1755,15 @@ function GameBoard() {
                 movesAllowed: newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]
               });
             }
-          }, 2500);
+            // Close modal after same delay for both players
+            setTimeout(() => {
+              setCurrentPlayer(2);
+              setFirstRollPhase(false);
+              setHasRolled(true);
+              setDice([newRolls[0], newRolls[1]]);
+              setUsedDice([]);
+              setMovesAllowed(newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]);
+            }, 1500);
         } else {
           setFirstRollResult('tie');
           setTimeout(() => {
@@ -3122,7 +3120,7 @@ function GameBoard() {
               {currentPlayer === playerNumber ? (
                 <span>Your move</span>
               ) : (
-                <span>Waiting for opponent's move</span>
+                <span>Waiting for opponent</span>
               )}
             </div>
           </foreignObject>
@@ -5228,11 +5226,11 @@ function GameBoard() {
         setIsFirstRolling(false);
         setFirstRollAnimationFrame(0);
         
-        // Show result first, then close modal after delay
+        // Show result immediately
         setFirstRolls(data.firstRolls);
         setFirstRollResult(data.winner);
         
-        // Wait to close modal so both players can see the result
+        // Close modal after same delay as rolling player
         setTimeout(() => {
           setCurrentPlayer(data.currentPlayer);
           setFirstRollPhase(false);
@@ -5240,7 +5238,7 @@ function GameBoard() {
           setDice(data.dice);
           setUsedDice([]);
           setMovesAllowed(data.movesAllowed);
-        }, 2000);
+        }, 1500);
       }
     };
     

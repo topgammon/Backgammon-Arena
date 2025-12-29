@@ -4810,122 +4810,100 @@ function GameBoard() {
     );
   };
 
+  // Socket.io handlers for online game events
+  useEffect(() => {
+    if (!isOnlineGame || !socketRef.current || !matchId || !playerNumber) return;
+    
+    const socket = socketRef.current;
+    const currentMatchId = matchId;
+    const currentPlayerNumber = playerNumber;
+    
+    // Listen for opponent's moves
+    const handleMove = (data) => {
+      if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
+        // Apply opponent's move by syncing game state
+        console.log('Opponent move received:', data);
+        if (data.gameState) {
+          setCheckers(data.gameState.checkers);
+          setBar(data.gameState.bar);
+          setBorneOff(data.gameState.borneOff);
+          setUsedDice(data.gameState.usedDice);
+          setSelected(null);
+          setLegalMoves([]);
+          setMoveMade(true);
+        }
+      }
+    };
+    
+    // Listen for dice rolls
+    const handleDiceRolled = (data) => {
+      if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
+        setDice(data.dice);
+        setHasRolled(true);
+        if (data.movesAllowed) {
+          setMovesAllowed(data.movesAllowed);
+        }
+      }
+    };
+    
+    // Listen for turn changes
+    const handleTurnChanged = (data) => {
+      if (data.matchId === currentMatchId) {
+        setCurrentPlayer(data.currentPlayer);
+        setHasRolled(false);
+        setUsedDice([]);
+        setSelected(null);
+        setLegalMoves([]);
+      }
+    };
+    
+    // Listen for game state sync
+    const handleStateSync = (data) => {
+      if (data.matchId === currentMatchId) {
+        if (data.checkers) setCheckers(data.checkers);
+        if (data.bar) setBar(data.bar);
+        if (data.borneOff) setBorneOff(data.borneOff);
+        if (data.currentPlayer) setCurrentPlayer(data.currentPlayer);
+        if (data.dice) setDice(data.dice);
+        if (data.gameStakes) setGameStakes(data.gameStakes);
+      }
+    };
+    
+    // Listen for double offers
+    const handleDoubleOffered = (data) => {
+      if (data.matchId === currentMatchId && data.to === currentPlayerNumber) {
+        setDoubleOffer(data.doubleOffer);
+      }
+    };
+    
+    // Listen for game over
+    const handleGameOver = (data) => {
+      if (data.matchId === currentMatchId) {
+        setGameOver(data.gameOver);
+      }
+    };
+    
+    socket.on('game:move', handleMove);
+    socket.on('game:dice-rolled', handleDiceRolled);
+    socket.on('game:turn-changed', handleTurnChanged);
+    socket.on('game:state-sync', handleStateSync);
+    socket.on('game:double-offered', handleDoubleOffered);
+    socket.on('game:over', handleGameOver);
+    
+    return () => {
+      socket.off('game:move', handleMove);
+      socket.off('game:dice-rolled', handleDiceRolled);
+      socket.off('game:turn-changed', handleTurnChanged);
+      socket.off('game:state-sync', handleStateSync);
+      socket.off('game:double-offered', handleDoubleOffered);
+      socket.off('game:over', handleGameOver);
+    };
+  }, [isOnlineGame, matchId, playerNumber]);
+  
   // Online Game Screen
   const renderOnlineGame = () => {
-    // Set up Socket.io handlers for online game
-    useEffect(() => {
-      if (!isOnlineGame || !socketRef.current || !matchId) return;
-      
-      const socket = socketRef.current;
-      
-      // Listen for opponent's moves
-      socket.on('game:move', (data) => {
-        if (data.matchId === matchId && data.player !== playerNumber) {
-          // Apply opponent's move by syncing game state
-          console.log('Opponent move received:', data);
-          if (data.gameState) {
-            setCheckers(data.gameState.checkers || checkers);
-            setBar(data.gameState.bar || bar);
-            setBorneOff(data.gameState.borneOff || borneOff);
-            setUsedDice(data.gameState.usedDice || usedDice);
-            setSelected(null);
-            setLegalMoves([]);
-            setMoveMade(true);
-          }
-        }
-      });
-      
-      // Listen for dice rolls
-      socket.on('game:dice-rolled', (data) => {
-        if (data.matchId === matchId && data.player !== playerNumber) {
-          setDice(data.dice);
-          setHasRolled(true);
-        }
-      });
-      
-      // Listen for turn changes
-      socket.on('game:turn-changed', (data) => {
-        if (data.matchId === matchId) {
-          setCurrentPlayer(data.currentPlayer);
-          setHasRolled(false);
-          setUsedDice([]);
-        }
-      });
-      
-      // Listen for game state sync
-      socket.on('game:state-sync', (data) => {
-        if (data.matchId === matchId) {
-          setCheckers(data.checkers || checkers);
-          setBar(data.bar || bar);
-          setBorneOff(data.borneOff || borneOff);
-          setCurrentPlayer(data.currentPlayer || currentPlayer);
-          setDice(data.dice || dice);
-          setGameStakes(data.gameStakes || gameStakes);
-        }
-      });
-      
-      // Listen for double offers
-      socket.on('game:double-offered', (data) => {
-        if (data.matchId === matchId && data.to === playerNumber) {
-          setDoubleOffer(data.doubleOffer);
-        }
-      });
-      
-      // Listen for game over
-      socket.on('game:over', (data) => {
-        if (data.matchId === matchId) {
-          setGameOver(data.gameOver);
-        }
-      });
-      
-      return () => {
-        socket.off('game:move');
-        socket.off('game:dice-rolled');
-        socket.off('game:turn-changed');
-        socket.off('game:state-sync');
-        socket.off('game:double-offered');
-        socket.off('game:over');
-      };
-    }, [isOnlineGame, matchId, playerNumber]);
-    
-    const handleOnlineMove = (move) => {
-      if (!socketRef.current || !matchId || currentPlayer !== playerNumber) return;
-      
-      // Send move to server
-      socketRef.current.emit('game:move', {
-        matchId,
-        player: playerNumber,
-        move: move
-      });
-    };
-    
-    const handleOnlineRollDice = () => {
-      if (!socketRef.current || !matchId || currentPlayer !== playerNumber || hasRolled) return;
-      
-      // Roll dice locally first for immediate feedback
-      const newDice = [Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1];
-      setDice(newDice);
-      setHasRolled(true);
-      
-      // Send to server
-      socketRef.current.emit('game:dice-roll', {
-        matchId,
-        player: playerNumber,
-        dice: newDice
-      });
-    };
-    
-    const handleOnlineEndTurn = () => {
-      if (!socketRef.current || !matchId || currentPlayer !== playerNumber) return;
-      
-      socketRef.current.emit('game:end-turn', {
-        matchId,
-        player: playerNumber
-      });
-    };
-    
     const opponentName = opponent?.isGuest 
-      ? `Guest ${opponent.userId.split('_')[1]?.substring(0, 6) || 'Player'}` 
+      ? `Guest ${opponent.userId?.split('_')[1]?.substring(0, 6) || 'Player'}` 
       : opponent?.userId || 'Opponent';
     
     return (
@@ -4935,7 +4913,7 @@ function GameBoard() {
         </div>
         <h2>Online Match - {matchmakingType === 'guest' ? 'Unranked' : 'Ranked'}</h2>
         <div style={{ marginBottom: '12px', fontSize: '16px', color: '#666' }}>
-          You are Player {playerNumber} | Opponent: {opponentName}
+          You are Player {playerNumber} ({playerNumber === 1 ? 'White' : 'Black'}) | Opponent: {opponentName} ({playerNumber === 1 ? 'Black' : 'White'})
         </div>
         {message && <div style={{ color: 'red', margin: 10 }}>{message}</div>}
         {renderBoard()}

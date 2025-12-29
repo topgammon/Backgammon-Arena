@@ -4,6 +4,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
+import { supabase } from './supabase.js';
 
 // Load environment variables
 dotenv.config();
@@ -91,7 +92,16 @@ app.post('/api/evaluate', async (req, res) => {
 
 // Matchmaking queues
 const guestQueue = []; // Simple queue for guest matchmaking
-const rankedQueue = new Map(); // Map of userId -> { socketId, elo, timestamp } for ranked matchmaking
+const rankedQueue = []; // Array of { socketId, userId, elo, timestamp } for ranked matchmaking
+
+// ELO calculation function (standard chess.com formula)
+function calculateELOChange(playerELO, opponentELO, result) {
+  // result: 1 = win, 0.5 = draw, 0 = loss
+  const K = 32; // K-factor (standard for chess.com)
+  const expectedScore = 1 / (1 + Math.pow(10, (opponentELO - playerELO) / 400));
+  const eloChange = Math.round(K * (result - expectedScore));
+  return eloChange;
+}
 
 // Active matches: matchId -> { player1: { socketId, userId }, player2: { socketId, userId }, gameState }
 const activeMatches = new Map();
@@ -141,9 +151,10 @@ io.on('connection', (socket) => {
     }
     
     // Remove from ranked queue
-    if (rankedQueue.has(socket.id)) {
-      rankedQueue.delete(socket.id);
-      console.log('👤 Removed from ranked queue');
+    const rankedIndex = rankedQueue.findIndex(p => p.socketId === socket.id);
+    if (rankedIndex !== -1) {
+      rankedQueue.splice(rankedIndex, 1);
+      console.log('👤 Removed from ranked queue, new size:', rankedQueue.length);
     }
     
     // Clean up active matches where this socket was a player
@@ -239,16 +250,105 @@ io.on('connection', (socket) => {
     socket.emit('matchmaking:guest:left');
   });
   
-  // Ranked matchmaking (for logged in users) - placeholder for now
-  socket.on('matchmaking:ranked:join', (data) => {
-    console.log('User joining ranked matchmaking queue:', socket.id, data);
-    // TODO: Implement ranked matchmaking with ELO-based matching
-    socket.emit('matchmaking:ranked:queued', { message: 'Ranked matchmaking coming soon' });
+  // Ranked matchmaking (for logged in users)
+  socket.on('matchmaking:ranked:join', async (data) => {
+    const { userId, elo } = data;
+    
+    if (!userId) {
+      console.error('❌ No userId provided for ranked matchmaking');
+      socket.emit('matchmaking:ranked:error', { message: 'Must be logged in for ranked play' });
+      return;
+    }
+    
+    console.log('🏆 User joining ranked matchmaking queue:', socket.id, { userId, elo });
+    
+    // Remove from any existing queue position
+    const existingIndex = rankedQueue.findIndex(p => p.socketId === socket.id || p.userId === userId);
+    if (existingIndex !== -1) {
+      rankedQueue.splice(existingIndex, 1);
+    }
+    
+    // Add to ranked queue
+    const playerData = {
+      socketId: socket.id,
+      userId: userId,
+      elo: elo || 1000,
+      timestamp: Date.now(),
+      isGuest: false
+    };
+    rankedQueue.push(playerData);
+    
+    // Try to find a match within ELO range
+    // Match players within 200 ELO points, or expand range if waiting too long
+    const ELO_RANGE = 200;
+    const MAX_WAIT_TIME = 30000; // 30 seconds
+    const waitTime = Date.now() - playerData.timestamp;
+    const maxELODiff = waitTime > MAX_WAIT_TIME ? 400 : ELO_RANGE;
+    
+    const opponent = rankedQueue.find(p => 
+      p.socketId !== socket.id && 
+      p.userId !== userId &&
+      Math.abs(p.elo - playerData.elo) <= maxELODiff
+    );
+    
+    if (opponent) {
+      // Found a match!
+      const player1 = playerData.elo >= opponent.elo ? playerData : opponent;
+      const player2 = playerData.elo >= opponent.elo ? opponent : playerData;
+      const match = matchPlayers(rankedQueue, player1, player2);
+      
+      console.log('🏆 Ranked match found:', match.matchId, { 
+        player1: { userId: player1.userId, elo: player1.elo },
+        player2: { userId: player2.userId, elo: player2.elo }
+      });
+      
+      // Store match in active matches
+      activeMatches.set(match.matchId, {
+        player1: match.player1,
+        player2: match.player2,
+        gameState: null,
+        createdAt: Date.now(),
+        isRanked: true,
+        player1ELO: player1.elo,
+        player2ELO: player2.elo
+      });
+      
+      // Notify both players
+      io.to(match.player1.socketId).emit('matchmaking:match-found', {
+        matchId: match.matchId,
+        playerNumber: 1,
+        opponent: {
+          userId: match.player2.userId,
+          isGuest: false,
+          elo: match.player2.elo
+        }
+      });
+      
+      io.to(match.player2.socketId).emit('matchmaking:match-found', {
+        matchId: match.matchId,
+        playerNumber: 2,
+        opponent: {
+          userId: match.player1.userId,
+          isGuest: false,
+          elo: match.player1.elo
+        }
+      });
+    } else {
+      // Send confirmation that player is in queue
+      socket.emit('matchmaking:ranked:queued', {
+        position: rankedQueue.length,
+        estimatedWaitTime: null
+      });
+    }
   });
   
   socket.on('matchmaking:ranked:leave', () => {
     console.log('🚪 User leaving ranked matchmaking queue:', socket.id);
-    rankedQueue.delete(socket.id);
+    const index = rankedQueue.findIndex(p => p.socketId === socket.id);
+    if (index !== -1) {
+      rankedQueue.splice(index, 1);
+      console.log('👤 Removed from ranked queue, new size:', rankedQueue.length);
+    }
     socket.emit('matchmaking:ranked:left');
   });
   
@@ -629,7 +729,7 @@ io.on('connection', (socket) => {
   });
   
   // Game over handler
-  socket.on('game:over', (data) => {
+  socket.on('game:over', async (data) => {
     const { matchId, gameOver } = data;
     const match = activeMatches.get(matchId);
     
@@ -643,13 +743,114 @@ io.on('connection', (socket) => {
       ? match.player2.socketId 
       : match.player1.socketId;
     
-    // Broadcast game over to opponent
+    // Calculate ELO changes for ranked matches
+    let eloChanges = null;
+    if (match.isRanked && !match.player1.isGuest && !match.player2.isGuest) {
+      const player1ELO = match.player1ELO || 1000;
+      const player2ELO = match.player2ELO || 1000;
+      
+      // Determine result: 1 = win, 0 = loss
+      const player1Result = gameOver.winner === 1 ? 1 : 0;
+      const player2Result = gameOver.winner === 2 ? 1 : 0;
+      
+      // Calculate ELO changes
+      const player1Change = calculateELOChange(player1ELO, player2ELO, player1Result);
+      const player2Change = calculateELOChange(player2ELO, player1ELO, player2Result);
+      
+      const newPlayer1ELO = player1ELO + player1Change;
+      const newPlayer2ELO = player2ELO + player2Change;
+      
+      eloChanges = {
+        player1: {
+          userId: match.player1.userId,
+          oldELO: player1ELO,
+          newELO: newPlayer1ELO,
+          change: player1Change
+        },
+        player2: {
+          userId: match.player2.userId,
+          oldELO: player2ELO,
+          newELO: newPlayer2ELO,
+          change: player2Change
+        }
+      };
+      
+      // Update ELO in database
+      if (supabase) {
+        try {
+          // Get current stats for player 1
+          const { data: player1Data, error: fetchError1 } = await supabase
+            .from('users')
+            .select('wins, losses, games_played')
+            .eq('id', match.player1.userId)
+            .single();
+          
+          if (!fetchError1 && player1Data) {
+            // Update player 1
+            const { error: error1 } = await supabase
+              .from('users')
+              .update({ 
+                elo_rating: newPlayer1ELO,
+                wins: (player1Data.wins || 0) + (player1Result === 1 ? 1 : 0),
+                losses: (player1Data.losses || 0) + (player1Result === 0 ? 1 : 0),
+                games_played: (player1Data.games_played || 0) + 1
+              })
+              .eq('id', match.player1.userId);
+            
+            if (error1) {
+              console.error('Error updating player 1 ELO:', error1);
+            }
+          }
+          
+          // Get current stats for player 2
+          const { data: player2Data, error: fetchError2 } = await supabase
+            .from('users')
+            .select('wins, losses, games_played')
+            .eq('id', match.player2.userId)
+            .single();
+          
+          if (!fetchError2 && player2Data) {
+            // Update player 2
+            const { error: error2 } = await supabase
+              .from('users')
+              .update({ 
+                elo_rating: newPlayer2ELO,
+                wins: (player2Data.wins || 0) + (player2Result === 1 ? 1 : 0),
+                losses: (player2Data.losses || 0) + (player2Result === 0 ? 1 : 0),
+                games_played: (player2Data.games_played || 0) + 1
+              })
+              .eq('id', match.player2.userId);
+            
+            if (error2) {
+              console.error('Error updating player 2 ELO:', error2);
+            }
+          }
+          
+          console.log(`📊 ELO updated for ranked match ${matchId}:`, eloChanges);
+        } catch (err) {
+          console.error('Error updating ELO in database:', err);
+        }
+      }
+    }
+    
+    // Broadcast game over to opponent with ELO changes
     io.to(opponentSocketId).emit('game:over', {
       matchId,
-      gameOver
+      gameOver,
+      eloChanges
+    });
+    
+    // Also send to sender with ELO changes
+    socket.emit('game:over', {
+      matchId,
+      gameOver,
+      eloChanges
     });
     
     console.log(`🏁 Game over in match ${matchId}: ${gameOver.type}, Winner: Player ${gameOver.winner}`);
+    if (eloChanges) {
+      console.log(`📊 ELO changes: Player 1: ${eloChanges.player1.change > 0 ? '+' : ''}${eloChanges.player1.change}, Player 2: ${eloChanges.player2.change > 0 ? '+' : ''}${eloChanges.player2.change}`);
+    }
   });
   
   // Chat handler

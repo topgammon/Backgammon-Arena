@@ -1906,18 +1906,21 @@ function GameBoard() {
               setMovesAllowed(newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]);
             }, 1500);
         } else {
+          // It's a tie - show both rolls to both players
           setFirstRollResult('tie');
           // Clear timer
           if (firstRollTimerRef.current) {
             clearInterval(firstRollTimerRef.current);
             firstRollTimerRef.current = null;
           }
-          // Send tie result to server for online games
+          // Send tie result to server for online games with both roll values
           if (isOnlineGame && socketRef.current && matchId) {
             socketRef.current.emit('game:first-roll-tie', {
-              matchId
+              matchId,
+              firstRolls: newRolls
             });
           }
+          // Show tie result for same duration before resetting
           setTimeout(() => {
             setFirstRolls([null, null]);
             setFirstRollTurn(1);
@@ -5528,7 +5531,12 @@ function GameBoard() {
         setIsFirstRolling(false);
         setFirstRollAnimationFrame(0);
         
-        // Show tie result for waiting player
+        // Set both roll values so waiting player sees them
+        if (data.firstRolls) {
+          setFirstRolls(data.firstRolls);
+        }
+        
+        // Show tie result for waiting player (same as rolling player)
         setFirstRollResult('tie');
         
         // Reset after delay (same as rolling player)

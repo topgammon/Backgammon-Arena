@@ -491,7 +491,7 @@ io.on('connection', (socket) => {
   });
   
   socket.on('game:first-roll-tie', (data) => {
-    const { matchId } = data;
+    const { matchId, firstRolls } = data;
     const match = activeMatches.get(matchId);
     
     if (!match) {
@@ -504,9 +504,10 @@ io.on('connection', (socket) => {
       ? match.player2.socketId 
       : match.player1.socketId;
     
-    // Broadcast tie to opponent
+    // Broadcast tie to opponent with roll values so they can see both dice
     io.to(opponentSocketId).emit('game:first-roll-tie', {
-      matchId
+      matchId,
+      firstRolls
     });
     
     console.log(`🤝 First roll tie in match ${matchId}, rerolling...`);

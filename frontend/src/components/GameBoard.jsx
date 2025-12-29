@@ -1137,10 +1137,11 @@ function GameBoard() {
     }
     
     // Send move to server for online games
-    if (isOnlineGame && !allowCpu && currentPlayer === playerNumber) {
-      sendGameEvent('move', {
-        moveType: 'bearoff',
-        checker: checker.id,
+    if (isOnlineGame && !allowCpu && currentPlayer === playerNumber && socketRef.current && matchId) {
+      socketRef.current.emit('game:move', {
+        matchId,
+        player: playerNumber,
+        move: { moveType: 'bearoff', checker: checker.id },
         gameState: {
           checkers: newCheckers,
           bar: bar,
@@ -1197,11 +1198,11 @@ function GameBoard() {
     }
     
     // Send move to server for online games
-    if (isOnlineGame && !allowCpu && currentPlayer === playerNumber) {
-      sendGameEvent('move', {
-        moveType: 'bearoff-sum',
-        checker: checker.id,
-        point: point,
+    if (isOnlineGame && !allowCpu && currentPlayer === playerNumber && socketRef.current && matchId) {
+      socketRef.current.emit('game:move', {
+        matchId,
+        player: playerNumber,
+        move: { moveType: 'bearoff-sum', checker: checker.id, point: point },
         gameState: {
           checkers: newCheckers,
           bar: bar,
@@ -1265,11 +1266,11 @@ function GameBoard() {
     }
     
     // Send move to server for online games
-    if (isOnlineGame && !allowCpu && currentPlayer === playerNumber) {
-      sendGameEvent('move', {
-        moveType: 'bearoff-multimove',
-        checker: checker.id,
-        point: point,
+    if (isOnlineGame && !allowCpu && currentPlayer === playerNumber && socketRef.current && matchId) {
+      socketRef.current.emit('game:move', {
+        matchId,
+        player: playerNumber,
+        move: { moveType: 'bearoff-multimove', checker: checker.id, point: point },
         gameState: {
           checkers: newCheckers,
           bar: bar,
@@ -1340,6 +1341,21 @@ function GameBoard() {
         setSelected(null);
         setLegalMoves([]);
         setMoveMade(true);
+        
+        // Send move to server for online games
+        if (isOnlineGame && currentPlayer === playerNumber && socketRef.current && matchId) {
+          socketRef.current.emit('game:move', {
+            matchId,
+            player: playerNumber,
+            move: { from: from, to: dest, match: match },
+            gameState: {
+              checkers: newCheckers,
+              bar: newBar,
+              borneOff: newBorneOff,
+              usedDice: newUsedDice
+            }
+          });
+        }
         return;
       }
     }
@@ -1469,12 +1485,11 @@ function GameBoard() {
     setMoveMade(true);
     
     // Send move to server for online games
-    if (isOnlineGame && currentPlayer === playerNumber) {
-      sendGameEvent('move', {
-        moveType: 'regular',
-        from: from,
-        to: dest,
-        match: match,
+    if (isOnlineGame && currentPlayer === playerNumber && socketRef.current && matchId) {
+      socketRef.current.emit('game:move', {
+        matchId,
+        player: playerNumber,
+        move: { moveType: 'regular', from: from, to: dest, match: match },
         gameState: {
           checkers: newCheckers,
           bar: newBar,
@@ -1529,6 +1544,8 @@ function GameBoard() {
   const rollDice = () => {
     if (gameOver) return;
     if (hasRolled) return;
+    // Prevent rolling when it's not your turn in online games
+    if (isOnlineGame && currentPlayer !== playerNumber) return;
     
     setMessage('');
     setNoMoveOverlay(false);
@@ -1569,8 +1586,10 @@ function GameBoard() {
       setLegalMoves([]);
       
       // Send dice roll to server for online games
-      if (isOnlineGame && currentPlayer === playerNumber) {
-        sendGameEvent('dice-roll', {
+      if (isOnlineGame && currentPlayer === playerNumber && socketRef.current && matchId) {
+        socketRef.current.emit('game:dice-roll', {
+          matchId,
+          player: playerNumber,
           dice: d,
           movesAllowed: moves
         });
@@ -1680,8 +1699,10 @@ function GameBoard() {
     }
     
     // Send turn change to server for online games
-    if (isOnlineGame && currentPlayer === playerNumber) {
-      sendGameEvent('end-turn', {
+    if (isOnlineGame && currentPlayer === playerNumber && socketRef.current && matchId) {
+      socketRef.current.emit('game:end-turn', {
+        matchId,
+        player: playerNumber,
         nextPlayer: nextPlayer,
         gameState: {
           checkers: checkers,
@@ -2901,7 +2922,7 @@ function GameBoard() {
                 )}
               </div>
             )}
-            {showEndTurn && (!isCpuGame || currentPlayer !== cpuPlayer) && (
+            {showEndTurn && (!isCpuGame || currentPlayer !== cpuPlayer) && (screen !== 'onlineGame' || (screen === 'onlineGame' && currentPlayer === playerNumber)) && (
               <button style={{ ...buttonStyle, minWidth: 0, width: 110, fontSize: 22, padding: '14px 0', margin: 0, background: '#007bff', color: '#fff' }} onClick={handleEndTurn}>End Turn</button>
             )}
           </div>

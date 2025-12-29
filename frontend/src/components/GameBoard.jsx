@@ -6126,7 +6126,8 @@ function GameBoard() {
             justifyContent: 'space-between', 
             alignItems: 'flex-start', 
             marginBottom: 16, 
-            gap: 20 
+            gap: 20,
+            maxWidth: boardContainerWidth
           }}>
             {/* Opponent info (left side) */}
             <div style={{ flex: 1 }}>
@@ -6171,9 +6172,27 @@ function GameBoard() {
               borderRadius: '8px 8px 0 0',
               fontSize: 14,
               fontWeight: 600,
-              color: '#333'
+              color: '#333',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
             }}>
-              Chat
+              <span>Chat</span>
+              <button
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                style={{
+                  padding: '4px 8px',
+                  background: 'transparent',
+                  color: '#333',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: 18,
+                  cursor: 'pointer',
+                  lineHeight: 1
+                }}
+              >
+                😊
+              </button>
             </div>
             <div style={{
               flex: 1,
@@ -6198,28 +6217,13 @@ function GameBoard() {
               borderTop: '1px solid #dee2e6',
               position: 'relative'
             }}>
-              <button
-                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                style={{
-                  padding: '6px 10px',
-                  background: '#e9ecef',
-                  color: '#333',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: 18,
-                  cursor: 'pointer',
-                  lineHeight: 1
-                }}
-              >
-                😊
-              </button>
               {showEmojiPicker && (
                 <div
                   ref={emojiPickerRef}
                   style={{
                     position: 'absolute',
                     bottom: '100%',
-                    left: 0,
+                    right: 0,
                     marginBottom: '8px',
                     background: '#fff',
                     border: '1px solid #ddd',
@@ -6342,9 +6346,27 @@ function GameBoard() {
                 borderRadius: '8px 8px 0 0',
                 fontSize: 14,
                 fontWeight: 600,
-                color: '#333'
+                color: '#333',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
               }}>
-                Chat
+                <span>Chat</span>
+                <button
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  style={{
+                    padding: '4px 8px',
+                    background: 'transparent',
+                    color: '#333',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: 18,
+                    cursor: 'pointer',
+                    lineHeight: 1
+                  }}
+                >
+                  😊
+                </button>
               </div>
               <div style={{
                 flex: 1,
@@ -6370,28 +6392,13 @@ function GameBoard() {
                 borderTop: '1px solid #dee2e6',
                 position: 'relative'
               }}>
-                <button
-                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  style={{
-                    padding: '6px 10px',
-                    background: '#e9ecef',
-                    color: '#333',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    fontSize: 18,
-                    cursor: 'pointer',
-                    lineHeight: 1
-                  }}
-                >
-                  😊
-                </button>
                 {showEmojiPicker && (
                   <div
                     ref={emojiPickerRef}
                     style={{
                       position: 'absolute',
                       bottom: '100%',
-                      left: 0,
+                      right: 0,
                       marginBottom: '8px',
                       background: '#fff',
                       border: '1px solid #ddd',
@@ -6442,9 +6449,10 @@ function GameBoard() {
                       setChatInput('');
                     }
                   }}
-                  placeholder="Type a message... 😊"
+                  placeholder="Type a message..."
                   style={{
                     flex: 1,
+                    minWidth: 0,
                     padding: '6px 10px',
                     border: '1px solid #ddd',
                     borderRadius: '4px',

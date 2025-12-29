@@ -431,7 +431,14 @@ function GameBoard() {
         setTimer(t => {
           if (t <= 1) {
             clearInterval(timerRef.current);
-            triggerGameOver('timeout', currentPlayer === 1 ? 2 : 1, currentPlayer);
+            // Only trigger timeout forfeit if player has valid moves available
+            // If no valid moves, auto-end turn instead
+            if (hasRolled && hasAnyValidMoves() && !allDiceUsed()) {
+              triggerGameOver('timeout', currentPlayer === 1 ? 2 : 1, currentPlayer);
+            } else if (hasRolled && (!hasAnyValidMoves() || allDiceUsed())) {
+              // Auto-end turn if no moves available
+              handleEndTurn();
+            }
             return 0;
           }
           return t - 1;
@@ -761,6 +768,28 @@ function GameBoard() {
       setAwaitingEndTurn(true);
     }
   }, [usedDice, checkers, hasRolled, moveMade, noMoveOverlay]);
+
+  // Auto-end turn if no legal moves (not a forfeit - only timeout is forfeit)
+  useEffect(() => {
+    if (
+      !gameOver &&
+      hasRolled &&
+      !awaitingEndTurn &&
+      !isRolling &&
+      !firstRollPhase &&
+      (screen === 'passplay' || screen === 'onlineGame') &&
+      !hasAnyValidMoves() &&
+      usedDice.length > 0
+    ) {
+      // Small delay to ensure UI updates
+      const timeoutId = setTimeout(() => {
+        if (!hasAnyValidMoves() && usedDice.length > 0) {
+          handleEndTurn();
+        }
+      }, 500);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [hasRolled, usedDice, checkers, awaitingEndTurn, isRolling, firstRollPhase, gameOver, screen]);
 
   // Global click handler to deselect
   useEffect(() => {
@@ -3028,7 +3057,7 @@ function GameBoard() {
                 <span style={timer <= 5 ? { color: '#dc3545' } : { color: '#fff' }}>s</span>
               </div>
             )}
-            {(!hasRolled && !awaitingEndTurn && !isRolling) ? (
+            {(!hasRolled && !awaitingEndTurn && !isRolling && !gameOver) ? (
               <div style={{ display: 'flex', gap: 8 }}>
                 {(!isOnlineGame || (isOnlineGame && currentPlayer === playerNumber)) && (
                   <button style={{ ...buttonStyle, minWidth: 0, width: 110, fontSize: 22, padding: '14px 0', margin: 0 }} onClick={rollDice}>Roll Dice</button>
@@ -3038,47 +3067,55 @@ function GameBoard() {
                 )}
               </div>
             ) : null}
-            {(hasRolled || isRolling) && !showEndTurn && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '0 0 4px 0' }}>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 7 }}>
-                  {isRolling ? (
-                    [0, 1].map(i => (
-                      <Dice key={i} value={isRolling ? rollingDice[i] : (dice[i] || 1)} faded={false} shrunk={false} isRolling={true} frame={animationFrame} />
-                    ))
-                  ) : (
-                    (dice[0] === dice[1] && dice[0] !== 0)
-                      ? [0, 1, 2, 3].map(i => (
-                          <Dice key={i} value={dice[0]} faded={usedDice.includes(i)} shrunk={usedDice.includes(i)} />
-                        ))
-                      : [0, 1].map(i => (
-                          <Dice key={i} value={dice[i]} faded={usedDice.includes(i)} shrunk={usedDice.includes(i)} />
-                        ))
-                  )}
-                </div>
-                {!isRolling && hasRolled && screen === 'onlineGame' && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: 16, color: '#fff' }}>
-                    <span style={{
-                      display: 'inline-block',
-                      width: 20,
-                      height: 20,
-                      borderRadius: '50%',
-                      background: currentPlayer === 1 ? '#fff' : '#222',
-                      border: '2px solid #b87333',
-                    }} />
-                    {currentPlayer === playerNumber ? (
-                      <span>Your move</span>
-                    ) : (
-                      <span>Waiting for opponent's move</span>
-                    )}
-                  </div>
+            {(hasRolled || isRolling) && !showEndTurn && !gameOver && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '0 0 4px 0', gap: 7 }}>
+                {isRolling ? (
+                  [0, 1].map(i => (
+                    <Dice key={i} value={isRolling ? rollingDice[i] : (dice[i] || 1)} faded={false} shrunk={false} isRolling={true} frame={animationFrame} />
+                  ))
+                ) : (
+                  (dice[0] === dice[1] && dice[0] !== 0)
+                    ? [0, 1, 2, 3].map(i => (
+                        <Dice key={i} value={dice[0]} faded={usedDice.includes(i)} shrunk={usedDice.includes(i)} />
+                      ))
+                    : [0, 1].map(i => (
+                        <Dice key={i} value={dice[i]} faded={usedDice.includes(i)} shrunk={usedDice.includes(i)} />
+                      ))
                 )}
               </div>
             )}
-            {showEndTurn && (!isCpuGame || currentPlayer !== cpuPlayer) && (screen !== 'onlineGame' || (screen === 'onlineGame' && currentPlayer === playerNumber)) && (
+            {showEndTurn && (!isCpuGame || currentPlayer !== cpuPlayer) && (screen !== 'onlineGame' || (screen === 'onlineGame' && currentPlayer === playerNumber)) && !gameOver && (
               <button style={{ ...buttonStyle, minWidth: 0, width: 110, fontSize: 22, padding: '14px 0', margin: 0, background: '#007bff', color: '#fff' }} onClick={handleEndTurn}>End Turn</button>
             )}
           </div>
         </foreignObject>
+        {/* Your move / Waiting text on left side */}
+        {!gameOver && !firstRollPhase && hasRolled && !isRolling && screen === 'onlineGame' && (
+          <foreignObject
+            x={boardX - 180}
+            y={boardY + boardH / 2 - 20}
+            width={160}
+            height={40}
+            style={{ pointerEvents: 'none' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#fff', textAlign: 'left' }}>
+              <span style={{
+                display: 'inline-block',
+                width: 18,
+                height: 18,
+                borderRadius: '50%',
+                background: currentPlayer === 1 ? '#fff' : '#222',
+                border: '2px solid #b87333',
+                flexShrink: 0,
+              }} />
+              {currentPlayer === playerNumber ? (
+                <span>Your move</span>
+              ) : (
+                <span>Waiting for opponent's move</span>
+              )}
+            </div>
+          </foreignObject>
+        )}
       </svg>
       </div>
     );
@@ -5172,6 +5209,14 @@ function GameBoard() {
     
     const handleFirstRollComplete = (data) => {
       if (data.matchId === currentMatchId) {
+        // Clear animation interval if it exists
+        if (firstRollIntervalRef.current) {
+          clearInterval(firstRollIntervalRef.current);
+          firstRollIntervalRef.current = null;
+        }
+        setIsFirstRolling(false);
+        setFirstRollAnimationFrame(0);
+        
         // Sync first roll completion
         setFirstRolls(data.firstRolls);
         setFirstRollResult(data.winner);
@@ -5186,6 +5231,11 @@ function GameBoard() {
     
     const handleFirstRollTie = (data) => {
       if (data.matchId === currentMatchId) {
+        // Clear animation interval if it exists
+        if (firstRollIntervalRef.current) {
+          clearInterval(firstRollIntervalRef.current);
+          firstRollIntervalRef.current = null;
+        }
         // Reset for tie
         setFirstRolls([null, null]);
         setFirstRollTurn(1);
@@ -5273,35 +5323,131 @@ function GameBoard() {
         </div>
         {firstRollPhase && renderFirstRollModal()}
         {doubleOffer && doubleOffer.to === playerNumber && (
-          <div style={{ position: 'absolute', top: '54.5%', left: 'calc(50% - 373px)', transform: 'translateY(-50%)', zIndex: 20, pointerEvents: 'none' }}>
-            <div style={{ background: 'rgba(255,255,255,0.97)', border: '2px solid #ff6b35', borderRadius: 12, padding: 32, minWidth: 280, maxWidth: 400, textAlign: 'center', fontSize: 20, fontWeight: 'bold', color: '#222', boxShadow: '0 4px 32px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
-              <div style={{ marginBottom: 16, fontSize: 24, color: '#ff6b35' }}>🎲 Double Offered! 🎲</div>
-              <div style={{ marginBottom: 8 }}>Opponent offers to double the stakes</div>
-              <div style={{ marginBottom: 16, fontSize: 18, color: '#666' }}>Current stakes: {gameStakes} | New stakes: {gameStakes * 2}</div>
-              <div style={{ marginBottom: 16, fontSize: 20, color: doubleTimer <= 3 ? '#dc3545' : '#333', fontWeight: 'bold' }}>⏰ {doubleTimer} seconds to decide</div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <button style={{ ...buttonStyle, minWidth: 100, padding: '12px 20px', fontSize: 18, background: '#28a745', color: '#fff' }} onClick={() => handleDoubleResponse(true)}>Accept</button>
-                <button style={{ ...buttonStyle, minWidth: 100, padding: '12px 20px', fontSize: 18, background: '#dc3545', color: '#fff' }} onClick={() => handleDoubleResponse(false)}>Decline</button>
+          <div 
+            style={{ 
+              position: 'fixed', 
+              top: 0, 
+              left: 0, 
+              width: '100vw', 
+              height: '100vh', 
+              background: 'rgba(0, 0, 0, 0.5)', 
+              zIndex: 2000, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              backdropFilter: 'blur(4px)'
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                // Don't close on background click
+              }
+            }}
+          >
+            <div 
+              style={{ 
+                background: '#fff', 
+                borderRadius: '16px', 
+                padding: '40px', 
+                minWidth: '400px', 
+                maxWidth: '480px',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+                position: 'relative',
+                animation: 'fadeIn 0.2s ease-in',
+                textAlign: 'center'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ marginBottom: 16, fontSize: 28, color: '#ff6b35', fontWeight: 'bold' }}>🎲 Double Offered! 🎲</div>
+              <div style={{ marginBottom: 12, fontSize: 18, color: '#333' }}>Opponent offers to double the stakes</div>
+              <div style={{ marginBottom: 20, fontSize: 16, color: '#666' }}>Current stakes: {gameStakes} | New stakes: {gameStakes * 2}</div>
+              <div style={{ marginBottom: 24, fontSize: 18, color: doubleTimer <= 3 ? '#dc3545' : '#333', fontWeight: 'bold' }}>⏰ {doubleTimer} seconds to decide</div>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                <button style={{ ...buttonStyle, minWidth: 120, padding: '12px 24px', fontSize: 18, background: '#28a745', color: '#fff' }} onClick={() => handleDoubleResponse(true)}>Accept</button>
+                <button style={{ ...buttonStyle, minWidth: 120, padding: '12px 24px', fontSize: 18, background: '#dc3545', color: '#fff' }} onClick={() => handleDoubleResponse(false)}>Decline</button>
               </div>
             </div>
           </div>
         )}
         {showConfirmResign && (
-          <div style={{ position: 'absolute', top: '54.5%', left: 'calc(50% - 373px)', transform: 'translateY(-50%)', zIndex: 20, pointerEvents: 'none' }}>
-            <div style={{ background: 'rgba(255,255,255,0.97)', border: '2px solid #dc3545', borderRadius: 12, padding: 32, minWidth: 260, maxWidth: 340, textAlign: 'center', fontSize: 24, fontWeight: 'bold', color: '#222', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
-              <div style={{ marginBottom: 18 }}>Are you sure you want to resign?</div>
-              <div style={{ display: 'flex', gap: 18, marginTop: 8 }}>
-                <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff', minWidth: 0, width: 90, fontSize: 20 }} onClick={doResign}>Yes</button>
-                <button style={{ ...buttonStyle, background: '#bbb', color: '#222', minWidth: 0, width: 90, fontSize: 20 }} onClick={cancelResign}>No</button>
+          <div 
+            style={{ 
+              position: 'fixed', 
+              top: 0, 
+              left: 0, 
+              width: '100vw', 
+              height: '100vh', 
+              background: 'rgba(0, 0, 0, 0.5)', 
+              zIndex: 2000, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              backdropFilter: 'blur(4px)'
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                cancelResign();
+              }
+            }}
+          >
+            <div 
+              style={{ 
+                background: '#fff', 
+                borderRadius: '16px', 
+                padding: '40px', 
+                minWidth: '400px', 
+                maxWidth: '480px',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+                position: 'relative',
+                animation: 'fadeIn 0.2s ease-in',
+                textAlign: 'center'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ marginBottom: 24, fontSize: 20, fontWeight: 'bold', color: '#222' }}>Are you sure you want to resign?</div>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff', minWidth: 120, fontSize: 18, padding: '12px 24px' }} onClick={doResign}>Yes</button>
+                <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', minWidth: 120, fontSize: 18, padding: '12px 24px' }} onClick={cancelResign}>No</button>
               </div>
             </div>
           </div>
         )}
         {gameOver && (
-          <div style={{ position: 'absolute', top: '54.5%', left: 'calc(50% - 373px)', transform: 'translateY(-50%)', zIndex: 20, pointerEvents: 'none' }}>
-            <div style={{ background: 'rgba(255,255,255,0.97)', border: '2px solid #28a745', borderRadius: 12, padding: 32, minWidth: 260, maxWidth: 340, textAlign: 'center', fontSize: 24, fontWeight: 'bold', color: '#222', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
-              <h2>{getGameOverMessage(gameOver)}</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, justifyContent: 'center', marginTop: 20, width: '100%' }}>
+          <div 
+            style={{ 
+              position: 'fixed', 
+              top: 0, 
+              left: 0, 
+              width: '100vw', 
+              height: '100vh', 
+              background: 'rgba(0, 0, 0, 0.5)', 
+              zIndex: 2000, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              backdropFilter: 'blur(4px)'
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                // Don't close on background click
+              }
+            }}
+          >
+            <div 
+              style={{ 
+                background: '#fff', 
+                borderRadius: '16px', 
+                padding: '40px', 
+                minWidth: '400px', 
+                maxWidth: '480px',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+                position: 'relative',
+                animation: 'fadeIn 0.2s ease-in',
+                textAlign: 'center'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 style={{ marginBottom: 20, fontSize: 24, fontWeight: 'bold', color: '#222' }}>{getGameOverMessage(gameOver)}</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, justifyContent: 'center', marginTop: 20, width: '100%' }}>
                 {!rematchRequest ? (
                   <>
                     <button style={buttonStyle} onClick={() => {
@@ -5319,11 +5465,23 @@ function GameBoard() {
                     }}>Rematch</button>
                     <button style={{ ...buttonStyle, background: '#007bff' }} onClick={() => { 
                       if (isOnlineGame) {
+                        // Disconnect from current match
+                        if (socketRef.current) {
+                          socketRef.current.disconnect();
+                          socketRef.current = null;
+                        }
+                        // Reset game state
+                        setGameOver(null);
+                        setRematchRequest(null);
+                        setIsOnlineGame(false);
+                        setMatchId(null);
+                        setPlayerNumber(null);
+                        setOpponent(null);
+                        // Start matchmaking
                         setIsMatchmaking(true);
                         setMatchmakingType('guest');
                         setScreen('onlineMatchmaking');
-                        setGameOver(null);
-                        setRematchRequest(null);
+                        setMatchmakingStatus('Connecting...');
                       } else {
                         handleQuit();
                       }
@@ -5334,11 +5492,23 @@ function GameBoard() {
                   <>
                     <div style={{ marginBottom: 10, color: '#666', fontSize: 16 }}>Rematch request sent...</div>
                     <button style={{ ...buttonStyle, background: '#007bff' }} onClick={() => { 
+                      // Disconnect from current match
+                      if (socketRef.current) {
+                        socketRef.current.disconnect();
+                        socketRef.current = null;
+                      }
+                      // Reset game state
+                      setGameOver(null);
+                      setRematchRequest(null);
+                      setIsOnlineGame(false);
+                      setMatchId(null);
+                      setPlayerNumber(null);
+                      setOpponent(null);
+                      // Start matchmaking
                       setIsMatchmaking(true);
                       setMatchmakingType('guest');
                       setScreen('onlineMatchmaking');
-                      setGameOver(null);
-                      setRematchRequest(null);
+                      setMatchmakingStatus('Connecting...');
                     }}>New Game</button>
                     <button style={{ ...buttonStyle, background: '#6c757d' }} onClick={handleQuit}>Quit</button>
                   </>

@@ -447,6 +447,76 @@ io.on('connection', (socket) => {
     
     console.log(`🤝 First roll tie in match ${matchId}, rerolling...`);
   });
+  
+  // Rematch handlers
+  socket.on('game:rematch-request', (data) => {
+    const { matchId, from, to } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Invalid matchId for rematch request:', matchId);
+      return;
+    }
+    
+    // Find opponent socket
+    const opponentSocketId = match.player1.socketId === socket.id 
+      ? match.player2.socketId 
+      : match.player1.socketId;
+    
+    // Send rematch request to opponent
+    io.to(opponentSocketId).emit('game:rematch-request', {
+      matchId, from, to
+    });
+    
+    console.log(`🔄 Rematch requested in match ${matchId}, Player ${from} -> Player ${to}`);
+  });
+  
+  socket.on('game:rematch-accept', (data) => {
+    const { matchId, from, to } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Invalid matchId for rematch accept:', matchId);
+      return;
+    }
+    
+    // Find opponent socket
+    const opponentSocketId = match.player1.socketId === socket.id 
+      ? match.player2.socketId 
+      : match.player1.socketId;
+    
+    // Send rematch accept to both players
+    io.to(opponentSocketId).emit('game:rematch-accept', {
+      matchId, from, to
+    });
+    io.to(socket.id).emit('game:rematch-accept', {
+      matchId, from, to
+    });
+    
+    console.log(`✅ Rematch accepted in match ${matchId}`);
+  });
+  
+  socket.on('game:rematch-decline', (data) => {
+    const { matchId, from, to } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Invalid matchId for rematch decline:', matchId);
+      return;
+    }
+    
+    // Find opponent socket
+    const opponentSocketId = match.player1.socketId === socket.id 
+      ? match.player2.socketId 
+      : match.player1.socketId;
+    
+    // Send rematch decline to requester
+    io.to(opponentSocketId).emit('game:rematch-decline', {
+      matchId, from, to
+    });
+    
+    console.log(`❌ Rematch declined in match ${matchId}`);
+  });
 });
 
 const PORT = process.env.PORT || 3001;

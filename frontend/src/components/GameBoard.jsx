@@ -165,6 +165,7 @@ function GameBoard() {
   const [showConfirmResign, setShowConfirmResign] = useState(false);
   const [gameOver, setGameOver] = useState(null);
   const [timer, setTimer] = useState(45);
+  const [opponentTimer, setOpponentTimer] = useState(45);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSignupForm, setShowSignupForm] = useState(false);
   const [user, setUser] = useState(null);
@@ -432,7 +433,16 @@ function GameBoard() {
             triggerGameOver('timeout', currentPlayer === 1 ? 2 : 1, currentPlayer);
             return 0;
           }
-          return t - 1;
+          const newTime = t - 1;
+          // Send timer update to server for online games
+          if (isOnlineGame && currentPlayer === playerNumber && socketRef.current && matchId) {
+            socketRef.current.emit('game:timer-update', {
+              matchId,
+              player: playerNumber,
+              timer: newTime
+            });
+          }
+          return newTime;
         });
       }, 1000);
     }
@@ -1701,7 +1711,7 @@ function GameBoard() {
                 movesAllowed: newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]
               });
             }
-          }, 2500);
+          }, 1500);
         } else if (newRolls[1] > newRolls[0]) {
           setFirstRollResult(2);
           setTimeout(() => {
@@ -1723,7 +1733,7 @@ function GameBoard() {
                 movesAllowed: newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]
               });
             }
-          }, 2500);
+          }, 1500);
         } else {
           setFirstRollResult('tie');
           setTimeout(() => {
@@ -1739,7 +1749,7 @@ function GameBoard() {
                 matchId
               });
             }
-          }, 2000);
+          }, 1500);
         }
       }
     }, 600);
@@ -1800,6 +1810,7 @@ function GameBoard() {
         matchId,
         player: playerNumber,
         nextPlayer: nextPlayer,
+        timer: timer,
         gameState: {
           checkers: checkers,
           bar: bar,
@@ -2153,6 +2164,14 @@ function GameBoard() {
     setGameOver({ type, winner, loser });
     setShowConfirmResign(false);
     setNoMoveOverlay(false);
+    
+    // Send game over to server for online games
+    if (isOnlineGame && socketRef.current && matchId) {
+      socketRef.current.emit('game:over', {
+        matchId,
+        gameOver: { type, winner, loser }
+      });
+    }
   }
 
   function getGameOverMessage(go) {
@@ -5049,6 +5068,19 @@ function GameBoard() {
         setUsedDice([]);
         setSelected(null);
         setLegalMoves([]);
+        if (data.timer !== undefined) {
+          setOpponentTimer(data.timer);
+        } else {
+          // Reset opponent timer when turn changes
+          setOpponentTimer(45);
+        }
+      }
+    };
+    
+    // Listen for timer updates
+    const handleTimerUpdate = (data) => {
+      if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
+        setOpponentTimer(data.timer);
       }
     };
     
@@ -5099,6 +5131,12 @@ function GameBoard() {
     const handleFirstRoll = (data) => {
       console.log('Received first roll event:', data, 'currentPlayerNumber:', currentPlayerNumber);
       if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
+        // Clear animation interval if it exists
+        if (window.firstRollIntervalRef && window.firstRollIntervalRef.current) {
+          clearInterval(window.firstRollIntervalRef.current);
+          window.firstRollIntervalRef.current = null;
+        }
+        
         console.log('Processing opponent first roll, updating state...');
         // Update opponent's first roll and turn together
         setFirstRolls(prev => {
@@ -5150,6 +5188,7 @@ function GameBoard() {
     socket.on('game:state-sync', handleStateSync);
     socket.on('game:double-offered', handleDoubleOffered);
     socket.on('game:over', handleGameOver);
+    socket.on('game:timer-update', handleTimerUpdate);
     socket.on('game:first-roll-start', handleFirstRollStart);
     socket.on('game:first-roll', handleFirstRoll);
     socket.on('game:first-roll-complete', handleFirstRollComplete);
@@ -5163,6 +5202,7 @@ function GameBoard() {
       socket.off('game:state-sync', handleStateSync);
       socket.off('game:double-offered', handleDoubleOffered);
       socket.off('game:over', handleGameOver);
+      socket.off('game:timer-update', handleTimerUpdate);
       socket.off('game:first-roll-start', handleFirstRollStart);
       socket.off('game:first-roll', handleFirstRoll);
       socket.off('game:first-roll-complete', handleFirstRollComplete);
@@ -5187,12 +5227,6 @@ function GameBoard() {
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24, margin: '16px 0 0 0' }}>
           <div style={{ fontSize: 20, minWidth: 180, textAlign: 'right' }}>
             <b>Player {playerNumber}</b>
-            {currentPlayer === playerNumber && (
-              <span style={{ marginLeft: 8, fontSize: 14, color: '#28a745' }}>(Your Turn)</span>
-            )}
-            {currentPlayer !== playerNumber && (
-              <span style={{ marginLeft: 8, fontSize: 14, color: '#666' }}>(Waiting...)</span>
-            )}
             <span style={{
               display: 'inline-block',
               width: 28,
@@ -5203,7 +5237,25 @@ function GameBoard() {
               verticalAlign: 'middle',
               border: '2px solid #b87333',
             }} />
+            {currentPlayer === playerNumber && (
+              <span style={{ marginLeft: 8, fontSize: 14, color: '#28a745' }}>(Your Turn)</span>
+            )}
+            {currentPlayer !== playerNumber && (
+              <span style={{ marginLeft: 8, fontSize: 14, color: '#666' }}>(Waiting...)</span>
+            )}
           </div>
+          {!firstRollPhase && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+              <div style={{ fontSize: 16, color: '#666' }}>Your Timer</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: timer <= 5 ? '#dc3545' : '#333' }}>
+                {timer}s
+              </div>
+              <div style={{ fontSize: 16, color: '#666', marginTop: 8 }}>Opponent Timer</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: opponentTimer <= 5 ? '#dc3545' : '#333' }}>
+                {opponentTimer}s
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', gap: 12 }}>
               {undoStack.length > 0 && hasRolled && currentPlayer === playerNumber && (
@@ -5252,8 +5304,9 @@ function GameBoard() {
           <div style={{ position: 'absolute', top: '54.5%', left: 'calc(50% - 373px)', transform: 'translateY(-50%)', zIndex: 20, pointerEvents: 'none' }}>
             <div style={{ background: 'rgba(255,255,255,0.97)', border: '2px solid #28a745', borderRadius: 12, padding: 32, minWidth: 260, maxWidth: 340, textAlign: 'center', fontSize: 24, fontWeight: 'bold', color: '#222', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
               <h2>{getGameOverMessage(gameOver)}</h2>
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, justifyContent: 'center', marginTop: 20, width: '100%' }}>
                 <button style={buttonStyle} onClick={handleRematch}>Rematch</button>
+                <button style={{ ...buttonStyle, background: '#007bff' }} onClick={() => { setScreen('onlineMatchmaking'); setGameOver(null); }}>New Game</button>
                 <button style={{ ...buttonStyle, background: '#6c757d' }} onClick={handleQuit}>Quit</button>
               </div>
             </div>

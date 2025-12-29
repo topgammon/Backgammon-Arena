@@ -1405,6 +1405,21 @@ function GameBoard() {
         setSelected(null);
         setLegalMoves([]);
         setMoveMade(true);
+        
+        // Send move to server for online games
+        if (isOnlineGame && currentPlayer === playerNumber && socketRef.current && matchId) {
+          socketRef.current.emit('game:move', {
+            matchId,
+            player: playerNumber,
+            move: { moveType: 'multimove-doubles', from: from, to: destLocal, steps: steps, match: match },
+            gameState: {
+              checkers: newCheckers,
+              bar: newBar,
+              borneOff: newBorneOff,
+              usedDice: newUsedDice
+            }
+          });
+        }
         return;
       }
       
@@ -1453,6 +1468,21 @@ function GameBoard() {
           setSelected(null);
           setLegalMoves([]);
           setMoveMade(true);
+          
+          // Send move to server for online games
+          if (isOnlineGame && currentPlayer === playerNumber && socketRef.current && matchId) {
+            socketRef.current.emit('game:move', {
+              matchId,
+              player: playerNumber,
+              move: { moveType: 'multimove-sum', from: from, to: dest, match: match },
+              gameState: {
+                checkers: newCheckers,
+                bar: newBar,
+                borneOff: newBorneOff,
+                usedDice: newUsedDice
+              }
+            });
+          }
           return;
         }
       }

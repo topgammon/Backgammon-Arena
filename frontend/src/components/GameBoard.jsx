@@ -295,6 +295,8 @@ function GameBoard() {
   const [firstRollAnimationFrame, setFirstRollAnimationFrame] = useState(0);
   const [autoRoll, setAutoRoll] = useState({ 1: false, 2: false });
   const [muted, setMuted] = useState(false);
+  const [passPlayPlayer1Name, setPassPlayPlayer1Name] = useState(null);
+  const [passPlayPlayer2Name, setPassPlayPlayer2Name] = useState(null);
   const [doubleOffer, setDoubleOffer] = useState(null);
   const [doubleTimer, setDoubleTimer] = useState(12);
   const [canDouble, setCanDouble] = useState({ 1: true, 2: true });
@@ -3471,6 +3473,191 @@ function GameBoard() {
     );
   }
 
+  // Generate guest username
+  const generateGuestUsername = () => {
+    const adjectives = ['Swift', 'Bold', 'Clever', 'Lucky', 'Sharp', 'Quick', 'Wise', 'Brave'];
+    const nouns = ['Player', 'Gamer', 'Champion', 'Master', 'Pro', 'Ace', 'Star', 'Hero'];
+    const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const noun = nouns[Math.floor(Math.random() * nouns.length)];
+    const num = Math.floor(Math.random() * 9999);
+    return `${adj}${noun}${num}`;
+  };
+
+  // Initialize pass and play usernames
+  useEffect(() => {
+    if (screen === 'passplay' && !passPlayPlayer1Name) {
+      setPassPlayPlayer1Name(generateGuestUsername());
+      setPassPlayPlayer2Name(generateGuestUsername());
+    }
+  }, [screen, passPlayPlayer1Name]);
+
+  // Avatar component
+  const renderAvatar = (isGuest = false, isCpu = false, cpuDifficulty = null, size = 60) => {
+    if (isCpu && cpuDifficulty) {
+      // CPU avatar - use the difficulty avatar name
+      const avatarName = DIFFICULTY_LEVELS[cpuDifficulty]?.avatar || 'CPU';
+      return (
+        <div style={{
+          width: size,
+          height: size,
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: size * 0.4,
+          fontWeight: 'bold',
+          color: '#fff',
+          border: '3px solid #333',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+        }}>
+          {avatarName[0]}
+        </div>
+      );
+    } else if (isGuest) {
+      // Guest avatar - question mark silhouette
+      return (
+        <div style={{
+          width: size,
+          height: size,
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: size * 0.5,
+          fontWeight: 'bold',
+          color: '#fff',
+          border: '3px solid #333',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+        }}>
+          ?
+        </div>
+      );
+    } else {
+      // Registered user avatar (placeholder for now)
+      return (
+        <div style={{
+          width: size,
+          height: size,
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: size * 0.4,
+          fontWeight: 'bold',
+          color: '#fff',
+          border: '3px solid #333',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+        }}>
+          U
+        </div>
+      );
+    }
+  };
+
+  // Player info component (for below board)
+  const renderPlayerInfo = (playerNum, isGuest = false, username = null, country = null, rating = null, showControls = true, isPassPlay = false) => {
+    const displayName = username || (isGuest ? (playerNum === 1 ? passPlayPlayer1Name : passPlayPlayer2Name) : `Player ${playerNum}`);
+    const displayCountry = country || (isGuest ? 'N/A' : 'N/A');
+    const displayRating = rating || (isGuest ? 'Unranked' : '1000');
+    const isCurrentPlayer = isPassPlay ? (currentPlayer === playerNum) : (playerNum === playerNumber);
+    
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+        padding: '12px 20px',
+        background: '#f8f9fa',
+        borderRadius: '8px',
+        border: '2px solid #dee2e6',
+        minWidth: 400
+      }}>
+        {renderAvatar(isGuest, false, null, 50)}
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333' }}>{displayName}</div>
+          <div style={{ fontSize: 14, color: '#666', display: 'flex', gap: 12, alignItems: 'center' }}>
+            <span>🌍 {displayCountry}</span>
+            <span>⭐ {displayRating}</span>
+          </div>
+        </div>
+        {showControls && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {isCurrentPlayer && undoStack.length > 0 && hasRolled && (
+              <button style={{ ...buttonStyle, minWidth: 0, padding: '8px 16px', fontSize: 14, background: '#ffc107', color: '#222' }} onClick={handleUndo}>Undo</button>
+            )}
+            {isCurrentPlayer && (
+              <button style={{ ...buttonStyle, minWidth: 0, padding: '8px 16px', fontSize: 14, background: '#dc3545', color: '#fff' }} onClick={confirmResign}>Resign</button>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>Auto:</span>
+              <button 
+                style={{ ...buttonStyle, minWidth: 50, padding: '6px 10px', fontSize: 12, background: autoRoll[playerNum] ? '#28a745' : '#6c757d', color: '#fff' }} 
+                onClick={() => setAutoRoll(prev => ({ ...prev, [playerNum]: !prev[playerNum] }))}
+              >
+                {autoRoll[playerNum] ? 'ON' : 'OFF'}
+              </button>
+            </div>
+            {isCurrentPlayer && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>Sound:</span>
+                <button 
+                  style={{ ...buttonStyle, minWidth: 50, padding: '6px 10px', fontSize: 12, background: !muted ? '#28a745' : '#6c757d', color: '#fff' }} 
+                  onClick={() => setMuted(prev => !prev)}
+                >
+                  {muted ? 'OFF' : 'ON'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Opponent info component (for above board)
+  const renderOpponentInfo = (isGuest = false, isCpu = false, username = null, country = null, rating = null, cpuDifficulty = null) => {
+    let displayName, displayCountry, displayRating;
+    
+    if (isCpu && cpuDifficulty) {
+      displayName = DIFFICULTY_LEVELS[cpuDifficulty]?.name || 'CPU';
+      displayCountry = null; // No country for CPU
+      displayRating = DIFFICULTY_LEVELS[cpuDifficulty]?.skillRating || 'N/A';
+    } else if (isGuest) {
+      displayName = username || 'Guest Player';
+      displayCountry = country || 'N/A';
+      displayRating = rating || 'Unranked';
+    } else {
+      displayName = username || 'Player';
+      displayCountry = country || 'N/A';
+      displayRating = rating || '1000';
+    }
+    
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+        padding: '12px 20px',
+        background: '#f8f9fa',
+        borderRadius: '8px',
+        border: '2px solid #dee2e6',
+        minWidth: 400
+      }}>
+        {renderAvatar(isGuest, isCpu, cpuDifficulty, 50)}
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 18, fontWeight: 'bold', color: '#333' }}>{displayName}</div>
+          <div style={{ fontSize: 14, color: '#666', display: 'flex', gap: 12, alignItems: 'center' }}>
+            {displayCountry && <span>🌍 {displayCountry}</span>}
+            <span>⭐ {displayRating}</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderPassPlay = () => (
     <div style={{ textAlign: 'center', marginTop: 30 }}>
       <div style={{ marginBottom: '18px' }}>
@@ -3478,62 +3665,23 @@ function GameBoard() {
       </div>
       <h2>Pass and Play Backgammon</h2>
       {message && <div style={{ color: 'red', margin: 10 }}>{message}</div>}
-      {renderBoard()}
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24, margin: '16px 0 0 0' }}>
-        <div style={{ fontSize: 20, minWidth: 180, textAlign: 'right' }}>
-          <b>Current Move:</b> Player {currentPlayer}
-          <span style={{
-            display: 'inline-block',
-            width: 28,
-            height: 28,
-            borderRadius: '50%',
-            background: currentPlayer === 1 ? '#fff' : '#222',
-            marginLeft: 10,
-            verticalAlign: 'middle',
-            border: '2px solid #b87333',
-          }} />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 12 }}>
-            {undoStack.length > 0 && hasRolled && (
-              <button style={{ ...buttonStyle, background: '#ffc107', color: '#222' }} onClick={handleUndo}>Undo</button>
-            )}
-            <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff' }} onClick={confirmResign}>Resign</button>
-            <button style={{ ...buttonStyle, background: '#ff9800', color: '#fff' }} onClick={setEndGameState}>Test End Game</button>
-          </div>
-        </div>
+      
+      {/* Opponent info above board (left side) */}
+      <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginBottom: 16, maxWidth: 900, margin: '0 auto 16px' }}>
+        {renderOpponentInfo(true, false, currentPlayer === 1 ? passPlayPlayer2Name : passPlayPlayer1Name, null, null, null)}
       </div>
-      {!isCpuGame && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 32, margin: '16px 0 0 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16, fontWeight: 600 }}>Player 1 Auto-roll:</span>
-            <button 
-              style={{ ...buttonStyle, minWidth: 60, padding: '8px 12px', fontSize: 14, background: autoRoll[1] ? '#28a745' : '#6c757d', color: '#fff' }} 
-              onClick={() => setAutoRoll(prev => ({ ...prev, 1: !prev[1] }))}
-            >
-              {autoRoll[1] ? 'ON' : 'OFF'}
-            </button>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16, fontWeight: 600 }}>Player 2 Auto-roll:</span>
-            <button 
-              style={{ ...buttonStyle, minWidth: 60, padding: '8px 12px', fontSize: 14, background: autoRoll[2] ? '#28a745' : '#6c757d', color: '#fff' }} 
-              onClick={() => setAutoRoll(prev => ({ ...prev, 2: !prev[2] }))}
-            >
-              {autoRoll[2] ? 'ON' : 'OFF'}
-            </button>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16, fontWeight: 600 }}>Sound:</span>
-            <button 
-              style={{ ...buttonStyle, minWidth: 60, padding: '8px 12px', fontSize: 14, background: !muted ? '#28a745' : '#6c757d', color: '#fff' }} 
-              onClick={() => setMuted(prev => !prev)}
-            >
-              {muted ? 'OFF' : 'ON'}
-            </button>
-          </div>
-        </div>
-      )}
+      
+      {renderBoard()}
+      
+      {/* Player info below board (left side) */}
+      <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginTop: 16, maxWidth: 900, margin: '16px auto 0' }}>
+        {renderPlayerInfo(currentPlayer === 1 ? 1 : 2, true, currentPlayer === 1 ? passPlayPlayer1Name : passPlayPlayer2Name, null, null, true, true)}
+      </div>
+      
+      {/* Test End Game button */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+        <button style={{ ...buttonStyle, background: '#ff9800', color: '#fff', minWidth: 0, padding: '8px 16px', fontSize: 14 }} onClick={setEndGameState}>Test End Game</button>
+      </div>
       {noMoveOverlay && usedDice.length < movesAllowed.length && !gameOver && (
         <div style={{ position: 'absolute', top: '54.5%', left: 'calc(50% - 373px)', transform: 'translateY(-50%)', zIndex: 10, pointerEvents: 'none' }}>
           <div style={{ background: 'rgba(255,255,255,0.95)', border: '2px solid #28a745', borderRadius: 12, padding: 32, minWidth: 220, maxWidth: 340, textAlign: 'center', fontSize: 24, fontWeight: 'bold', color: '#222', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
@@ -5095,43 +5243,29 @@ function GameBoard() {
 
   // CPU Game Screen (similar to pass and play, but with CPU logic)
   const renderCpuGame = () => {
-    // For now, render the same as pass and play
-    // CPU move logic will be added when we integrate the bot library
     return (
       <div style={{ textAlign: 'center', marginTop: 30 }}>
         <div style={{ marginBottom: '18px' }}>
           <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '120px' }} />
         </div>
-        <h2>Vs. {DIFFICULTY_LEVELS[cpuDifficulty].name} (Rating: {DIFFICULTY_LEVELS[cpuDifficulty].skillRating})</h2>
+        <h2>Vs. CPU</h2>
         {message && <div style={{ color: 'red', margin: 10 }}>{message}</div>}
+        
+        {/* CPU info above board (left side) */}
+        <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginBottom: 16, maxWidth: 900, margin: '0 auto 16px' }}>
+          {renderOpponentInfo(false, true, null, null, null, cpuDifficulty)}
+        </div>
+        
         {renderBoard()}
-        {/* Same UI as pass and play, but timer will be disabled */}
-        <div style={{ marginTop: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            {undoStack.length > 0 && hasRolled && (!isCpuGame || currentPlayer !== cpuPlayer) && (
-              <button style={{ ...buttonStyle, background: '#ffc107', color: '#222' }} onClick={handleUndo}>Undo</button>
-            )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 16, fontWeight: 600 }}>Player 1 Auto-roll:</span>
-              <button 
-                style={{ ...buttonStyle, minWidth: 60, padding: '8px 12px', fontSize: 14, background: autoRoll[1] ? '#28a745' : '#6c757d', color: '#fff' }} 
-                onClick={() => setAutoRoll(prev => ({ ...prev, 1: !prev[1] }))}
-              >
-                {autoRoll[1] ? 'ON' : 'OFF'}
-              </button>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 16, fontWeight: 600 }}>Sound:</span>
-              <button 
-                style={{ ...buttonStyle, minWidth: 60, padding: '8px 12px', fontSize: 14, background: !muted ? '#28a745' : '#6c757d', color: '#fff' }} 
-                onClick={() => setMuted(prev => !prev)}
-              >
-                {muted ? 'OFF' : 'ON'}
-              </button>
-            </div>
-            <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff' }} onClick={confirmResign}>Resign</button>
-            <button style={{ ...buttonStyle, background: '#ff9800', color: '#fff' }} onClick={setEndGameState}>Test End Game</button>
-          </div>
+        
+        {/* Player info below board (left side) */}
+        <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginTop: 16, maxWidth: 900, margin: '16px auto 0' }}>
+          {renderPlayerInfo(1, true, passPlayPlayer1Name || 'Guest Player', null, null, true, false)}
+        </div>
+        
+        {/* Test End Game button */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+          <button style={{ ...buttonStyle, background: '#ff9800', color: '#fff', minWidth: 0, padding: '8px 16px', fontSize: 14 }} onClick={setEndGameState}>Test End Game</button>
         </div>
         {firstRollPhase && renderFirstRollModal()}
         {doubleOffer && !(isCpuGame && doubleOffer.to === cpuPlayer && doubleOffer.from !== cpuPlayer) && (
@@ -5860,48 +5994,22 @@ function GameBoard() {
         </div>
         <h2>Online Guest Match - Unranked</h2>
         {message && <div style={{ color: 'red', margin: 10 }}>{message}</div>}
+        
+        {/* Opponent info above board (left side) */}
+        <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginBottom: 16, maxWidth: 900, margin: '0 auto 16px' }}>
+          {renderOpponentInfo(opponent?.isGuest || false, false, opponentName, null, null, null)}
+        </div>
+        
         {renderBoard()}
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24, margin: '16px 0 0 0' }}>
-          <div style={{ fontSize: 20, minWidth: 180, textAlign: 'right' }}>
-            <b>Player {playerNumber}</b>
-            <span style={{
-              display: 'inline-block',
-              width: 28,
-              height: 28,
-              borderRadius: '50%',
-              background: playerNumber === 1 ? '#fff' : '#222',
-              marginLeft: 10,
-              verticalAlign: 'middle',
-              border: '2px solid #b87333',
-            }} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'flex', gap: 12 }}>
-              {undoStack.length > 0 && hasRolled && currentPlayer === playerNumber && (
-                <button style={{ ...buttonStyle, background: '#ffc107', color: '#222' }} onClick={handleUndo}>Undo</button>
-              )}
-              <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff' }} onClick={confirmResign}>Resign</button>
-              <button style={{ ...buttonStyle, background: '#ff9800', color: '#fff' }} onClick={setEndGameState}>Test End Game</button>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
-              <span style={{ fontSize: 16, fontWeight: 600 }}>Auto-roll:</span>
-              <button 
-                style={{ ...buttonStyle, minWidth: 60, padding: '8px 12px', fontSize: 14, background: autoRoll[playerNumber] ? '#28a745' : '#6c757d', color: '#fff' }} 
-                onClick={() => setAutoRoll(prev => ({ ...prev, [playerNumber]: !prev[playerNumber] }))}
-              >
-                {autoRoll[playerNumber] ? 'ON' : 'OFF'}
-              </button>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
-              <span style={{ fontSize: 16, fontWeight: 600 }}>Sound:</span>
-              <button 
-                style={{ ...buttonStyle, minWidth: 60, padding: '8px 12px', fontSize: 14, background: !muted ? '#28a745' : '#6c757d', color: '#fff' }} 
-                onClick={() => setMuted(prev => !prev)}
-              >
-                {muted ? 'OFF' : 'ON'}
-              </button>
-            </div>
-          </div>
+        
+        {/* Player info below board (left side) */}
+        <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginTop: 16, maxWidth: 900, margin: '16px auto 0' }}>
+          {renderPlayerInfo(playerNumber, true, `Guest ${playerNumber}`, null, null, true)}
+        </div>
+        
+        {/* Test End Game button */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+          <button style={{ ...buttonStyle, background: '#ff9800', color: '#fff', minWidth: 0, padding: '8px 16px', fontSize: 14 }} onClick={setEndGameState}>Test End Game</button>
         </div>
         {firstRollPhase && renderFirstRollModal()}
         {doubleOffer && doubleOffer.to === playerNumber && (

@@ -301,7 +301,20 @@ function GameBoard() {
   const [chatInput, setChatInput] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const emojiPickerRef = useRef(null);
-  
+  const [doubleOffer, setDoubleOffer] = useState(null);
+  const [doubleTimer, setDoubleTimer] = useState(12);
+  const [canDouble, setCanDouble] = useState({ 1: true, 2: true });
+  const [lastDoubleOfferer, setLastDoubleOfferer] = useState(null); // Track who last offered a double
+  const [doubleOfferedThisTurn, setDoubleOfferedThisTurn] = useState({ 1: false, 2: false }); // Track if player offered this turn
+  const [gameStakes, setGameStakes] = useState(1);
+  const [isCpuGame, setIsCpuGame] = useState(false);
+  const [cpuPlayer, setCpuPlayer] = useState(2); // CPU plays as Player 2
+  const [cpuDifficulty, setCpuDifficulty] = useState(5); // Default to level 5 (middle difficulty)
+  const [isCpuThinking, setIsCpuThinking] = useState(false);
+  const [screen, setScreen] = useState('home'); // Start on homepage
+  const [cpuDoubleMessage, setCpuDoubleMessage] = useState(null); // Message to show after CPU decides on double
+  const [positionEvaluation, setPositionEvaluation] = useState(0); // Current position evaluation (-1 to 1)
+
   // Scroll to top when game mode screen changes
   useEffect(() => {
     if (screen === 'onlineGame' || screen === 'passplay' || screen === 'cpu' || screen === 'cpu-difficulty') {
@@ -321,19 +334,6 @@ function GameBoard() {
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showEmojiPicker]);
-  const [doubleOffer, setDoubleOffer] = useState(null);
-  const [doubleTimer, setDoubleTimer] = useState(12);
-  const [canDouble, setCanDouble] = useState({ 1: true, 2: true });
-  const [lastDoubleOfferer, setLastDoubleOfferer] = useState(null); // Track who last offered a double
-  const [doubleOfferedThisTurn, setDoubleOfferedThisTurn] = useState({ 1: false, 2: false }); // Track if player offered this turn
-  const [gameStakes, setGameStakes] = useState(1);
-  const [isCpuGame, setIsCpuGame] = useState(false);
-  const [cpuPlayer, setCpuPlayer] = useState(2); // CPU plays as Player 2
-  const [cpuDifficulty, setCpuDifficulty] = useState(5); // Default to level 5 (middle difficulty)
-  const [isCpuThinking, setIsCpuThinking] = useState(false);
-  const [screen, setScreen] = useState('home'); // Start on homepage
-  const [cpuDoubleMessage, setCpuDoubleMessage] = useState(null); // Message to show after CPU decides on double
-  const [positionEvaluation, setPositionEvaluation] = useState(0); // Current position evaluation (-1 to 1)
 
   // Auto-detect country based on browser locale when signup form opens
   useEffect(() => {

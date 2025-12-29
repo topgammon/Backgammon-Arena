@@ -1318,18 +1318,20 @@ function GameBoard() {
     }
     
     // Send move to server for online games
-    if (isOnlineGame && !allowCpu && currentPlayer === playerNumber && socketRef.current && matchId) {
-      socketRef.current.emit('game:move', {
-        matchId,
-        player: playerNumber,
-        move: { moveType: 'bearoff-sum', checker: checker.id, point: point },
-        gameState: {
-          checkers: newCheckers,
-          bar: bar,
-          borneOff: newBorneOff,
-          usedDice: newUsedDice
-        }
-      });
+    if (isOnlineGame && socketRef.current && matchId) {
+      if (currentPlayer === playerNumber) {
+        socketRef.current.emit('game:move', {
+          matchId,
+          player: playerNumber,
+          move: { moveType: 'bearoff-sum', checker: checker.id, point: point },
+          gameState: {
+            checkers: newCheckers,
+            bar: bar,
+            borneOff: newBorneOff,
+            usedDice: newUsedDice
+          }
+        });
+      }
     }
   }
 
@@ -1387,18 +1389,20 @@ function GameBoard() {
     }
     
     // Send move to server for online games
-    if (isOnlineGame && !allowCpu && currentPlayer === playerNumber && socketRef.current && matchId) {
-      socketRef.current.emit('game:move', {
-        matchId,
-        player: playerNumber,
-        move: { moveType: 'bearoff-multimove', checker: checker.id, point: point },
-        gameState: {
-          checkers: newCheckers,
-          bar: bar,
-          borneOff: newBorneOff,
-          usedDice: newUsedDice
-        }
-      });
+    if (isOnlineGame && socketRef.current && matchId) {
+      if (currentPlayer === playerNumber) {
+        socketRef.current.emit('game:move', {
+          matchId,
+          player: playerNumber,
+          move: { moveType: 'bearoff-multimove', checker: checker.id, point: point },
+          gameState: {
+            checkers: newCheckers,
+            bar: bar,
+            borneOff: newBorneOff,
+            usedDice: newUsedDice
+          }
+        });
+      }
     }
   }
 
@@ -1694,6 +1698,48 @@ function GameBoard() {
 
   const confirmResign = () => setShowConfirmResign(true);
   const cancelResign = () => setShowConfirmResign(false);
+  
+  // Temporary testing function to set end game state
+  const setEndGameState = () => {
+    if (gameOver) return;
+    
+    // Set up end game state: most pieces in home board, some borne off
+    const newCheckers = [];
+    const newBorneOff = { 1: 10, 2: 8 }; // Player 1 has 10 borne off, Player 2 has 8
+    
+    // Player 1: Place remaining 5 pieces in home board (points 18-23)
+    for (let i = 0; i < 5; i++) {
+      const point = 18 + (i % 6);
+      newCheckers.push({
+        id: `p1-${i}`,
+        player: 1,
+        point: point,
+        offset: newCheckers.filter(c => c.point === point && c.player === 1).length
+      });
+    }
+    
+    // Player 2: Place remaining 7 pieces in home board (points 0-5)
+    for (let i = 0; i < 7; i++) {
+      const point = i % 6;
+      newCheckers.push({
+        id: `p2-${i}`,
+        player: 2,
+        point: point,
+        offset: newCheckers.filter(c => c.point === point && c.player === 2).length
+      });
+    }
+    
+    setCheckers(newCheckers);
+    setBorneOff(newBorneOff);
+    setBar({ 1: [], 2: [] });
+    setHasRolled(true);
+    setUsedDice([]);
+    setSelected(null);
+    setLegalMoves([]);
+    setDice([3, 4]); // Set some dice values
+    setMovesAllowed([3, 4]);
+  };
+  
   const doResign = () => {
     setShowConfirmResign(false);
     // Send resignation to server immediately for online games
@@ -3425,6 +3471,7 @@ function GameBoard() {
               <button style={{ ...buttonStyle, background: '#ffc107', color: '#222' }} onClick={handleUndo}>Undo</button>
             )}
             <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff' }} onClick={confirmResign}>Resign</button>
+            <button style={{ ...buttonStyle, background: '#ff9800', color: '#fff' }} onClick={setEndGameState}>Test End Game</button>
           </div>
         </div>
       </div>
@@ -5055,6 +5102,7 @@ function GameBoard() {
               </button>
             </div>
             <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff' }} onClick={confirmResign}>Resign</button>
+            <button style={{ ...buttonStyle, background: '#ff9800', color: '#fff' }} onClick={setEndGameState}>Test End Game</button>
           </div>
         </div>
         {firstRollPhase && renderFirstRollModal()}
@@ -5731,6 +5779,7 @@ function GameBoard() {
                 <button style={{ ...buttonStyle, background: '#ffc107', color: '#222' }} onClick={handleUndo}>Undo</button>
               )}
               <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff' }} onClick={confirmResign}>Resign</button>
+              <button style={{ ...buttonStyle, background: '#ff9800', color: '#fff' }} onClick={setEndGameState}>Test End Game</button>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
               <span style={{ fontSize: 16, fontWeight: 600 }}>Auto-roll:</span>

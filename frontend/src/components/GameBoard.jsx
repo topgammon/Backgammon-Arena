@@ -364,31 +364,64 @@ function GameBoard() {
 
     // Handle OAuth callback - check for hash in URL
     const handleOAuthCallback = async () => {
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const accessToken = hashParams.get('access_token');
-      const error = hashParams.get('error');
-      
-      if (error) {
-        console.error('OAuth error:', error);
-        alert('Authentication failed: ' + error);
-        // Clean up URL
-        window.history.replaceState(null, '', window.location.pathname);
-        return;
-      }
-      
-      if (accessToken) {
-        // OAuth callback detected - Supabase should handle this automatically
-        // But let's make sure we get the session
-        console.log('OAuth callback detected, getting session...');
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) {
-          console.error('Error getting session after OAuth:', sessionError);
-        } else if (session) {
-          console.log('Session retrieved after OAuth:', session.user.email);
-          setUser(session.user);
+      // Check if we have OAuth tokens in the URL hash
+      if (window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const error = hashParams.get('error');
+        const errorDescription = hashParams.get('error_description');
+        
+        console.log('OAuth callback detected in URL hash');
+        
+        if (error) {
+          console.error('OAuth error:', error, errorDescription);
+          alert('Authentication failed: ' + (errorDescription || error));
+          // Clean up URL
+          window.history.replaceState(null, '', window.location.pathname);
+          return;
         }
-        // Clean up URL hash
-        window.history.replaceState(null, '', window.location.pathname);
+        
+        if (accessToken) {
+          console.log('Access token found in URL, processing OAuth callback...');
+          
+          // Supabase should automatically handle this, but let's make sure
+          // Wait a moment for Supabase to process it
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Get the session
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          
+          if (sessionError) {
+            console.error('Error getting session after OAuth:', sessionError);
+            alert('Failed to complete sign in. Please try again.');
+            window.history.replaceState(null, '', window.location.pathname);
+            return;
+          }
+          
+          if (session && session.user) {
+            console.log('✅ OAuth sign in successful! User:', session.user.email);
+            setUser(session.user);
+            
+            // Clean up URL hash after successful login
+            window.history.replaceState(null, '', window.location.pathname);
+            
+            // Close login modal if open
+            setShowLoginModal(false);
+            setShowLoginForm(false);
+          } else {
+            console.warn('No session found after OAuth callback');
+            // Try again after a short delay
+            setTimeout(async () => {
+              const { data: { session: retrySession } } = await supabase.auth.getSession();
+              if (retrySession) {
+                console.log('✅ Session found on retry:', retrySession.user.email);
+                setUser(retrySession.user);
+                window.history.replaceState(null, '', window.location.pathname);
+                setShowLoginModal(false);
+              }
+            }, 1000);
+          }
+        }
       }
     };
 
@@ -4899,14 +4932,10 @@ function GameBoard() {
                   }
                   
                   try {
-                    // Use the current window location (should be localhost:5173 for dev)
-                    // Force port 5173 if we're in development
-                    let redirectUrl = window.location.origin + window.location.pathname;
-                    if (redirectUrl.includes('localhost') && !redirectUrl.includes(':5173') && !redirectUrl.includes(':3000')) {
-                      redirectUrl = redirectUrl.replace(/localhost(:\d+)?/, 'localhost:5173');
-                    } else if (redirectUrl.includes('localhost:3000')) {
-                      redirectUrl = redirectUrl.replace(':3000', ':5173');
-                    }
+                    // Use the current window location - automatically works in both dev and production
+                    // In dev: http://localhost:5173
+                    // In production: https://yourdomain.com
+                    const redirectUrl = window.location.origin + window.location.pathname;
                     
                     console.log('Starting Google OAuth with redirect URL:', redirectUrl);
                     

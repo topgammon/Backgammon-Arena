@@ -370,8 +370,58 @@ function GameBoard() {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
+      
+      // Fetch user profile when user logs in
+      if (session?.user) {
+        const { data: profile, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        
+        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+          console.error('Error fetching user profile:', error);
+        } else if (profile) {
+          setUserProfile(profile);
+        } else if (session.user && !profile) {
+          // User exists but no profile - create one (for OAuth users)
+          const email = session.user.email || '';
+          const username = session.user.user_metadata?.username || 
+                          session.user.user_metadata?.full_name?.split(' ')[0] || 
+                          email.split('@')[0] || 
+                          `User${session.user.id.substring(0, 6)}`;
+          const country = session.user.user_metadata?.country || 'US';
+          
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert({
+              id: session.user.id,
+              email: email,
+              username: username,
+              country: country,
+              avatar: 'Barry',
+              elo_rating: 1000,
+              wins: 0,
+              losses: 0,
+              games_played: 0
+            });
+          
+          if (!insertError) {
+            const { data: newProfile } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+            if (newProfile) {
+              setUserProfile(newProfile);
+            }
+          }
+        }
+      } else {
+        setUserProfile(null);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -4703,9 +4753,34 @@ function GameBoard() {
 
               {/* Google Sign In Button */}
               <button
-                onClick={() => {
-                  // TODO: Implement Google sign in
-                  alert('Google sign in coming soon!');
+                onClick={async () => {
+                  if (!supabase) {
+                    alert('Supabase not configured. Please check your environment variables.');
+                    return;
+                  }
+                  
+                  try {
+                    const { data, error } = await supabase.auth.signInWithOAuth({
+                      provider: 'google',
+                      options: {
+                        redirectTo: `${window.location.origin}${window.location.pathname}`,
+                        queryParams: {
+                          access_type: 'offline',
+                          prompt: 'consent',
+                        }
+                      }
+                    });
+                    
+                    if (error) {
+                      console.error('Google sign in error:', error);
+                      alert('Failed to sign in with Google: ' + error.message);
+                    }
+                    // If successful, user will be redirected to Google, then back to the app
+                    // The onAuthStateChange handler will take care of the rest
+                  } catch (err) {
+                    console.error('Google sign in error:', err);
+                    alert('An error occurred during Google sign in');
+                  }
                 }}
                 style={{
                   width: '100%',

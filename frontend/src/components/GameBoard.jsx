@@ -1701,7 +1701,7 @@ function GameBoard() {
                 movesAllowed: newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]
               });
             }
-          }, 1200);
+          }, 2500);
         } else if (newRolls[1] > newRolls[0]) {
           setFirstRollResult(2);
           setTimeout(() => {
@@ -1723,13 +1723,15 @@ function GameBoard() {
                 movesAllowed: newRolls[0] === newRolls[1] ? [newRolls[0], newRolls[0], newRolls[0], newRolls[0]] : [newRolls[0], newRolls[1]]
               });
             }
-          }, 1200);
+          }, 2500);
         } else {
           setFirstRollResult('tie');
           setTimeout(() => {
             setFirstRolls([null, null]);
             setFirstRollTurn(1);
             setFirstRollResult(null);
+            setIsFirstRolling(false);
+            setFirstRollAnimationFrame(0);
             
             // Send tie result to server for online games
             if (isOnlineGame && socketRef.current && matchId) {
@@ -1737,7 +1739,7 @@ function GameBoard() {
                 matchId
               });
             }
-          }, 1200);
+          }, 2000);
         }
       }
     }, 600);
@@ -5136,6 +5138,8 @@ function GameBoard() {
         setFirstRolls([null, null]);
         setFirstRollTurn(1);
         setFirstRollResult(null);
+        setIsFirstRolling(false);
+        setFirstRollAnimationFrame(0);
       }
     };
     
@@ -5177,15 +5181,12 @@ function GameBoard() {
         <div style={{ marginBottom: '18px' }}>
           <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '120px' }} />
         </div>
-        <h2>Online Match - {matchmakingType === 'guest' ? 'Unranked' : 'Ranked'}</h2>
-        <div style={{ marginBottom: '12px', fontSize: '16px', color: '#666' }}>
-          You are Player {playerNumber} ({playerNumber === 1 ? 'White' : 'Black'}) | Opponent: {opponentName} ({playerNumber === 1 ? 'Black' : 'White'})
-        </div>
+        <h2>Online Guest Match - Unranked</h2>
         {message && <div style={{ color: 'red', margin: 10 }}>{message}</div>}
         {renderBoard()}
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24, margin: '16px 0 0 0' }}>
           <div style={{ fontSize: 20, minWidth: 180, textAlign: 'right' }}>
-            <b>Current Move:</b> Player {currentPlayer}
+            <b>Player {playerNumber}</b>
             {currentPlayer === playerNumber && (
               <span style={{ marginLeft: 8, fontSize: 14, color: '#28a745' }}>(Your Turn)</span>
             )}
@@ -5197,7 +5198,7 @@ function GameBoard() {
               width: 28,
               height: 28,
               borderRadius: '50%',
-              background: currentPlayer === 1 ? '#fff' : '#222',
+              background: playerNumber === 1 ? '#fff' : '#222',
               marginLeft: 10,
               verticalAlign: 'middle',
               border: '2px solid #b87333',
@@ -5205,7 +5206,19 @@ function GameBoard() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', gap: 12 }}>
+              {undoStack.length > 0 && hasRolled && currentPlayer === playerNumber && (
+                <button style={{ ...buttonStyle, background: '#ffc107', color: '#222' }} onClick={handleUndo}>Undo</button>
+              )}
               <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff' }} onClick={confirmResign}>Resign</button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+              <span style={{ fontSize: 16, fontWeight: 600 }}>Auto-roll:</span>
+              <button 
+                style={{ ...buttonStyle, minWidth: 60, padding: '8px 12px', fontSize: 14, background: autoRoll[playerNumber] ? '#28a745' : '#6c757d', color: '#fff' }} 
+                onClick={() => setAutoRoll(prev => ({ ...prev, [playerNumber]: !prev[playerNumber] }))}
+              >
+                {autoRoll[playerNumber] ? 'ON' : 'OFF'}
+              </button>
             </div>
           </div>
         </div>

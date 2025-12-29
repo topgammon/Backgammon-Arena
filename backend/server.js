@@ -93,6 +93,9 @@ app.post('/api/evaluate', async (req, res) => {
 const guestQueue = []; // Simple queue for guest matchmaking
 const rankedQueue = new Map(); // Map of userId -> { socketId, elo, timestamp } for ranked matchmaking
 
+// Active matches: matchId -> { player1: { socketId, userId }, player2: { socketId, userId }, gameState }
+const activeMatches = new Map();
+
 // Helper function to match players
 function matchPlayers(queue, player1, player2) {
   const matchId = `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -142,6 +145,26 @@ io.on('connection', (socket) => {
       rankedQueue.delete(socket.id);
       console.log('👤 Removed from ranked queue');
     }
+    
+    // Clean up active matches where this socket was a player
+    for (const [matchId, match] of activeMatches.entries()) {
+      if (match.player1.socketId === socket.id || match.player2.socketId === socket.id) {
+        const opponentSocketId = match.player1.socketId === socket.id 
+          ? match.player2.socketId 
+          : match.player1.socketId;
+        
+        // Notify opponent of disconnect
+        io.to(opponentSocketId).emit('game:opponent-disconnected', {
+          matchId
+        });
+        
+        // Remove match after a delay (in case of reconnection)
+        setTimeout(() => {
+          activeMatches.delete(matchId);
+          console.log(`🗑️ Cleaned up match ${matchId}`);
+        }, 30000); // 30 second grace period
+      }
+    }
   });
 
   // Guest matchmaking
@@ -169,6 +192,14 @@ io.on('connection', (socket) => {
       const match = matchPlayers(guestQueue, player1, player2);
       
       console.log('Match found for guests:', match.matchId);
+      
+      // Store match in active matches
+      activeMatches.set(match.matchId, {
+        player1: match.player1,
+        player2: match.player2,
+        gameState: null,
+        createdAt: Date.now()
+      });
       
       // Notify both players
       io.to(match.player1.socketId).emit('matchmaking:match-found', {
@@ -219,6 +250,84 @@ io.on('connection', (socket) => {
     console.log('🚪 User leaving ranked matchmaking queue:', socket.id);
     rankedQueue.delete(socket.id);
     socket.emit('matchmaking:ranked:left');
+  });
+  
+  // Game event handlers
+  socket.on('game:dice-roll', (data) => {
+    const { matchId, player, dice, movesAllowed } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Invalid matchId for dice roll:', matchId);
+      return;
+    }
+    
+    // Find opponent socket
+    const opponentSocketId = player === 1 ? match.player2.socketId : match.player1.socketId;
+    
+    // Broadcast dice roll to opponent
+    io.to(opponentSocketId).emit('game:dice-rolled', {
+      matchId,
+      player,
+      dice,
+      movesAllowed
+    });
+    
+    console.log(`🎲 Player ${player} rolled dice in match ${matchId}`);
+  });
+  
+  socket.on('game:move', (data) => {
+    const { matchId, player, move, gameState } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Invalid matchId for move:', matchId);
+      return;
+    }
+    
+    // Update match game state
+    if (gameState) {
+      match.gameState = gameState;
+    }
+    
+    // Find opponent socket
+    const opponentSocketId = player === 1 ? match.player2.socketId : match.player1.socketId;
+    
+    // Broadcast move to opponent
+    io.to(opponentSocketId).emit('game:move', {
+      matchId,
+      player,
+      move,
+      gameState
+    });
+    
+    console.log(`🎯 Player ${player} made a move in match ${matchId}`);
+  });
+  
+  socket.on('game:end-turn', (data) => {
+    const { matchId, player, nextPlayer, gameState } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Invalid matchId for end turn:', matchId);
+      return;
+    }
+    
+    // Update match game state
+    if (gameState) {
+      match.gameState = gameState;
+    }
+    
+    // Find opponent socket
+    const opponentSocketId = player === 1 ? match.player2.socketId : match.player1.socketId;
+    
+    // Broadcast turn change to opponent
+    io.to(opponentSocketId).emit('game:turn-changed', {
+      matchId,
+      currentPlayer: nextPlayer
+    });
+    
+    console.log(`🔄 Player ${player} ended turn, now Player ${nextPlayer}'s turn in match ${matchId}`);
   });
 });
 

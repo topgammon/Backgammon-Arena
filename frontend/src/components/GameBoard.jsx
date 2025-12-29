@@ -196,6 +196,10 @@ function GameBoard() {
   const [matchmakingStatus, setMatchmakingStatus] = useState('');
   const [matchmakingType, setMatchmakingType] = useState(null); // 'guest' or 'ranked'
   const socketRef = useRef(null);
+  const [isOnlineGame, setIsOnlineGame] = useState(false);
+  const [matchId, setMatchId] = useState(null);
+  const [playerNumber, setPlayerNumber] = useState(null); // 1 or 2
+  const [opponent, setOpponent] = useState(null); // { userId, isGuest }
   
   // Track window width for responsive design
   useEffect(() => {
@@ -1007,10 +1011,23 @@ function GameBoard() {
     }
   }
 
+  // Helper function to send game events via Socket.io for online games
+  const sendGameEvent = (eventType, data) => {
+    if (isOnlineGame && socketRef.current && matchId && currentPlayer === playerNumber) {
+      socketRef.current.emit(`game:${eventType}`, {
+        matchId,
+        player: playerNumber,
+        ...data
+      });
+    }
+  };
+
   function handlePointClick(point, allowCpu = false) {
     if (gameOver) return;
     // Prevent player interaction when it's CPU's turn (unless allowCpu is true for programmatic CPU moves)
     if (!allowCpu && isCpuGame && currentPlayer === cpuPlayer) return;
+    // Prevent player interaction when it's not their turn in online game
+    if (isOnlineGame && currentPlayer !== playerNumber) return;
     let match;
     const from = selected ? selected.point : null;
     
@@ -1118,6 +1135,20 @@ function GameBoard() {
     if (allDiceUsed() || !hasAnyValidMoves()) {
       setAwaitingEndTurn(true);
     }
+    
+    // Send move to server for online games
+    if (isOnlineGame && !allowCpu && currentPlayer === playerNumber) {
+      sendGameEvent('move', {
+        moveType: 'bearoff',
+        checker: checker.id,
+        gameState: {
+          checkers: newCheckers,
+          bar: bar,
+          borneOff: newBorneOff,
+          usedDice: newUsedDice
+        }
+      });
+    }
   }
 
   function handleSumBearoff(checker, point) {
@@ -1163,6 +1194,21 @@ function GameBoard() {
     setLegalMoves([]);
     if (allDiceUsed() || !hasAnyValidMoves()) {
       setAwaitingEndTurn(true);
+    }
+    
+    // Send move to server for online games
+    if (isOnlineGame && !allowCpu && currentPlayer === playerNumber) {
+      sendGameEvent('move', {
+        moveType: 'bearoff-sum',
+        checker: checker.id,
+        point: point,
+        gameState: {
+          checkers: newCheckers,
+          bar: bar,
+          borneOff: newBorneOff,
+          usedDice: newUsedDice
+        }
+      });
     }
   }
 
@@ -1216,6 +1262,21 @@ function GameBoard() {
     setLegalMoves([]);
     if (allDiceUsed() || !hasAnyValidMoves()) {
       setAwaitingEndTurn(true);
+    }
+    
+    // Send move to server for online games
+    if (isOnlineGame && !allowCpu && currentPlayer === playerNumber) {
+      sendGameEvent('move', {
+        moveType: 'bearoff-multimove',
+        checker: checker.id,
+        point: point,
+        gameState: {
+          checkers: newCheckers,
+          bar: bar,
+          borneOff: newBorneOff,
+          usedDice: newUsedDice
+        }
+      });
     }
   }
 
@@ -1406,6 +1467,22 @@ function GameBoard() {
     setSelected(null);
     setLegalMoves([]);
     setMoveMade(true);
+    
+    // Send move to server for online games
+    if (isOnlineGame && currentPlayer === playerNumber) {
+      sendGameEvent('move', {
+        moveType: 'regular',
+        from: from,
+        to: dest,
+        match: match,
+        gameState: {
+          checkers: newCheckers,
+          bar: newBar,
+          borneOff: newBorneOff,
+          usedDice: newUsedDice
+        }
+      });
+    }
   }
 
   const confirmResign = () => setShowConfirmResign(true);
@@ -1490,6 +1567,14 @@ function GameBoard() {
       setMovesAllowed(moves);
       setSelected(null);
       setLegalMoves([]);
+      
+      // Send dice roll to server for online games
+      if (isOnlineGame && currentPlayer === playerNumber) {
+        sendGameEvent('dice-roll', {
+          dice: d,
+          movesAllowed: moves
+        });
+      }
     }, 600);
   };
 
@@ -1592,6 +1677,18 @@ function GameBoard() {
     // Clear undo stack when CPU's turn starts (to prevent undoing CPU moves)
     if (isCpuGame && nextPlayer === cpuPlayer) {
       setUndoStack([]);
+    }
+    
+    // Send turn change to server for online games
+    if (isOnlineGame && currentPlayer === playerNumber) {
+      sendGameEvent('end-turn', {
+        nextPlayer: nextPlayer,
+        gameState: {
+          checkers: checkers,
+          bar: bar,
+          borneOff: borneOff
+        }
+      });
     }
   }
 
@@ -4538,15 +4635,48 @@ function GameBoard() {
       setMatchmakingStatus(`Waiting for opponent... (Position: ${data.position})`);
     });
     
-    socket.on('matchmaking:match-found', (data) => {
-      setMatchmakingStatus('Match found! Starting game...');
-      // TODO: Handle match creation and transition to online game
-      console.log('Match found:', data);
-      // For now, just show a message
-      setTimeout(() => {
-        setMatchmakingStatus('Match found! (Game integration coming soon)');
-      }, 1000);
-    });
+      socket.on('matchmaking:match-found', (data) => {
+        console.log('Match found:', data);
+        setMatchmakingStatus('Match found! Starting game...');
+        
+        // Set online game state
+        setMatchId(data.matchId);
+        setPlayerNumber(data.playerNumber);
+        setOpponent(data.opponent);
+        setIsOnlineGame(true);
+        
+        // Initialize game state for online play
+        setCheckers(getInitialCheckers());
+        setBar({ 1: [], 2: [] });
+        setBorneOff({ 1: 0, 2: 0 });
+        setDice([0, 0]);
+        setUsedDice([]);
+        setCurrentPlayer(1);
+        setHasRolled(false);
+        setFirstRollPhase(true);
+        setFirstRolls([null, null]);
+        setFirstRollTurn(1);
+        setFirstRollResult(null);
+        setGameOver(null);
+        setDoubleOffer(null);
+        setCanDouble({ 1: true, 2: true });
+        setGameStakes(1);
+        setMessage('');
+        setSelected(null);
+        setLegalMoves([]);
+        setUndoStack([]);
+        setMoveMade(false);
+        setAwaitingEndTurn(false);
+        setIsCpuGame(false);
+        
+        // Transition to online game screen
+        setTimeout(() => {
+          setIsMatchmaking(false);
+          setMatchmakingStatus('');
+          setMatchmakingType(null);
+          setScreen('onlineGame');
+        }, 500);
+      });
     
     socket.on('disconnect', () => {
       console.log('Disconnected from matchmaking server');
@@ -4676,6 +4806,202 @@ function GameBoard() {
             Cancel
           </button>
         </div>
+      </div>
+    );
+  };
+
+  // Online Game Screen
+  const renderOnlineGame = () => {
+    // Set up Socket.io handlers for online game
+    useEffect(() => {
+      if (!isOnlineGame || !socketRef.current || !matchId) return;
+      
+      const socket = socketRef.current;
+      
+      // Listen for opponent's moves
+      socket.on('game:move', (data) => {
+        if (data.matchId === matchId && data.player !== playerNumber) {
+          // Apply opponent's move by syncing game state
+          console.log('Opponent move received:', data);
+          if (data.gameState) {
+            setCheckers(data.gameState.checkers || checkers);
+            setBar(data.gameState.bar || bar);
+            setBorneOff(data.gameState.borneOff || borneOff);
+            setUsedDice(data.gameState.usedDice || usedDice);
+            setSelected(null);
+            setLegalMoves([]);
+            setMoveMade(true);
+          }
+        }
+      });
+      
+      // Listen for dice rolls
+      socket.on('game:dice-rolled', (data) => {
+        if (data.matchId === matchId && data.player !== playerNumber) {
+          setDice(data.dice);
+          setHasRolled(true);
+        }
+      });
+      
+      // Listen for turn changes
+      socket.on('game:turn-changed', (data) => {
+        if (data.matchId === matchId) {
+          setCurrentPlayer(data.currentPlayer);
+          setHasRolled(false);
+          setUsedDice([]);
+        }
+      });
+      
+      // Listen for game state sync
+      socket.on('game:state-sync', (data) => {
+        if (data.matchId === matchId) {
+          setCheckers(data.checkers || checkers);
+          setBar(data.bar || bar);
+          setBorneOff(data.borneOff || borneOff);
+          setCurrentPlayer(data.currentPlayer || currentPlayer);
+          setDice(data.dice || dice);
+          setGameStakes(data.gameStakes || gameStakes);
+        }
+      });
+      
+      // Listen for double offers
+      socket.on('game:double-offered', (data) => {
+        if (data.matchId === matchId && data.to === playerNumber) {
+          setDoubleOffer(data.doubleOffer);
+        }
+      });
+      
+      // Listen for game over
+      socket.on('game:over', (data) => {
+        if (data.matchId === matchId) {
+          setGameOver(data.gameOver);
+        }
+      });
+      
+      return () => {
+        socket.off('game:move');
+        socket.off('game:dice-rolled');
+        socket.off('game:turn-changed');
+        socket.off('game:state-sync');
+        socket.off('game:double-offered');
+        socket.off('game:over');
+      };
+    }, [isOnlineGame, matchId, playerNumber]);
+    
+    const handleOnlineMove = (move) => {
+      if (!socketRef.current || !matchId || currentPlayer !== playerNumber) return;
+      
+      // Send move to server
+      socketRef.current.emit('game:move', {
+        matchId,
+        player: playerNumber,
+        move: move
+      });
+    };
+    
+    const handleOnlineRollDice = () => {
+      if (!socketRef.current || !matchId || currentPlayer !== playerNumber || hasRolled) return;
+      
+      // Roll dice locally first for immediate feedback
+      const newDice = [Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1];
+      setDice(newDice);
+      setHasRolled(true);
+      
+      // Send to server
+      socketRef.current.emit('game:dice-roll', {
+        matchId,
+        player: playerNumber,
+        dice: newDice
+      });
+    };
+    
+    const handleOnlineEndTurn = () => {
+      if (!socketRef.current || !matchId || currentPlayer !== playerNumber) return;
+      
+      socketRef.current.emit('game:end-turn', {
+        matchId,
+        player: playerNumber
+      });
+    };
+    
+    const opponentName = opponent?.isGuest 
+      ? `Guest ${opponent.userId.split('_')[1]?.substring(0, 6) || 'Player'}` 
+      : opponent?.userId || 'Opponent';
+    
+    return (
+      <div style={{ textAlign: 'center', marginTop: 30 }}>
+        <div style={{ marginBottom: '18px' }}>
+          <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '120px' }} />
+        </div>
+        <h2>Online Match - {matchmakingType === 'guest' ? 'Unranked' : 'Ranked'}</h2>
+        <div style={{ marginBottom: '12px', fontSize: '16px', color: '#666' }}>
+          You are Player {playerNumber} | Opponent: {opponentName}
+        </div>
+        {message && <div style={{ color: 'red', margin: 10 }}>{message}</div>}
+        {renderBoard()}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24, margin: '16px 0 0 0' }}>
+          <div style={{ fontSize: 20, minWidth: 180, textAlign: 'right' }}>
+            <b>Current Move:</b> Player {currentPlayer}
+            {currentPlayer === playerNumber && (
+              <span style={{ marginLeft: 8, fontSize: 14, color: '#28a745' }}>(Your Turn)</span>
+            )}
+            {currentPlayer !== playerNumber && (
+              <span style={{ marginLeft: 8, fontSize: 14, color: '#666' }}>(Waiting...)</span>
+            )}
+            <span style={{
+              display: 'inline-block',
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              background: currentPlayer === 1 ? '#fff' : '#222',
+              marginLeft: 10,
+              verticalAlign: 'middle',
+              border: '2px solid #b87333',
+            }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff' }} onClick={confirmResign}>Resign</button>
+            </div>
+          </div>
+        </div>
+        {firstRollPhase && renderFirstRollModal()}
+        {doubleOffer && doubleOffer.to === playerNumber && (
+          <div style={{ position: 'absolute', top: '54.5%', left: 'calc(50% - 373px)', transform: 'translateY(-50%)', zIndex: 20, pointerEvents: 'none' }}>
+            <div style={{ background: 'rgba(255,255,255,0.97)', border: '2px solid #ff6b35', borderRadius: 12, padding: 32, minWidth: 280, maxWidth: 400, textAlign: 'center', fontSize: 20, fontWeight: 'bold', color: '#222', boxShadow: '0 4px 32px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+              <div style={{ marginBottom: 16, fontSize: 24, color: '#ff6b35' }}>🎲 Double Offered! 🎲</div>
+              <div style={{ marginBottom: 8 }}>Opponent offers to double the stakes</div>
+              <div style={{ marginBottom: 16, fontSize: 18, color: '#666' }}>Current stakes: {gameStakes} | New stakes: {gameStakes * 2}</div>
+              <div style={{ marginBottom: 16, fontSize: 20, color: doubleTimer <= 3 ? '#dc3545' : '#333', fontWeight: 'bold' }}>⏰ {doubleTimer} seconds to decide</div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button style={{ ...buttonStyle, minWidth: 100, padding: '12px 20px', fontSize: 18, background: '#28a745', color: '#fff' }} onClick={() => handleDoubleResponse(true)}>Accept</button>
+                <button style={{ ...buttonStyle, minWidth: 100, padding: '12px 20px', fontSize: 18, background: '#dc3545', color: '#fff' }} onClick={() => handleDoubleResponse(false)}>Decline</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showConfirmResign && (
+          <div style={{ position: 'absolute', top: '54.5%', left: 'calc(50% - 373px)', transform: 'translateY(-50%)', zIndex: 20, pointerEvents: 'none' }}>
+            <div style={{ background: 'rgba(255,255,255,0.97)', border: '2px solid #dc3545', borderRadius: 12, padding: 32, minWidth: 260, maxWidth: 340, textAlign: 'center', fontSize: 24, fontWeight: 'bold', color: '#222', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+              <div style={{ marginBottom: 18 }}>Are you sure you want to resign?</div>
+              <div style={{ display: 'flex', gap: 18, marginTop: 8 }}>
+                <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff', minWidth: 0, width: 90, fontSize: 20 }} onClick={doResign}>Yes</button>
+                <button style={{ ...buttonStyle, background: '#bbb', color: '#222', minWidth: 0, width: 90, fontSize: 20 }} onClick={cancelResign}>No</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {gameOver && (
+          <div style={{ position: 'absolute', top: '54.5%', left: 'calc(50% - 373px)', transform: 'translateY(-50%)', zIndex: 20, pointerEvents: 'none' }}>
+            <div style={{ background: 'rgba(255,255,255,0.97)', border: '2px solid #28a745', borderRadius: 12, padding: 32, minWidth: 260, maxWidth: 340, textAlign: 'center', fontSize: 24, fontWeight: 'bold', color: '#222', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+              <h2>{getGameOverMessage(gameOver)}</h2>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20 }}>
+                <button style={buttonStyle} onClick={handleRematch}>Rematch</button>
+                <button style={{ ...buttonStyle, background: '#6c757d' }} onClick={handleQuit}>Quit</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -5162,6 +5488,7 @@ function GameBoard() {
 
   if (screen === 'home') return renderHome();
   if (screen === 'matchmaking') return renderMatchmaking();
+  if (screen === 'onlineGame') return renderOnlineGame();
   if (screen === 'passplay') return renderPassPlay();
   if (screen === 'cpu-difficulty') return renderCpuDifficultySelection();
   if (screen === 'cpu') return renderCpuGame();

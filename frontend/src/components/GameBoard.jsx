@@ -299,6 +299,8 @@ function GameBoard() {
   const [passPlayPlayer2Name, setPassPlayPlayer2Name] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiPickerRef = useRef(null);
   const [doubleOffer, setDoubleOffer] = useState(null);
   const [doubleTimer, setDoubleTimer] = useState(12);
   const [canDouble, setCanDouble] = useState({ 1: true, 2: true });
@@ -6079,12 +6081,43 @@ function GameBoard() {
       ? `Guest ${opponent.userId?.split('_')[1]?.substring(0, 6) || 'Player'}` 
       : opponent?.userId || 'Opponent';
     
+    const boardContainerWidth = boardW + boardX * 2; // Board width + padding
+    const isWideScreen = windowWidth > 1200;
+    const commonEmojis = ['😊', '😂', '😎', '👍', '👎', '❤️', '🎉', '🔥', '💪', '😢', '😮', '🤔', '👏', '🎯', '🏆', '😴'];
+    
+    const handleEmojiClick = (emoji) => {
+      setChatInput(prev => prev + emoji);
+      setShowEmojiPicker(false);
+    };
+
+    // Close emoji picker when clicking outside
+    useEffect(() => {
+      const handleClickOutside = (event) => {
+        if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
+          setShowEmojiPicker(false);
+        }
+      };
+      if (showEmojiPicker) {
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+      }
+    }, [showEmojiPicker]);
+
     return (
       <div style={{ textAlign: 'center', marginTop: 30 }}>
         {message && <div style={{ color: 'red', margin: 10 }}>{message}</div>}
         
-        {/* Title and opponent info above board */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0 20px', marginBottom: 16, maxWidth: 900, margin: '0 auto 16px', gap: 20 }}>
+        {/* Title and opponent info above board - aligned with board */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'flex-start', 
+          padding: '0 20px', 
+          marginBottom: 16, 
+          maxWidth: boardContainerWidth,
+          margin: '0 auto 16px', 
+          gap: 20 
+        }}>
           {/* Opponent info (left side) */}
           <div style={{ flex: 1 }}>
             {renderOpponentInfo(opponent?.isGuest || false, false, opponentName, null, null, null, playerNumber === 1 ? 2 : 1)}
@@ -6103,17 +6136,17 @@ function GameBoard() {
           alignItems: 'flex-start', 
           gap: 20, 
           padding: '0 20px',
-          maxWidth: windowWidth > 1200 ? 1200 : 900,
+          maxWidth: isWideScreen ? boardContainerWidth + 320 : boardContainerWidth, // Board width + chat width when wide
           margin: '0 auto',
-          flexWrap: windowWidth > 1200 ? 'nowrap' : 'wrap'
+          flexWrap: isWideScreen ? 'nowrap' : 'wrap'
         }}>
           {/* Board */}
           <div style={{ flexShrink: 0 }}>
             {renderBoard()}
           </div>
           
-          {/* Chat box for online games - to the right if wide enough, otherwise below */}
-          {windowWidth > 1200 ? (
+          {/* Chat box for online games - to the right if wide enough */}
+          {isWideScreen && (
             <div style={{
               width: 300,
               background: '#f8f9fa',
@@ -6155,8 +6188,65 @@ function GameBoard() {
               display: 'flex',
               gap: 8,
               padding: '8px 12px',
-              borderTop: '1px solid #dee2e6'
+              borderTop: '1px solid #dee2e6',
+              position: 'relative'
             }}>
+              <button
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                style={{
+                  padding: '6px 10px',
+                  background: '#e9ecef',
+                  color: '#333',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: 18,
+                  cursor: 'pointer',
+                  lineHeight: 1
+                }}
+              >
+                😊
+              </button>
+              {showEmojiPicker && (
+                <div
+                  ref={emojiPickerRef}
+                  style={{
+                    position: 'absolute',
+                    bottom: '100%',
+                    left: 0,
+                    marginBottom: '8px',
+                    background: '#fff',
+                    border: '1px solid #ddd',
+                    borderRadius: '8px',
+                    padding: '8px',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, 1fr)',
+                    gap: '4px',
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                    zIndex: 1000,
+                    width: '160px'
+                  }}
+                >
+                  {commonEmojis.map((emoji, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleEmojiClick(emoji)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        fontSize: '20px',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        borderRadius: '4px',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.target.style.background = '#f0f0f0'}
+                      onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              )}
               <input
                 type="text"
                 value={chatInput}
@@ -6209,7 +6299,31 @@ function GameBoard() {
               </button>
             </div>
           </div>
-          ) : (
+          )}
+        </div>
+        
+        {/* Player info below board - aligned with board */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'flex-start', 
+          padding: '0 20px', 
+          marginTop: 16, 
+          maxWidth: boardContainerWidth,
+          margin: '16px auto 0' 
+        }}>
+          {renderPlayerInfo(playerNumber, true, `Guest ${playerNumber}`, null, null, true)}
+        </div>
+        
+        {/* Chat box below player info when narrow */}
+        {!isWideScreen && (
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'flex-start', 
+            padding: '0 20px', 
+            marginTop: 16, 
+            maxWidth: boardContainerWidth,
+            margin: '16px auto 0' 
+          }}>
             <div style={{
               width: '100%',
               maxWidth: 400,
@@ -6252,8 +6366,65 @@ function GameBoard() {
                 display: 'flex',
                 gap: 8,
                 padding: '8px 12px',
-                borderTop: '1px solid #dee2e6'
+                borderTop: '1px solid #dee2e6',
+                position: 'relative'
               }}>
+                <button
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  style={{
+                    padding: '6px 10px',
+                    background: '#e9ecef',
+                    color: '#333',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: 18,
+                    cursor: 'pointer',
+                    lineHeight: 1
+                  }}
+                >
+                  😊
+                </button>
+                {showEmojiPicker && (
+                  <div
+                    ref={emojiPickerRef}
+                    style={{
+                      position: 'absolute',
+                      bottom: '100%',
+                      left: 0,
+                      marginBottom: '8px',
+                      background: '#fff',
+                      border: '1px solid #ddd',
+                      borderRadius: '8px',
+                      padding: '8px',
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(4, 1fr)',
+                      gap: '4px',
+                      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                      zIndex: 1000,
+                      width: '160px'
+                    }}
+                  >
+                    {commonEmojis.map((emoji, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleEmojiClick(emoji)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          fontSize: '20px',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          borderRadius: '4px',
+                          transition: 'background 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.target.style.background = '#f0f0f0'}
+                        onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <input
                   type="text"
                   value={chatInput}
@@ -6306,13 +6477,8 @@ function GameBoard() {
                 </button>
               </div>
             </div>
-          )}
-        </div>
-        
-        {/* Player info below board (left side) */}
-        <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginTop: 16, maxWidth: 900, margin: '16px auto 0' }}>
-          {renderPlayerInfo(playerNumber, true, `Guest ${playerNumber}`, null, null, true)}
-        </div>
+          </div>
+        )}
         
         {/* Test End Game button - Hidden for production, uncomment for testing */}
         {/* <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>

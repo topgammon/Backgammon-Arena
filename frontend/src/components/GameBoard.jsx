@@ -3826,8 +3826,44 @@ function GameBoard() {
       )}
       {gameOver && (
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.08)', zIndex: 1000, pointerEvents: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'rgba(255,255,255,0.98)', border: '2px solid #28a745', borderRadius: 12, padding: 36, minWidth: 300, maxWidth: 340, textAlign: 'center', fontSize: 26, fontWeight: 'bold', color: '#222', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
-            <div style={{ marginBottom: 22 }}>{getGameOverMessage(gameOver)}</div>
+          <div style={{ background: 'rgba(255,255,255,0.98)', border: '2px solid #28a745', borderRadius: 12, padding: 36, minWidth: 400, maxWidth: 500, textAlign: 'center', fontSize: 26, fontWeight: 'bold', color: '#222', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+            {/* Player avatars */}
+            <div style={{ display: 'flex', gap: 40, marginBottom: 24, alignItems: 'center' }}>
+              {/* Player 1 */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <div style={{
+                  position: 'relative',
+                  border: gameOver.winner === 1 ? '4px solid #28a745' : '4px solid transparent',
+                  borderRadius: '16px',
+                  padding: '4px',
+                  boxShadow: gameOver.winner === 1 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
+                }}>
+                  {renderAvatar(true, false, null, 80)}
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>{passPlayPlayer1Name || 'Player 1'}</div>
+                {gameOver.winner === 1 && (
+                  <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                )}
+              </div>
+              {/* Player 2 */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <div style={{
+                  position: 'relative',
+                  border: gameOver.winner === 2 ? '4px solid #28a745' : '4px solid transparent',
+                  borderRadius: '16px',
+                  padding: '4px',
+                  boxShadow: gameOver.winner === 2 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
+                }}>
+                  {renderAvatar(true, false, null, 80)}
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>{passPlayPlayer2Name || 'Player 2'}</div>
+                {gameOver.winner === 2 && (
+                  <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                )}
+              </div>
+            </div>
+            {/* Game over message */}
+            <div style={{ marginBottom: 24, fontSize: 18, color: '#666', fontWeight: 'normal' }}>{getGameOverMessage(gameOver)}</div>
             <div style={{ display: 'flex', gap: 22, marginTop: 8 }}>
               <button style={{ ...buttonStyle, background: '#28a745', color: '#fff', fontSize: 22 }} onClick={handleRematch}>Rematch</button>
               <button style={{ ...buttonStyle, background: '#bbb', color: '#222', minWidth: 0, width: 110, fontSize: 22 }} onClick={handleQuit}>Quit</button>
@@ -5405,12 +5441,44 @@ function GameBoard() {
         )}
         {gameOver && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
-            <div style={{ background: '#fff', padding: 40, borderRadius: 16, textAlign: 'center', maxWidth: 400, boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)' }}>
-              <h2 style={{ marginBottom: gameOver.type === 'resignation' ? 8 : 0, fontSize: 28 }}>Game Over</h2>
-              {gameOver.type === 'resignation' && (
-                <div style={{ fontSize: 14, color: '#666', marginBottom: 20 }}>Opponent left the game</div>
-              )}
-              <div style={{ fontSize: 18, marginBottom: 24, color: '#333' }}>{getGameOverMessage(gameOver)}</div>
+            <div style={{ background: '#fff', padding: 40, borderRadius: 16, textAlign: 'center', maxWidth: 500, boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)' }}>
+              {/* Player avatars */}
+              <div style={{ display: 'flex', gap: 40, marginBottom: 24, alignItems: 'center', justifyContent: 'center' }}>
+                {/* Player 1 */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    position: 'relative',
+                    border: gameOver.winner === 1 ? '4px solid #28a745' : '4px solid transparent',
+                    borderRadius: '16px',
+                    padding: '4px',
+                    boxShadow: gameOver.winner === 1 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
+                  }}>
+                    {renderAvatar(true, false, null, 80)}
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>{passPlayPlayer1Name || 'Player 1'}</div>
+                  {gameOver.winner === 1 && (
+                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                  )}
+                </div>
+                {/* CPU */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    position: 'relative',
+                    border: gameOver.winner === 2 ? '4px solid #28a745' : '4px solid transparent',
+                    borderRadius: '16px',
+                    padding: '4px',
+                    boxShadow: gameOver.winner === 2 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
+                  }}>
+                    {renderAvatar(false, true, cpuDifficulty, 80)}
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>{DIFFICULTY_LEVELS[cpuDifficulty]?.avatar || 'CPU'}</div>
+                  {gameOver.winner === 2 && (
+                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                  )}
+                </div>
+              </div>
+              {/* Game over message */}
+              <div style={{ fontSize: 18, marginBottom: 24, color: '#666', fontWeight: 'normal' }}>{getGameOverMessage(gameOver)}</div>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                 <button style={buttonStyle} onClick={handleRematch}>Rematch</button>
                 <button style={{ ...buttonStyle, background: '#6c757d' }} onClick={handleQuit}>Quit</button>
@@ -6172,27 +6240,9 @@ function GameBoard() {
               borderRadius: '8px 8px 0 0',
               fontSize: 14,
               fontWeight: 600,
-              color: '#333',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
+              color: '#333'
             }}>
-              <span>Chat</span>
-              <button
-                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                style={{
-                  padding: '4px 8px',
-                  background: 'transparent',
-                  color: '#333',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: 18,
-                  cursor: 'pointer',
-                  lineHeight: 1
-                }}
-              >
-                😊
-              </button>
+              Chat
             </div>
             <div style={{
               flex: 1,
@@ -6274,15 +6324,31 @@ function GameBoard() {
                     setChatInput('');
                   }
                 }}
-                placeholder="Type a message... 😊"
+                placeholder="Type a message..."
                 style={{
                   flex: 1,
+                  minWidth: 0,
                   padding: '6px 10px',
                   border: '1px solid #ddd',
                   borderRadius: '4px',
                   fontSize: 13
                 }}
               />
+              <button
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                style={{
+                  padding: '6px 10px',
+                  background: '#e9ecef',
+                  color: '#333',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: 18,
+                  cursor: 'pointer',
+                  lineHeight: 1
+                }}
+              >
+                😊
+              </button>
               <button
                 onClick={() => {
                   if (chatInput.trim() && socketRef.current && matchId) {
@@ -6460,6 +6526,21 @@ function GameBoard() {
                   }}
                 />
                 <button
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  style={{
+                    padding: '6px 10px',
+                    background: '#e9ecef',
+                    color: '#333',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: 18,
+                    cursor: 'pointer',
+                    lineHeight: 1
+                  }}
+                >
+                  😊
+                </button>
+                <button
                   onClick={() => {
                     if (chatInput.trim() && socketRef.current && matchId) {
                       const message = chatInput.trim();
@@ -6611,7 +6692,7 @@ function GameBoard() {
                 borderRadius: '16px', 
                 padding: '40px', 
                 minWidth: '400px', 
-                maxWidth: '480px',
+                maxWidth: '500px',
                 boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
                 position: 'relative',
                 animation: 'fadeIn 0.2s ease-in',
@@ -6619,11 +6700,47 @@ function GameBoard() {
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 style={{ marginBottom: gameOver.type === 'resignation' ? 8 : 20, fontSize: 28, fontWeight: 'bold', color: '#222' }}>Game Over</h2>
-              {gameOver.type === 'resignation' && (
-                <div style={{ fontSize: 14, color: '#666', marginBottom: 12 }}>Opponent left the game</div>
-              )}
-              <div style={{ fontSize: 18, marginBottom: 20, color: '#333' }}>{getGameOverMessage(gameOver)}</div>
+              {/* Player avatars */}
+              <div style={{ display: 'flex', gap: 40, marginBottom: 24, alignItems: 'center', justifyContent: 'center' }}>
+                {/* Player 1 */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    position: 'relative',
+                    border: gameOver.winner === 1 ? '4px solid #28a745' : '4px solid transparent',
+                    borderRadius: '16px',
+                    padding: '4px',
+                    boxShadow: gameOver.winner === 1 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
+                  }}>
+                    {renderAvatar(playerNumber === 1 ? (user ? false : true) : (opponent?.isGuest || false), false, null, 80)}
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>
+                    {playerNumber === 1 ? (user?.username || `Guest ${playerNumber}`) : (opponentName || 'Opponent')}
+                  </div>
+                  {gameOver.winner === 1 && (
+                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                  )}
+                </div>
+                {/* Player 2 */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    position: 'relative',
+                    border: gameOver.winner === 2 ? '4px solid #28a745' : '4px solid transparent',
+                    borderRadius: '16px',
+                    padding: '4px',
+                    boxShadow: gameOver.winner === 2 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
+                  }}>
+                    {renderAvatar(playerNumber === 2 ? (user ? false : true) : (opponent?.isGuest || false), false, null, 80)}
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>
+                    {playerNumber === 2 ? (user?.username || `Guest ${playerNumber}`) : (opponentName || 'Opponent')}
+                  </div>
+                  {gameOver.winner === 2 && (
+                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                  )}
+                </div>
+              </div>
+              {/* Game over message */}
+              <div style={{ fontSize: 18, marginBottom: 20, color: '#666', fontWeight: 'normal' }}>{getGameOverMessage(gameOver)}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, justifyContent: 'center', marginTop: 20, width: '100%' }}>
                 {!rematchRequest ? (
                   <>

@@ -431,19 +431,19 @@ function GameBoard() {
         setTimer(t => {
           if (t <= 1) {
             clearInterval(timerRef.current);
-            // Check current state when timer expires
             setTimer(0);
-            // Use a small delay to ensure state is current
-            setTimeout(() => {
-              // Only trigger timeout forfeit if player has valid moves available AND dice are not all used
-              // If all dice are used OR no valid moves, auto-end turn instead
-              if (hasRolled && hasAnyValidMoves() && !allDiceUsed()) {
-                triggerGameOver('timeout', currentPlayer === 1 ? 2 : 1, currentPlayer);
-              } else {
-                // Auto-end turn if all dice used or no moves available
-                handleEndTurn();
-              }
-            }, 100);
+            // Check state directly - if all dice used, always end turn (not timeout)
+            const allUsed = allDiceUsed();
+            const hasValid = hasAnyValidMoves();
+            
+            // Only timeout forfeit if: has rolled, has valid moves, AND dice not all used
+            // If all dice used OR no valid moves, just end turn
+            if (hasRolled && hasValid && !allUsed) {
+              triggerGameOver('timeout', currentPlayer === 1 ? 2 : 1, currentPlayer);
+            } else {
+              // All dice used or no valid moves - just end turn
+              handleEndTurn();
+            }
             return 0;
           }
           return t - 1;
@@ -2353,6 +2353,10 @@ function GameBoard() {
     if (!hasRolled) return;
     // Prevent player interaction when it's CPU's turn
     if (isCpuGame && currentPlayer === cpuPlayer) return;
+    // Prevent selecting opponent's pieces in online games
+    if (isOnlineGame && (currentPlayer !== playerNumber || checker.player !== playerNumber)) return;
+    // Prevent selecting opponent's pieces in general
+    if (checker.player !== currentPlayer) return;
     
     if (selected && selected.id !== checker.id) {
       const legalMovesArray = Array.from(legalMoves);
@@ -5216,6 +5220,8 @@ function GameBoard() {
       if (data.matchId === currentMatchId) {
         if (data.accepted) {
           setGameStakes(data.gameStakes);
+          // When double is accepted: the person who accepted gains the right to offer next
+          // The person who offered loses the right until the other player offers
           const fromPlayer = data.doubleOffer?.from || (currentPlayerNumber === 1 ? 2 : 1);
           setCanDouble(prev => ({ ...prev, [fromPlayer]: false, [currentPlayerNumber]: true }));
           setDoubleOffer(null);

@@ -581,6 +581,30 @@ io.on('connection', (socket) => {
     
     console.log(`❌ Rematch declined in match ${matchId}`);
   });
+  
+  // Game over handler
+  socket.on('game:over', (data) => {
+    const { matchId, gameOver } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Invalid matchId for game over:', matchId);
+      return;
+    }
+    
+    // Find opponent socket
+    const opponentSocketId = match.player1.socketId === socket.id 
+      ? match.player2.socketId 
+      : match.player1.socketId;
+    
+    // Broadcast game over to opponent
+    io.to(opponentSocketId).emit('game:over', {
+      matchId,
+      gameOver
+    });
+    
+    console.log(`🏁 Game over in match ${matchId}: ${gameOver.type}, Winner: Player ${gameOver.winner}`);
+  });
 });
 
 const PORT = process.env.PORT || 3001;

@@ -4647,39 +4647,7 @@ function GameBoard() {
                         e.currentTarget.style.background = '#a8a7a8';
                       }}
                     >
-                      {userProfile?.avatar ? (
-                        <img 
-                          src={`/avatars/${userProfile.avatar}.png`}
-                          alt={userProfile.avatar}
-                          style={{
-                            width: '36px',
-                            height: '36px',
-                            borderRadius: '8px',
-                            objectFit: 'cover',
-                            flexShrink: 0
-                          }}
-                          onError={(e) => {
-                            // Fallback to initial if image fails to load
-                            e.target.style.display = 'none';
-                            e.target.nextSibling.style.display = 'flex';
-                          }}
-                        />
-                      ) : null}
-                      <div style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '8px',
-                        background: '#ff751f',
-                        display: userProfile?.avatar ? 'none' : 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '16px',
-                        color: '#fff',
-                        fontWeight: 'bold',
-                        flexShrink: 0
-                      }}>
-                        {userProfile?.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '👤'}
-                      </div>
+                      {renderAvatar(false, false, null, 50, userProfile, user)}
                       <span style={{ 
                         fontSize: isMobile ? '14px' : '18px', 
                         fontWeight: '600',
@@ -5785,6 +5753,19 @@ function GameBoard() {
     
     socket.on('matchmaking:guest:queued', (data) => {
       setMatchmakingStatus(`Waiting for opponent... (Position: ${data.position})`);
+    });
+    
+    socket.on('matchmaking:ranked:queued', (data) => {
+      setMatchmakingStatus(`Waiting for opponent... (Position: ${data.position})`);
+    });
+    
+    socket.on('matchmaking:ranked:error', (data) => {
+      setMatchmakingStatus(data.message || 'Error joining ranked queue');
+      setTimeout(() => {
+        setIsMatchmaking(false);
+        setMatchmakingType(null);
+        setScreen('home');
+      }, 2000);
     });
     
       socket.on('matchmaking:match-found', (data) => {

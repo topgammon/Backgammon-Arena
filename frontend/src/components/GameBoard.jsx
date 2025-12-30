@@ -508,6 +508,33 @@ function GameBoard() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Restore active match from localStorage on mount (for refresh recovery)
+  useEffect(() => {
+    const storedMatch = localStorage.getItem('activeMatch');
+    if (storedMatch && !isOnlineGame && !matchId) {
+      try {
+        const matchData = JSON.parse(storedMatch);
+        // Check if match is recent (within last hour)
+        const matchAge = Date.now() - matchData.timestamp;
+        if (matchAge < 3600000) { // 1 hour
+          console.log('Restoring active match from localStorage:', matchData);
+          setMatchId(matchData.matchId);
+          setPlayerNumber(matchData.playerNumber);
+          setOpponent(matchData.opponent);
+          setIsOnlineGame(true);
+          setMatchmakingType(matchData.matchmakingType);
+          setScreen('onlineGame');
+        } else {
+          // Match is too old, clear it
+          localStorage.removeItem('activeMatch');
+        }
+      } catch (error) {
+        console.error('Error restoring match from localStorage:', error);
+        localStorage.removeItem('activeMatch');
+      }
+    }
+  }, []); // Only run on mount
+
   // Fetch user profile when user changes
   useEffect(() => {
     if (!user || !supabase) {
@@ -2704,6 +2731,8 @@ function GameBoard() {
   }
 
   function handleQuit() {
+    // Clear active match from localStorage
+    localStorage.removeItem('activeMatch');
     window.location.reload();
   }
 
@@ -5781,6 +5810,15 @@ function GameBoard() {
         setOpponent(data.opponent);
         setIsOnlineGame(true);
         
+        // Store match state in localStorage for reconnection on refresh
+        localStorage.setItem('activeMatch', JSON.stringify({
+          matchId: data.matchId,
+          playerNumber: data.playerNumber,
+          opponent: data.opponent,
+          matchmakingType: matchmakingType,
+          timestamp: Date.now()
+        }));
+        
         // Initialize game state for online play
         setCheckers(getInitialCheckers());
         setBar({ 1: [], 2: [] });
@@ -5974,6 +6012,55 @@ function GameBoard() {
     };
   }, [isOnlineGame, matchmakingType, matchId, playerNumber, gameOver]);
   
+  // Socket.io connection for online games (reconnect if needed)
+  useEffect(() => {
+    // If we have an active match but no socket connection, reconnect
+    if (isOnlineGame && matchId && playerNumber && !socketRef.current) {
+      console.log('Reconnecting socket for active match:', matchId);
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+      const socket = io(backendUrl);
+      socketRef.current = socket;
+      
+      socket.on('connect', () => {
+        console.log('Reconnected to server for match:', matchId);
+        // Rejoin the match
+        socket.emit('game:rejoin', {
+          matchId: matchId,
+          playerNumber: playerNumber,
+          userId: user?.id || null
+        });
+      });
+      
+      socket.on('game:rejoin-success', (data) => {
+        console.log('Successfully rejoined match:', data);
+        // Restore game state if provided
+        if (data.gameState) {
+          setCheckers(data.gameState.checkers || []);
+          setBar(data.gameState.bar || { 1: [], 2: [] });
+          setBorneOff(data.gameState.borneOff || { 1: 0, 2: 0 });
+          setDice(data.gameState.dice || [0, 0]);
+          setUsedDice(data.gameState.usedDice || []);
+          setCurrentPlayer(data.gameState.currentPlayer || 1);
+          setHasRolled(data.gameState.hasRolled || false);
+          setMovesAllowed(data.gameState.movesAllowed || [null, null]);
+        }
+        // The game event handlers will be set up by the next useEffect
+        // which watches for isOnlineGame && socketRef.current
+      });
+      
+      socket.on('game:rejoin-error', (data) => {
+        console.error('Failed to rejoin match:', data);
+        // Match no longer exists, clear localStorage and return to home
+        localStorage.removeItem('activeMatch');
+        setIsOnlineGame(false);
+        setMatchId(null);
+        setPlayerNumber(null);
+        setOpponent(null);
+        setScreen('home');
+      });
+    }
+  }, [isOnlineGame, matchId, playerNumber, user]);
+  
   // Socket.io handlers for online game events
   useEffect(() => {
     if (!isOnlineGame || !socketRef.current || !matchId || !playerNumber) return;
@@ -6118,6 +6205,8 @@ function GameBoard() {
     const handleGameOver = (data) => {
       if (data.matchId === currentMatchId) {
         setGameOver(data.gameOver);
+        // Clear active match from localStorage when game ends
+        localStorage.removeItem('activeMatch');
         // Store ELO changes if provided (for ranked matches)
         if (data.eloChanges) {
           setEloChanges(data.eloChanges);

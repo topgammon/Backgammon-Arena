@@ -140,6 +140,56 @@ io.on('connection', (socket) => {
     console.error('❌ Socket error:', error);
   });
   
+  // Rejoin active match handler (for reconnection after refresh)
+  socket.on('game:rejoin', (data) => {
+    const { matchId, playerNumber, userId } = data;
+    const match = activeMatches.get(matchId);
+    
+    if (!match) {
+      console.error('❌ Match not found for rejoin:', matchId);
+      socket.emit('game:rejoin-error', { 
+        matchId, 
+        message: 'Match no longer exists' 
+      });
+      return;
+    }
+    
+    // Verify player identity
+    const expectedPlayer = playerNumber === 1 ? match.player1 : match.player2;
+    if (userId && expectedPlayer.userId && expectedPlayer.userId !== userId) {
+      console.error('❌ User ID mismatch for rejoin:', { expected: expectedPlayer.userId, received: userId });
+      socket.emit('game:rejoin-error', { 
+        matchId, 
+        message: 'Invalid player credentials' 
+      });
+      return;
+    }
+    
+    // Update socket ID for this player
+    if (playerNumber === 1) {
+      match.player1.socketId = socket.id;
+    } else {
+      match.player2.socketId = socket.id;
+    }
+    
+    console.log(`✅ Player ${playerNumber} rejoined match ${matchId} with new socket ${socket.id}`);
+    
+    // Send success response with current game state
+    socket.emit('game:rejoin-success', {
+      matchId,
+      playerNumber,
+      gameState: match.gameState || null
+    });
+    
+    // Notify opponent that player reconnected
+    const opponentSocketId = playerNumber === 1 ? match.player2.socketId : match.player1.socketId;
+    if (opponentSocketId) {
+      io.to(opponentSocketId).emit('game:opponent-reconnected', {
+        matchId
+      });
+    }
+  });
+  
   socket.on('disconnect', (reason) => {
     console.log('🔌 User disconnected:', socket.id, 'Reason:', reason);
     
@@ -158,6 +208,7 @@ io.on('connection', (socket) => {
     }
     
     // Clean up active matches where this socket was a player
+    // But don't remove immediately - wait for potential reconnection
     for (const [matchId, match] of activeMatches.entries()) {
       if (match.player1.socketId === socket.id || match.player2.socketId === socket.id) {
         const opponentSocketId = match.player1.socketId === socket.id 
@@ -165,13 +216,22 @@ io.on('connection', (socket) => {
           : match.player1.socketId;
         
         // Notify opponent of disconnect
-        io.to(opponentSocketId).emit('game:opponent-disconnected', {
-          matchId
-        });
+        if (opponentSocketId) {
+          io.to(opponentSocketId).emit('game:opponent-disconnected', {
+            matchId
+          });
+        }
         
         // Remove match after a delay (in case of reconnection)
         setTimeout(() => {
-          activeMatches.delete(matchId);
+          // Only remove if socket still matches (player didn't reconnect)
+          const currentMatch = activeMatches.get(matchId);
+          if (currentMatch) {
+            // Check if the disconnected socket is still in the match
+            const isPlayer1 = currentMatch.player1.socketId === socket.id;
+            const isPlayer2 = currentMatch.player2.socketId === socket.id;
+            if (isPlayer1 || isPlayer2) {
+              activeMatches.delete(matchId);
           console.log(`🗑️ Cleaned up match ${matchId}`);
         }, 30000); // 30 second grace period
       }

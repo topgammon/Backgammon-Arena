@@ -230,6 +230,8 @@ function GameBoard() {
   const [showSignupForm, setShowSignupForm] = useState(false);
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  const profileFetchingRef = useRef(false); // Prevent duplicate profile fetches
+  const lastFetchedUserIdRef = useRef(null); // Track last fetched user ID to prevent stale updates
   const [signupFormData, setSignupFormData] = useState({
     email: '',
     password: '',
@@ -560,17 +562,16 @@ function GameBoard() {
           setUser(session.user);
           
           // CRITICAL: Always fetch fresh profile on page load to avoid stale data
+          // Fetch directly here since fetchUserProfileSafely is defined below
           const { data: freshProfile, error: profileErr } = await supabase
             .from('users')
             .select('*')
             .eq('id', session.user.id)
             .single();
           
-          if (!profileErr && freshProfile) {
+          if (!profileErr && freshProfile && freshProfile.id === session.user.id) {
             setUserProfile(freshProfile);
-          } else if (profileErr && profileErr.code === 'PGRST116') {
-            // Profile doesn't exist yet - will be created by onAuthStateChange
-            console.log('Profile not found on page load, will be created by onAuthStateChange');
+            lastFetchedUserIdRef.current = session.user.id;
           }
         } catch (err) {
           console.error('Error verifying initial session:', err);
@@ -640,27 +641,23 @@ function GameBoard() {
           return;
         }
         
-        // Always fetch fresh profile data (don't rely on cache)
-        const { data: profile, error } = await supabase
+        // CRITICAL: Always fetch fresh profile data from database (never use cache/stale data)
+        // Use centralized function to prevent duplicates
+        await fetchUserProfileSafely(session.user.id, true);
+        
+        // After fetching, check if we need to update google_avatar_url
+        // Get fresh profile to check
+        const { data: currentProfile } = await supabase
           .from('users')
           .select('*')
           .eq('id', session.user.id)
           .single();
         
-        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-          console.error('Error fetching user profile:', error);
-          // Don't clear profile on error - keep existing one if we have it
-          if (!userProfile) {
-            setUserProfile(null);
-          }
-        } else if (profile) {
-          // Profile exists - ALWAYS update with fresh data from database
-          // This prevents stale avatar/profile data issues
-          // Only update google_avatar_url if it's not already set and user signed in with Google
+        if (currentProfile) {
           const isGoogleSignIn = session.user.identities?.some(id => id.provider === 'google');
           const googleAvatarUrl = session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null;
           
-          if (isGoogleSignIn && googleAvatarUrl && !profile.google_avatar_url) {
+          if (isGoogleSignIn && googleAvatarUrl && !currentProfile.google_avatar_url) {
             // Update google_avatar_url only if it's not already set
             const { data: updatedProfile } = await supabase
               .from('users')
@@ -670,17 +667,10 @@ function GameBoard() {
               .single();
             
             if (updatedProfile) {
-              // Always update with fresh data
               setUserProfile(updatedProfile);
-            } else {
-              // Use fresh profile data even if update failed
-              setUserProfile(profile);
             }
-          } else {
-            // CRITICAL: Always set fresh profile data - never skip this
-            // This ensures avatar is always current, even if we already have a profile
-            setUserProfile(profile);
           }
+        }
         } else if (session.user && !profile) {
           // User exists in auth but no profile - create one
           // This happens for first-time Google OAuth sign-ins (Supabase auto-links accounts)
@@ -785,32 +775,23 @@ function GameBoard() {
     if (!user || !supabase) {
       if (!user) {
         setUserProfile(null);
+        lastFetchedUserIdRef.current = null;
       }
       return;
     }
 
+    // Use centralized fetch function with small delay to let onAuthStateChange complete
     const fetchUserProfile = async () => {
-      // Small delay to let onAuthStateChange complete first (if it's running)
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 150));
       
       // Double-check user still exists (might have signed out during delay)
       if (!user || !supabase) return;
       
-      // ALWAYS fetch fresh profile from database - don't rely on cached state
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      // Use centralized function to prevent duplicates
+      await fetchUserProfileSafely(user.id, false);
+    };
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching user profile:', error);
-        // Keep existing profile if we have one, don't clear it
-      } else if (data) {
-        // Always update with fresh data from database
-        // This ensures avatar and other fields are always current
-        setUserProfile(data);
-      } else {
+    fetchUserProfile();
         // If profile doesn't exist, try to create it from auth metadata
         if (user.user_metadata?.username) {
           const { error: insertError } = await supabase
@@ -3941,31 +3922,8 @@ function GameBoard() {
   // Refresh user profile when returning to home screen to ensure avatar is current
   useEffect(() => {
     if (screen === 'home' && user && supabase) {
-      // Always refresh profile when returning to home to ensure it's current
-      const refreshProfile = async () => {
-        try {
-          // Always fetch fresh from database - never use cached/stale data
-          const { data, error } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', user.id)
-            .single();
-          
-          if (!error && data) {
-            // Always update with fresh data
-            setUserProfile(data);
-          } else if (error && error.code === 'PGRST116') {
-            // Profile doesn't exist - this shouldn't happen for logged-in users
-            console.warn('Profile not found when refreshing on home screen');
-          }
-        } catch (err) {
-          console.error('Error refreshing profile on home screen:', err);
-          // Don't clear profile on error - keep existing one
-        }
-      };
-      
-      // Immediate refresh - no delay needed
-      refreshProfile();
+      // Always refresh profile when returning to home - force refresh to get latest data
+      fetchUserProfileSafely(user.id, true);
     }
   }, [screen, user?.id]); // Refresh when screen changes to home or user changes
 
@@ -7707,6 +7665,9 @@ function GameBoard() {
           // Clear state immediately
           setUser(null);
           setUserProfile(null);
+          // Clear refs to prevent stale data
+          profileFetchingRef.current = false;
+          lastFetchedUserIdRef.current = null;
           
           // CRITICAL: Clear Supabase storage SYNCHRONOUSLY before any async operations
           // This prevents Supabase from restoring the session on page reload
@@ -7760,6 +7721,9 @@ function GameBoard() {
         localStorage.setItem('_signing_out', 'true');
         setUser(null);
         setUserProfile(null);
+        // Clear refs to prevent stale data
+        profileFetchingRef.current = false;
+        lastFetchedUserIdRef.current = null;
         window.location.replace(window.location.origin + window.location.pathname + '?t=' + Date.now());
       }
     };

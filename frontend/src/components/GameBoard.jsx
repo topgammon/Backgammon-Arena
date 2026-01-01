@@ -702,8 +702,17 @@ function GameBoard() {
       
       // Fetch user profile when user logs in
       // CRITICAL: This must run for ALL SIGNED_IN events, including on page refresh
+      // BUT: Skip profile fetch on initial page load - let getSession() handle it
+      // This prevents race conditions and timeouts
       if (session?.user) {
-        console.log('onAuthStateChange: Processing SIGNED_IN event for user:', session.user.id);
+        console.log('onAuthStateChange: Processing SIGNED_IN event for user:', session.user.id, 'isInitialLoad:', isInitialLoadRef.current);
+        
+        // On initial page load, skip profile fetch - getSession() will handle it
+        if (isInitialLoadRef.current) {
+          console.log('onAuthStateChange: Skipping profile fetch on initial load - getSession() will handle it');
+          isInitialLoadRef.current = false; // Mark as no longer initial load
+          return; // Exit early, let getSession() handle the profile fetch
+        }
         
         // Wrap everything in try-catch to ensure we always complete
         try {

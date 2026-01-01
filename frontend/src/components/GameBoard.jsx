@@ -545,7 +545,24 @@ function GameBoard() {
           }
           
           // Second check: Verify with server that user still exists and session is valid
-          const { data: authUser, error: authError } = await supabase.auth.getUser();
+          // Add timeout to prevent hanging
+          let authUser, authError;
+          try {
+            const verificationResult = await Promise.race([
+              supabase.auth.getUser(),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('getUser() timeout')), 3000)
+              )
+            ]);
+            authUser = verificationResult?.data;
+            authError = verificationResult?.error;
+          } catch (err) {
+            console.warn('getSession: getUser() failed or timed out, skipping verification:', err);
+            // Skip verification and proceed to fetch profile
+            authUser = { user: session.user };
+            authError = null;
+          }
+          
           if (authError || !authUser?.user) {
             // Session is invalid - clear it completely
             console.log('Initial session invalid (user not found), clearing...');
@@ -572,11 +589,27 @@ function GameBoard() {
           // CRITICAL: Always fetch fresh profile on page load to avoid stale data
           // Fetch immediately and synchronously to prevent UI from showing defaults
           console.log('getSession: Fetching profile for user:', session.user.id);
-          const { data: freshProfile, error: profileErr } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
+          
+          let freshProfile, profileErr;
+          try {
+            const profilePromise = supabase
+              .from('users')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+            
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
+            );
+            
+            const result = await Promise.race([profilePromise, timeoutPromise]);
+            freshProfile = result?.data;
+            profileErr = result?.error;
+          } catch (err) {
+            console.error('getSession: Profile fetch failed or timed out:', err);
+            profileErr = { code: 'TIMEOUT', message: err.message };
+            freshProfile = null;
+          }
           
           console.log('getSession: Profile fetch result - has profile:', !!freshProfile, 'error:', profileErr?.code, 'error message:', profileErr?.message);
           if (freshProfile) {
@@ -716,11 +749,28 @@ function GameBoard() {
         
         // CRITICAL: Always fetch fresh profile data from database (never use cache/stale data)
         console.log('onAuthStateChange: Fetching profile for user:', session.user.id);
-        const { data: profile, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
+        
+        let profile, error;
+        try {
+          // Add timeout to prevent hanging
+          const profilePromise = supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
+          );
+          
+          const result = await Promise.race([profilePromise, timeoutPromise]);
+          profile = result?.data;
+          error = result?.error;
+        } catch (err) {
+          console.error('onAuthStateChange: Profile fetch failed or timed out:', err);
+          error = { code: 'TIMEOUT', message: err.message };
+          profile = null;
+        }
         
         console.log('onAuthStateChange: Profile fetch result - has profile:', !!profile, 'error:', error?.code, 'error message:', error?.message);
         if (profile) {

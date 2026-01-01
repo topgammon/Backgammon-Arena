@@ -451,28 +451,62 @@ function GameBoard() {
         if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
           console.error('Error fetching user profile:', error);
         } else if (profile) {
-          setUserProfile(profile);
-        } else if (session.user && !profile) {
-          // User exists but no profile - create one (for OAuth users)
-          const email = session.user.email || '';
-          const googleName = session.user.user_metadata?.full_name || session.user.user_metadata?.name || '';
-          // Generate username from Google name or email
-          let username = '';
-          if (googleName) {
-            // Use first name from Google, or full name if no space
-            const nameParts = googleName.trim().split(' ');
-            username = nameParts[0] || email.split('@')[0];
-            // Make it unique by adding a short ID if needed
-            if (nameParts.length > 1) {
-              username = nameParts[0] + nameParts[1].charAt(0).toUpperCase();
+          // Profile exists - preserve it completely (username, avatar, stats all stay the same)
+          // Only update google_avatar_url if it's not already set and user signed in with Google
+          const isGoogleSignIn = session.user.identities?.some(id => id.provider === 'google');
+          const googleAvatarUrl = session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null;
+          
+          if (isGoogleSignIn && googleAvatarUrl && !profile.google_avatar_url) {
+            // Update google_avatar_url only if it's not already set
+            const { data: updatedProfile } = await supabase
+              .from('users')
+              .update({ google_avatar_url: googleAvatarUrl })
+              .eq('id', session.user.id)
+              .select()
+              .single();
+            
+            if (updatedProfile) {
+              setUserProfile(updatedProfile);
+            } else {
+              setUserProfile(profile);
             }
           } else {
-            username = email.split('@')[0];
+            setUserProfile(profile);
           }
-          // Clean username (remove special chars, limit length)
-          username = username.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || `User${session.user.id.substring(0, 6)}`;
-          const country = session.user.user_metadata?.country || 'US';
-          const googleAvatarUrl = session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null;
+        } else if (session.user && !profile) {
+          // User exists in auth but no profile - create one
+          // This happens for first-time Google OAuth sign-ins (Supabase auto-links accounts)
+          const email = session.user.email || '';
+          const isGoogleSignIn = session.user.identities?.some(id => id.provider === 'google');
+          
+          let username = '';
+          let country = 'US';
+          let googleAvatarUrl = null;
+          
+          if (isGoogleSignIn) {
+            // Generate username from Google name or email
+            const googleName = session.user.user_metadata?.full_name || session.user.user_metadata?.name || '';
+            let baseUsername = '';
+            if (googleName) {
+              // Use first name from Google, or full name if no space
+              const nameParts = googleName.trim().split(' ');
+              baseUsername = nameParts[0] || email.split('@')[0];
+              // Add last initial if available
+              if (nameParts.length > 1) {
+                baseUsername = nameParts[0] + nameParts[1].charAt(0).toUpperCase();
+              }
+            } else {
+              baseUsername = email.split('@')[0];
+            }
+            // Generate unique username
+            username = await generateUniqueUsername(baseUsername);
+            country = session.user.user_metadata?.country || 'US';
+            googleAvatarUrl = session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null;
+          } else {
+            // Email/password signup - username should be in user_metadata from signup
+            username = session.user.user_metadata?.username || email.split('@')[0];
+            country = session.user.user_metadata?.country || 'US';
+          }
           
           const { error: insertError } = await supabase
             .from('users')
@@ -482,7 +516,7 @@ function GameBoard() {
               username: username,
               country: country,
               avatar: 'Barry', // Always default to first avatar
-              google_avatar_url: googleAvatarUrl, // Store Google photo URL separately
+              google_avatar_url: googleAvatarUrl, // Store Google photo URL if available
               elo_rating: 1000,
               wins: 0,
               losses: 0,
@@ -498,6 +532,8 @@ function GameBoard() {
             if (newProfile) {
               setUserProfile(newProfile);
             }
+          } else {
+            console.error('Error creating user profile:', insertError);
           }
         }
       } else {
@@ -4334,6 +4370,47 @@ function GameBoard() {
     } finally {
       setCheckingUsername(false);
     }
+  };
+
+  // Helper function to generate a unique username for OAuth sign-ins
+  const generateUniqueUsername = async (baseUsername) => {
+    if (!supabase) return baseUsername;
+    
+    // Clean the base username
+    let cleanUsername = baseUsername.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+    if (cleanUsername.length < 3) {
+      cleanUsername = `User${Math.random().toString(36).substring(2, 8)}`;
+    }
+    
+    // Check if username is available
+    const { data, error } = await supabase
+      .from('users')
+      .select('username')
+      .eq('username', cleanUsername)
+      .single();
+    
+    // If available, return it
+    if (error && error.code === 'PGRST116') {
+      return cleanUsername;
+    }
+    
+    // If not available, append random suffix
+    const randomSuffix = Math.random().toString(36).substring(2, 6);
+    const uniqueUsername = cleanUsername.substring(0, 16) + randomSuffix;
+    
+    // Double-check this one is available (very unlikely to conflict)
+    const { data: checkData, error: checkError } = await supabase
+      .from('users')
+      .select('username')
+      .eq('username', uniqueUsername)
+      .single();
+    
+    if (checkError && checkError.code === 'PGRST116') {
+      return uniqueUsername;
+    }
+    
+    // Last resort: use user ID suffix
+    return `User${Math.random().toString(36).substring(2, 8)}`;
   };
 
   // Debounced username check

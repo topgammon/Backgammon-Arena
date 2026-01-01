@@ -7281,8 +7281,13 @@ function GameBoard() {
     // Chat handler
     const handleChat = (data) => {
       if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
+        // Use opponent's username from profile, or fallback to guest name or player number
+        const opponentDisplayName = opponent?.isGuest 
+          ? `Guest ${opponent.userId?.split('_')[1]?.substring(0, 6) || 'Player'}`
+          : (opponentProfile?.username || `Player ${data.player}`);
+        
         setChatMessages(prev => [...prev, { 
-          from: data.player === 1 ? 'Player 1' : 'Player 2', 
+          from: opponentDisplayName, 
           text: data.message 
         }]);
       }
@@ -7475,7 +7480,11 @@ function GameBoard() {
                       player: playerNumber,
                       message
                     });
-                    setChatMessages(prev => [...prev, { from: `Player ${playerNumber}`, text: message }]);
+                    // Use current player's username from profile, or fallback to guest name or player number
+                    const currentPlayerDisplayName = user && userProfile 
+                      ? userProfile.username 
+                      : (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`);
+                    setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: message }]);
                     setChatInput('');
                   }
                 }}
@@ -7513,7 +7522,11 @@ function GameBoard() {
                       player: playerNumber,
                       message
                     });
-                    setChatMessages(prev => [...prev, { from: `Player ${playerNumber}`, text: message }]);
+                    // Use current player's username from profile, or fallback to guest name or player number
+                    const currentPlayerDisplayName = user && userProfile 
+                      ? userProfile.username 
+                      : (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`);
+                    setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: message }]);
                     setChatInput('');
                   }
                 }}
@@ -7666,7 +7679,11 @@ function GameBoard() {
                         player: playerNumber,
                         message
                       });
-                      setChatMessages(prev => [...prev, { from: `Player ${playerNumber}`, text: message }]);
+                      // Use current player's username from profile, or fallback to guest name or player number
+                    const currentPlayerDisplayName = user && userProfile 
+                      ? userProfile.username 
+                      : (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`);
+                    setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: message }]);
                       setChatInput('');
                     }
                   }}
@@ -7704,7 +7721,11 @@ function GameBoard() {
                         player: playerNumber,
                         message
                       });
-                      setChatMessages(prev => [...prev, { from: `Player ${playerNumber}`, text: message }]);
+                      // Use current player's username from profile, or fallback to guest name or player number
+                    const currentPlayerDisplayName = user && userProfile 
+                      ? userProfile.username 
+                      : (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`);
+                    setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: message }]);
                       setChatInput('');
                     }
                   }}

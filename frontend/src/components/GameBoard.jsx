@@ -3610,7 +3610,27 @@ function GameBoard() {
           )}
           <div style={{ display: 'flex', gap: 32, marginBottom: 18 }}>
             <div style={{ textAlign: 'center' }}>
-              <svg width="38" height="38" style={{ display: 'block', margin: '0 auto 4px auto' }}>
+              {/* Player 1 Avatar */}
+              <div style={{ marginBottom: 8 }}>
+                {renderAvatar(
+                  isOnlineGame 
+                    ? (playerNumber === 1 ? (user ? false : true) : (opponent?.isGuest || false))
+                    : (!user || !userProfile),
+                  false,
+                  null,
+                  60,
+                  isOnlineGame 
+                    ? (playerNumber === 1 ? userProfile : opponentProfile)
+                    : userProfile,
+                  isOnlineGame 
+                    ? (playerNumber === 1 ? user : null)
+                    : user
+                )}
+              </div>
+              {/* Player 1 Name */}
+              <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 16 }}>{player1Name}</div>
+              {/* Player 1 Checker Indicator */}
+              <svg width="38" height="38" style={{ display: 'block', margin: '0 auto 8px auto' }}>
                 <g filter="url(#mini-checker-shadow)">
                   <circle cx="19" cy="19" r="18" fill="#fff" stroke="#000" strokeWidth="1.5" />
                   <circle cx="19" cy="19" r="13.5" fill="none" stroke="#e5e5e5" strokeWidth="2.5" />
@@ -3623,7 +3643,7 @@ function GameBoard() {
                   </filter>
                 </defs>
               </svg>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>{player1Name}</div>
+              {/* Player 1 Dice */}
               {firstRolls[0] ? (
                 <Dice 
                   value={firstRolls[0]} 
@@ -3643,7 +3663,27 @@ function GameBoard() {
               )}
             </div>
             <div style={{ textAlign: 'center' }}>
-              <svg width="38" height="38" style={{ display: 'block', margin: '0 auto 4px auto' }}>
+              {/* Player 2 Avatar */}
+              <div style={{ marginBottom: 8 }}>
+                {renderAvatar(
+                  isOnlineGame 
+                    ? (playerNumber === 2 ? (user ? false : true) : (opponent?.isGuest || false))
+                    : (isCpuGame ? true : false),
+                  isCpuGame,
+                  isCpuGame ? cpuDifficulty : null,
+                  60,
+                  isOnlineGame 
+                    ? (playerNumber === 2 ? userProfile : opponentProfile)
+                    : null,
+                  isOnlineGame 
+                    ? (playerNumber === 2 ? user : null)
+                    : null
+                )}
+              </div>
+              {/* Player 2 Name */}
+              <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 16 }}>{player2Name}</div>
+              {/* Player 2 Checker Indicator */}
+              <svg width="38" height="38" style={{ display: 'block', margin: '0 auto 8px auto' }}>
                 <g filter="url(#mini-checker-shadow)">
                   <circle cx="19" cy="19" r="18" fill="#111" stroke="#000" strokeWidth="1.5" />
                   <circle cx="19" cy="19" r="13.5" fill="none" stroke="#222" strokeWidth="2.5" />
@@ -3656,7 +3696,7 @@ function GameBoard() {
                   </filter>
                 </defs>
               </svg>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>{player2Name}</div>
+              {/* Player 2 Dice */}
               {firstRolls[1] ? (
                 <Dice 
                   value={firstRolls[1]} 

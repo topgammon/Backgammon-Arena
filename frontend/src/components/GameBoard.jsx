@@ -4327,30 +4327,31 @@ function GameBoard() {
 
       // Check if input is a username (not containing @)
       if (!emailToUse.includes('@')) {
+        console.log('Looking up username:', emailToUse);
         // It's a username, fetch the user's email from the database
         const { data: userData, error: userError } = await supabase
           .from('users')
-          .select('email')
+          .select('email, username')
           .eq('username', emailToUse)
-          .single();
+          .maybeSingle(); // Use maybeSingle() instead of single() to avoid errors when not found
+
+        console.log('Username lookup result:', { userData, userError });
 
         if (userError) {
           console.error('Username lookup error:', userError);
-          if (userError.code === 'PGRST116') {
-            setLoginError('Username not found');
-          } else {
-            setLoginError('Error looking up username: ' + userError.message);
-          }
+          setLoginError('Error looking up username: ' + userError.message);
           setLoginLoading(false);
           return;
         }
 
         if (!userData || !userData.email) {
-          setLoginError('Username not found');
+          console.log('Username not found in database');
+          setLoginError('Username not found. Please check your username and try again.');
           setLoginLoading(false);
           return;
         }
 
+        console.log('Found email for username:', userData.email);
         emailToUse = userData.email;
       }
 

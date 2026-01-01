@@ -7786,7 +7786,7 @@ function GameBoard() {
             alignItems: 'center',
             textAlign: 'left'
           }}>
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative', display: 'inline-block' }}>
               {(() => {
                 // Check if user has Google avatar
                 const googleAvatarUrl = userProfile?.google_avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
@@ -7795,95 +7795,180 @@ function GameBoard() {
                 if (googleAvatarUrl) {
                   // Show Google avatar
                   return (
-                    <img 
-                      src={googleAvatarUrl}
-                      alt="User avatar"
+                    <div
                       onClick={() => setShowAvatarSelector(true)}
                       style={{
+                        position: 'relative',
                         width: '120px',
                         height: '120px',
                         borderRadius: '12px',
-                        objectFit: 'cover',
                         cursor: 'pointer',
                         border: '3px solid #ff751f',
+                        overflow: 'hidden',
                         transition: 'all 0.2s'
                       }}
                       onMouseEnter={(e) => {
-                        e.target.style.opacity = '0.8';
-                        e.target.style.transform = 'scale(1.05)';
+                        e.currentTarget.style.transform = 'scale(1.05)';
+                        const icon = e.currentTarget.querySelector('.avatar-edit-icon');
+                        if (icon) icon.style.opacity = '1';
                       }}
                       onMouseLeave={(e) => {
-                        e.target.style.opacity = '1';
-                        e.target.style.transform = 'scale(1)';
+                        e.currentTarget.style.transform = 'scale(1)';
+                        const icon = e.currentTarget.querySelector('.avatar-edit-icon');
+                        if (icon) icon.style.opacity = '0.8';
                       }}
-                      onError={(e) => {
-                        // Fallback to regular avatar if Google image fails
-                        e.target.src = `/avatars/${avatarName}.png`;
-                      }}
-                    />
+                    >
+                      <img 
+                        src={googleAvatarUrl}
+                        alt="User avatar"
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          display: 'block',
+                          pointerEvents: 'none'
+                        }}
+                        onError={(e) => {
+                          // Fallback to regular avatar if Google image fails
+                          e.target.src = `/avatars/${avatarName}.png`;
+                        }}
+                      />
+                      {/* Edit pencil icon overlay */}
+                      <div
+                        className="avatar-edit-icon"
+                        style={{
+                          position: 'absolute',
+                          bottom: '4px',
+                          right: '4px',
+                          width: '28px',
+                          height: '28px',
+                          borderRadius: '50%',
+                          background: 'rgba(0, 0, 0, 0.6)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: '0.8',
+                          transition: 'opacity 0.2s',
+                          pointerEvents: 'none'
+                        }}
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="white"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                      </div>
+                    </div>
                   );
                 } else if (avatarName) {
                   // Show regular avatar
                   return (
-                    <img 
-                      src={`/avatars/${avatarName}.png`}
-                      alt={avatarName}
+                    <div
                       onClick={() => setShowAvatarSelector(true)}
                       style={{
+                        position: 'relative',
                         width: '120px',
                         height: '120px',
                         borderRadius: '12px',
-                        objectFit: 'cover',
                         cursor: 'pointer',
                         border: '3px solid #ff751f',
+                        overflow: 'hidden',
                         transition: 'all 0.2s'
                       }}
                       onMouseEnter={(e) => {
-                        e.target.style.opacity = '0.8';
-                        e.target.style.transform = 'scale(1.05)';
+                        e.currentTarget.style.transform = 'scale(1.05)';
+                        const icon = e.currentTarget.querySelector('.avatar-edit-icon');
+                        if (icon) icon.style.opacity = '1';
                       }}
                       onMouseLeave={(e) => {
-                        e.target.style.opacity = '1';
-                        e.target.style.transform = 'scale(1)';
+                        e.currentTarget.style.transform = 'scale(1)';
+                        const icon = e.currentTarget.querySelector('.avatar-edit-icon');
+                        if (icon) icon.style.opacity = '0.8';
                       }}
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        e.target.nextSibling.style.display = 'flex';
-                      }}
-                    />
+                    >
+                      <img 
+                        src={`/avatars/${avatarName}.png`}
+                        alt={avatarName}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          display: 'block',
+                          pointerEvents: 'none'
+                        }}
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          const fallback = e.target.parentElement.querySelector('.avatar-fallback');
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                      {/* Fallback div for when image fails */}
+                      <div
+                        className="avatar-fallback"
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          background: '#ff751f',
+                          display: 'none',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '48px',
+                          color: '#fff',
+                          fontWeight: 'bold',
+                          pointerEvents: 'none'
+                        }}
+                      >
+                        {userProfile?.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '👤'}
+                      </div>
+                      {/* Edit pencil icon overlay */}
+                      <div
+                        className="avatar-edit-icon"
+                        style={{
+                          position: 'absolute',
+                          bottom: '4px',
+                          right: '4px',
+                          width: '28px',
+                          height: '28px',
+                          borderRadius: '50%',
+                          background: 'rgba(0, 0, 0, 0.6)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: '0.8',
+                          transition: 'opacity 0.2s',
+                          pointerEvents: 'none'
+                        }}
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="white"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                      </div>
+                    </div>
                   );
                 }
                 return null;
               })()}
-              <div 
-                onClick={() => setShowAvatarSelector(true)}
-                style={{
-                  width: '120px',
-                  height: '120px',
-                  borderRadius: '12px',
-                  background: '#ff751f',
-                  display: 'none', // Always hidden - avatar is shown above
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '48px',
-                  color: '#fff',
-                  fontWeight: 'bold',
-                  flexShrink: 0,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  border: '3px solid #ff751f'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.opacity = '0.8';
-                  e.target.style.transform = 'scale(1.05)';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.opacity = '1';
-                  e.target.style.transform = 'scale(1)';
-                }}
-              >
-                {userProfile?.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '👤'}
-              </div>
             </div>
             <div>
               <h1 style={{ 

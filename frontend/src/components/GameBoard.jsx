@@ -753,6 +753,46 @@ function GameBoard() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Centralized profile fetching function - prevents duplicates and ensures fresh data
+  // Defined at component level so it can be accessed from all useEffects
+  const fetchUserProfileSafely = async (userId, forceRefresh = false) => {
+    if (!supabase || !userId) return;
+    
+    // Prevent duplicate fetches
+    if (profileFetchingRef.current && !forceRefresh) {
+      return;
+    }
+    
+    // If we already have this user's profile and not forcing refresh, skip
+    if (!forceRefresh && lastFetchedUserIdRef.current === userId && userProfile && userProfile.id === userId) {
+      return;
+    }
+    
+    profileFetchingRef.current = true;
+    lastFetchedUserIdRef.current = userId;
+    
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (!error && data) {
+        // Double-check user ID matches (prevent stale updates)
+        if (data.id === userId) {
+          setUserProfile(data);
+        }
+      } else if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching user profile:', error);
+      }
+    } catch (err) {
+      console.error('Error in fetchUserProfileSafely:', err);
+    } finally {
+      profileFetchingRef.current = false;
+    }
+  };
+
   // Restore active match from localStorage on mount (for refresh recovery)
   useEffect(() => {
     const storedMatch = localStorage.getItem('activeMatch');

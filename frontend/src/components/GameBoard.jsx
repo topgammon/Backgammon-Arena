@@ -901,7 +901,40 @@ function GameBoard() {
             }
             // Generate unique username
             username = await generateUniqueUsername(baseUsername);
-            country = session.user.user_metadata?.country || 'US';
+            
+            // Try to detect country from Google account
+            // Google OAuth provides locale (e.g., "en-US", "fr-FR") which we can parse
+            let detectedCountry = 'US';
+            const googleLocale = session.user.user_metadata?.locale;
+            if (googleLocale) {
+              // Extract country code from locale (e.g., "en-US" -> "US", "fr-FR" -> "FR")
+              const localeParts = googleLocale.split('-');
+              if (localeParts.length > 1) {
+                const countryCode = localeParts[1].toUpperCase();
+                // Check if it's a valid country code in our list
+                const validCountry = countries.find(c => c.code === countryCode);
+                if (validCountry) {
+                  detectedCountry = countryCode;
+                }
+              }
+            } else {
+              // Fallback: try to detect from browser locale
+              try {
+                const browserLocale = navigator.language || navigator.userLanguage;
+                const localeParts = browserLocale.split('-');
+                if (localeParts.length > 1) {
+                  const countryCode = localeParts[1].toUpperCase();
+                  const validCountry = countries.find(c => c.code === countryCode);
+                  if (validCountry) {
+                    detectedCountry = countryCode;
+                  }
+                }
+              } catch (e) {
+                // Ignore errors, use default
+              }
+            }
+            country = detectedCountry;
+            
             googleAvatarUrl = session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null;
           } else {
             // Email/password signup - username should be in user_metadata from signup
@@ -4190,12 +4223,6 @@ function GameBoard() {
 
   // Avatar component
   const renderAvatar = (isGuest = false, isCpu = false, cpuDifficulty = null, size = 60, userProfileData = null, userData = null) => {
-    // If user is logged in but profile not loaded yet, return null to show nothing
-    // This prevents showing default avatar while fetching
-    if (!isGuest && !isCpu && userData && !userProfileData) {
-      return null;
-    }
-    
     if (isCpu && cpuDifficulty) {
       // CPU avatar - use the actual avatar image from difficulty selector
       const avatarName = DIFFICULTY_LEVELS[cpuDifficulty]?.avatar || 'CPU';
@@ -4262,12 +4289,19 @@ function GameBoard() {
       // This allows new Google users to see their Google photo immediately, but existing accounts keep their chosen avatar
       const googleAvatarUrl = userProfileData?.google_avatar_url;
       const avatarName = userProfileData?.avatar || 'Barry';
-      const isGoogleUser = userData?.identities?.some(id => id.provider === 'google') || 
-                          userData?.user_metadata?.avatar_url || 
-                          userData?.user_metadata?.picture;
+      
+      // Check if user is a Google user - check multiple possible locations
+      const hasGoogleIdentity = userData?.identities?.some(id => id.provider === 'google');
+      const hasGoogleMetadata = !!(userData?.user_metadata?.avatar_url || userData?.user_metadata?.picture);
+      const isGoogleUser = hasGoogleIdentity || hasGoogleMetadata;
+      
+      // Get fallback Google avatar URL if profile not loaded yet
       const fallbackGoogleAvatarUrl = !userProfileData && isGoogleUser ? 
         (userData?.user_metadata?.avatar_url || userData?.user_metadata?.picture) : null;
       
+      // Show Google avatar if:
+      // 1. Profile loaded and has google_avatar_url AND avatar is still 'Barry' (default)
+      // 2. OR profile not loaded yet but we have Google metadata (fallback for new users)
       const shouldUseGoogleAvatar = (googleAvatarUrl && avatarName === 'Barry') || 
                                     (fallbackGoogleAvatarUrl && !userProfileData);
       

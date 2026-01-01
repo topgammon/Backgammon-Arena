@@ -3252,17 +3252,45 @@ function GameBoard() {
 
   function getGameOverMessage(go) {
     if (!go) return '';
-    const player1Name = 'Player 1';
-    const player2Name = isCpuGame ? 'CPU' : 'Player 2';
-    const winnerName = go.winner === 1 ? player1Name : player2Name;
-    const loserName = go.loser === 1 ? player1Name : player2Name;
     
-    if (go.type === 'win') return `${winnerName} wins!`;
-    if (go.type === 'resign') return `${loserName} resigned. ${winnerName} wins!`;
-    if (go.type === 'disconnect') return `${loserName} disconnected. ${winnerName} wins by default!`;
-    if (go.type === 'double') return `${loserName} declined the double. ${winnerName} wins!`;
-    if (go.type === 'timeout') return `${loserName} ran out of time. ${winnerName} wins by timeout!`;
-    return 'Game Over';
+    // Get player names based on game type
+    let player1Name, player2Name;
+    
+    if (isOnlineGame) {
+      // Online game - use usernames from profiles
+      if (playerNumber === 1) {
+        player1Name = userProfile?.username || (user ? `Guest ${playerNumber}` : `Guest 1`);
+        player2Name = opponentProfile?.username || (opponent?.isGuest 
+          ? `Guest ${opponent.userId?.split('_')[1]?.substring(0, 6) || 'Player'}`
+          : 'Opponent');
+      } else {
+        player1Name = opponentProfile?.username || (opponent?.isGuest 
+          ? `Guest ${opponent.userId?.split('_')[1]?.substring(0, 6) || 'Player'}`
+          : 'Opponent');
+        player2Name = userProfile?.username || (user ? `Guest ${playerNumber}` : `Guest 2`);
+      }
+    } else if (isCpuGame) {
+      // CPU game
+      player1Name = userProfile?.username || (user ? 'Player 1' : 'Player 1');
+      player2Name = 'CPU';
+    } else {
+      // Pass and play
+      player1Name = userProfile?.username || passPlayPlayer1Name || 'Player 1';
+      player2Name = passPlayPlayer2Name || 'Player 2';
+    }
+    
+    const winnerName = go.winner === 1 ? player1Name : player2Name;
+    
+    // Map game over types to reasons
+    let reason = '';
+    if (go.type === 'win') reason = 'Completion';
+    else if (go.type === 'resign') reason = 'Resignation';
+    else if (go.type === 'disconnect') reason = 'Disconnection';
+    else if (go.type === 'double') reason = 'Offer Declined';
+    else if (go.type === 'timeout') reason = 'Timeout';
+    else reason = 'Completion'; // Default fallback
+    
+    return `${winnerName} wins by ${reason}`;
   }
 
   function handleRematch() {

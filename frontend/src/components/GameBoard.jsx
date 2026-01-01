@@ -429,9 +429,36 @@ function GameBoard() {
     // Check for OAuth callback on mount
     handleOAuthCallback();
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+    // Get initial session - but verify it's valid first
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        // Verify the session is still valid
+        try {
+          const { data: authUser, error: authError } = await supabase.auth.getUser();
+          if (authError || !authUser?.user) {
+            // Session is invalid - clear it
+            console.log('Initial session invalid, clearing...');
+            await supabase.auth.signOut();
+            localStorage.clear();
+            sessionStorage.clear();
+            setUser(null);
+            setUserProfile(null);
+            return;
+          }
+          // Session is valid
+          setUser(session.user);
+        } catch (err) {
+          console.error('Error verifying initial session:', err);
+          await supabase.auth.signOut();
+          localStorage.clear();
+          sessionStorage.clear();
+          setUser(null);
+          setUserProfile(null);
+        }
+      } else {
+        setUser(null);
+        setUserProfile(null);
+      }
     });
 
     // Listen for auth changes
@@ -4329,23 +4356,54 @@ function GameBoard() {
       if (!emailToUse.includes('@')) {
         console.log('Looking up username:', emailToUse);
         // It's a username, fetch the user's email from the database
-        const { data: userData, error: userError } = await supabase
+        // Try exact match first, then case-insensitive if needed
+        let { data: userData, error: userError } = await supabase
           .from('users')
           .select('email, username')
           .eq('username', emailToUse)
-          .maybeSingle(); // Use maybeSingle() instead of single() to avoid errors when not found
+          .maybeSingle();
 
-        console.log('Username lookup result:', { userData, userError });
+        // If exact match fails, try case-insensitive by fetching and filtering
+        if ((userError || !userData) && emailToUse) {
+          console.log('Exact match failed, trying case-insensitive lookup');
+          const { data: allUsers, error: fetchError } = await supabase
+            .from('users')
+            .select('email, username');
+          
+          if (!fetchError && allUsers) {
+            const foundUser = allUsers.find(u => 
+              u.username && u.username.toLowerCase() === emailToUse.toLowerCase()
+            );
+            if (foundUser) {
+              userData = foundUser;
+              userError = null;
+              console.log('Found user with case-insensitive match:', foundUser);
+            }
+          }
+        }
+
+        console.log('Username lookup result:', { userData, userError, searchedUsername: emailToUse });
 
         if (userError) {
           console.error('Username lookup error:', userError);
-          setLoginError('Error looking up username: ' + userError.message);
+          // Check if it's a permission error (RLS issue)
+          if (userError.code === 'PGRST301' || userError.message?.includes('permission') || userError.message?.includes('RLS')) {
+            setLoginError('Database permission error. Please contact support.');
+          } else {
+            setLoginError('Error looking up username: ' + userError.message);
+          }
           setLoginLoading(false);
           return;
         }
 
         if (!userData || !userData.email) {
-          console.log('Username not found in database');
+          console.log('Username not found in database. Searched for:', emailToUse);
+          // Debug: Try to get all usernames to see what's in the database
+          const { data: allUsers } = await supabase
+            .from('users')
+            .select('username, email')
+            .limit(10);
+          console.log('Sample usernames in database:', allUsers?.map(u => ({ username: u.username, email: u.email })));
           setLoginError('Username not found. Please check your username and try again.');
           setLoginLoading(false);
           return;
@@ -7405,19 +7463,20 @@ function GameBoard() {
           setUser(null);
           setUserProfile(null);
           
-          // Sign out from Supabase
+          // Sign out from Supabase - wait for it to complete
           const { error } = await supabase.auth.signOut();
           if (error) {
             console.error('Sign out error:', error);
-            // Continue anyway to clear storage
           }
           
-          // Clear all storage
+          // Wait a bit to ensure signOut completes
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Clear all storage AFTER signOut completes
           localStorage.clear();
           sessionStorage.clear();
           
-          // Navigate and reload
-          setScreen('home');
+          // Force a hard reload to clear any cached state
           window.location.href = '/';
         }
       } catch (err) {

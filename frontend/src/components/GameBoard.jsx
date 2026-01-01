@@ -342,8 +342,15 @@ function GameBoard() {
   ];
 
   // Helper function to get country flag
-  const getCountryFlag = (countryCode) => {
-    if (!countryCode) return '🌍'; // Default if no country code
+  const getCountryFlag = (countryCode, hasUser = false) => {
+    // If user is logged in but profile not loaded yet, don't show default
+    // This prevents the flash of default values
+    if (!countryCode && hasUser) {
+      // User is logged in but country not loaded yet - return null to indicate loading
+      // The component should handle this gracefully
+      return null;
+    }
+    if (!countryCode) return '🌍'; // Default if no country code and no user
     const country = countries.find(c => c.code === countryCode);
     return country ? country.flag : '🌍';
   };
@@ -524,6 +531,20 @@ function GameBoard() {
     // Only get session if we're NOT signing out
     // Get initial session - but verify it's valid first
     // This runs on every page load to catch orphaned sessions
+    
+    // CRITICAL: Restore profile from sessionStorage immediately to prevent flash of defaults
+    // This ensures the UI shows the correct avatar/country while we fetch fresh data
+    try {
+      const storedProfile = sessionStorage.getItem('_userProfile');
+      if (storedProfile) {
+        const parsedProfile = JSON.parse(storedProfile);
+        console.log('Restoring profile from sessionStorage to prevent flash:', parsedProfile.avatar, parsedProfile.country);
+        setUserProfile(parsedProfile);
+      }
+    } catch (e) {
+      console.warn('Failed to restore profile from sessionStorage:', e);
+    }
+    
     console.log('getSession: Starting session check on page load');
     supabase.auth.getSession()
       .then(async ({ data: { session }, error: sessionError }) => {
@@ -587,6 +608,15 @@ function GameBoard() {
           // Session is valid - immediately fetch fresh profile
           setUser(session.user);
           
+          // Verify restored profile matches current user (if we restored one)
+          if (userProfile && userProfile.id !== session.user.id) {
+            console.log('Restored profile user ID mismatch, clearing...');
+            setUserProfile(null);
+            try {
+              sessionStorage.removeItem('_userProfile');
+            } catch (e) {}
+          }
+          
           // CRITICAL: Always fetch fresh profile on page load to avoid stale data
           // Fetch immediately and synchronously to prevent UI from showing defaults
           console.log('getSession: Fetching profile for user:', session.user.id);
@@ -626,6 +656,12 @@ function GameBoard() {
             }
             console.log('Page load: Setting userProfile with avatar:', freshProfile.avatar, 'country:', freshProfile.country);
             setUserProfile(freshProfile);
+            // Store in sessionStorage for immediate restore on refresh
+            try {
+              sessionStorage.setItem('_userProfile', JSON.stringify(freshProfile));
+            } catch (e) {
+              console.warn('Failed to store profile in sessionStorage:', e);
+            }
             lastFetchedUserIdRef.current = session.user.id;
             profileFetchingRef.current = false; // Reset flag since we fetched directly
             isInitialLoadRef.current = false; // Mark initial load as complete
@@ -833,6 +869,12 @@ function GameBoard() {
             // This ensures avatar is always current, even if we already have a profile
             console.log('onAuthStateChange: Setting userProfile with avatar:', profile.avatar, 'country:', profile.country);
             setUserProfile(profile);
+            // Store in sessionStorage for immediate restore on refresh
+            try {
+              sessionStorage.setItem('_userProfile', JSON.stringify(profile));
+            } catch (e) {
+              console.warn('Failed to store profile in sessionStorage:', e);
+            }
           }
         } else if (session.user && !profile) {
           // User exists in auth but no profile - create one
@@ -955,6 +997,12 @@ function GameBoard() {
           }
           console.log('fetchUserProfileSafely: Setting userProfile with avatar:', data.avatar, 'country:', data.country);
           setUserProfile(data);
+          // Store in sessionStorage for immediate restore on refresh
+          try {
+            sessionStorage.setItem('_userProfile', JSON.stringify(data));
+          } catch (e) {
+            console.warn('Failed to store profile in sessionStorage:', e);
+          }
         }
       } else if (error && error.code !== 'PGRST116') {
         console.error('Error fetching user profile:', error);

@@ -7294,12 +7294,40 @@ function GameBoard() {
     // Chat handler
     const handleChat = (data) => {
       if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
-        // Use the username from the message data if provided, otherwise fallback to opponent profile
-        const senderDisplayName = data.username || (
-          opponent?.isGuest 
+        // Determine sender's username based on which player sent it
+        let senderDisplayName;
+        
+        if (data.username) {
+          // Use username from message data if provided (best case)
+          senderDisplayName = data.username;
+        } else if (data.player === 1) {
+          // Message from player 1
+          if (playerNumber === 1) {
+            // We are player 1, so this shouldn't happen (we filter out our own messages)
+            senderDisplayName = userProfile?.username || `Guest 1`;
+          } else {
+            // We are player 2, so player 1 is our opponent
+            senderDisplayName = opponentProfile?.username || (opponent?.isGuest 
+              ? `Guest ${opponent.userId?.split('_')[1]?.substring(0, 6) || 'Player'}`
+              : 'Player 1');
+          }
+        } else if (data.player === 2) {
+          // Message from player 2
+          if (playerNumber === 2) {
+            // We are player 2, so this shouldn't happen (we filter out our own messages)
+            senderDisplayName = userProfile?.username || `Guest 2`;
+          } else {
+            // We are player 1, so player 2 is our opponent
+            senderDisplayName = opponentProfile?.username || (opponent?.isGuest 
+              ? `Guest ${opponent.userId?.split('_')[1]?.substring(0, 6) || 'Player'}`
+              : 'Player 2');
+          }
+        } else {
+          // Fallback
+          senderDisplayName = opponentProfile?.username || (opponent?.isGuest 
             ? `Guest ${opponent.userId?.split('_')[1]?.substring(0, 6) || 'Player'}`
-            : (opponentProfile?.username || `Player ${data.player}`)
-        );
+            : `Player ${data.player}`);
+        }
         
         setChatMessages(prev => [...prev, { 
           from: senderDisplayName, 

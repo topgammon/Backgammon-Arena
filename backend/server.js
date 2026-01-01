@@ -917,7 +917,7 @@ io.on('connection', (socket) => {
   
   // Chat handler
   socket.on('game:chat', (data) => {
-    const { matchId, player, message } = data;
+    const { matchId, player, message, username } = data;
     const match = activeMatches.get(matchId);
     
     if (!match) {
@@ -930,14 +930,15 @@ io.on('connection', (socket) => {
       ? match.player2.socketId 
       : match.player1.socketId;
     
-    // Broadcast chat message to opponent
+    // Broadcast chat message to opponent, including username if provided
     io.to(opponentSocketId).emit('game:chat', {
       matchId,
       player,
-      message
+      message,
+      username // Forward username to opponent
     });
     
-    console.log(`💬 Chat message in match ${matchId} from Player ${player}`);
+    console.log(`💬 Chat message in match ${matchId} from Player ${player}${username ? ` (${username})` : ''}`);
   });
 });
 

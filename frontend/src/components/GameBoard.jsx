@@ -523,7 +523,9 @@ function GameBoard() {
     // Only get session if we're NOT signing out
     // Get initial session - but verify it's valid first
     // This runs on every page load to catch orphaned sessions
+    console.log('getSession: Starting session check on page load');
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      console.log('getSession: Session check result - has session:', !!session, 'has user:', !!session?.user);
       if (session?.user) {
         // Verify the session is still valid by checking with the server
         try {
@@ -564,11 +566,17 @@ function GameBoard() {
           
           // CRITICAL: Always fetch fresh profile on page load to avoid stale data
           // Fetch immediately and synchronously to prevent UI from showing defaults
+          console.log('getSession: Fetching profile for user:', session.user.id);
           const { data: freshProfile, error: profileErr } = await supabase
             .from('users')
             .select('*')
             .eq('id', session.user.id)
             .single();
+          
+          console.log('getSession: Profile fetch result - has profile:', !!freshProfile, 'error:', profileErr?.code, 'error message:', profileErr?.message);
+          if (freshProfile) {
+            console.log('getSession: Profile data - avatar:', freshProfile.avatar, 'country:', freshProfile.country, 'id:', freshProfile.id);
+          }
           
           if (!profileErr && freshProfile && freshProfile.id === session.user.id) {
             // Set profile immediately to prevent default avatar/country from showing
@@ -611,7 +619,7 @@ function GameBoard() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('onAuthStateChange event:', event, 'has session:', !!session);
+      console.log('onAuthStateChange event:', event, 'has session:', !!session, 'user id:', session?.user?.id);
       
       // Handle SIGNED_OUT event - ensure user is logged out
       if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
@@ -620,6 +628,12 @@ function GameBoard() {
         setUserProfile(null);
         // Clear all Supabase storage
         await clearAllSupabaseStorage();
+        return;
+      }
+      
+      // Skip INITIAL_SESSION event - getSession() handles that
+      if (event === 'INITIAL_SESSION') {
+        console.log('onAuthStateChange: Skipping INITIAL_SESSION - getSession() will handle profile fetch');
         return;
       }
       
@@ -644,7 +658,10 @@ function GameBoard() {
       }
       
       // Fetch user profile when user logs in
+      // CRITICAL: This must run for ALL SIGNED_IN events, including on page refresh
       if (session?.user) {
+        console.log('onAuthStateChange: Processing SIGNED_IN event for user:', session.user.id);
+        
         // First, verify the user still exists in auth (in case they were deleted)
         try {
           const { data: authUser, error: authError } = await supabase.auth.getUser();
@@ -657,6 +674,7 @@ function GameBoard() {
             setUserProfile(null);
             return;
           }
+          console.log('onAuthStateChange: User verification passed');
         } catch (err) {
           console.error('Error verifying user session:', err);
           // If we can't verify, sign out to be safe
@@ -668,11 +686,17 @@ function GameBoard() {
         }
         
         // CRITICAL: Always fetch fresh profile data from database (never use cache/stale data)
+        console.log('onAuthStateChange: Fetching profile for user:', session.user.id);
         const { data: profile, error } = await supabase
           .from('users')
           .select('*')
           .eq('id', session.user.id)
           .single();
+        
+        console.log('onAuthStateChange: Profile fetch result - has profile:', !!profile, 'error:', error?.code, 'error message:', error?.message);
+        if (profile) {
+          console.log('onAuthStateChange: Profile data - avatar:', profile.avatar, 'country:', profile.country, 'id:', profile.id);
+        }
         
         if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
           console.error('Error fetching user profile:', error);

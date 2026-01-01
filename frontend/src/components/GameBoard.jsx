@@ -229,7 +229,20 @@ function GameBoard() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSignupForm, setShowSignupForm] = useState(false);
   const [user, setUser] = useState(null);
-  const [userProfile, setUserProfile] = useState(null);
+  // Initialize userProfile from sessionStorage to prevent flash of defaults
+  const [userProfile, setUserProfile] = useState(() => {
+    try {
+      const storedProfile = sessionStorage.getItem('_userProfile');
+      if (storedProfile) {
+        const parsedProfile = JSON.parse(storedProfile);
+        console.log('Initializing userProfile from sessionStorage:', parsedProfile.avatar, parsedProfile.country);
+        return parsedProfile;
+      }
+    } catch (e) {
+      console.warn('Failed to initialize profile from sessionStorage:', e);
+    }
+    return null;
+  });
   const profileFetchingRef = useRef(false); // Prevent duplicate profile fetches
   const lastFetchedUserIdRef = useRef(null); // Track last fetched user ID to prevent stale updates
   const isInitialLoadRef = useRef(true); // Track if this is the initial page load
@@ -531,20 +544,7 @@ function GameBoard() {
     // Only get session if we're NOT signing out
     // Get initial session - but verify it's valid first
     // This runs on every page load to catch orphaned sessions
-    
-    // CRITICAL: Restore profile from sessionStorage immediately to prevent flash of defaults
-    // This ensures the UI shows the correct avatar/country while we fetch fresh data
-    try {
-      const storedProfile = sessionStorage.getItem('_userProfile');
-      if (storedProfile) {
-        const parsedProfile = JSON.parse(storedProfile);
-        console.log('Restoring profile from sessionStorage to prevent flash:', parsedProfile.avatar, parsedProfile.country);
-        setUserProfile(parsedProfile);
-      }
-    } catch (e) {
-      console.warn('Failed to restore profile from sessionStorage:', e);
-    }
-    
+    // Note: Profile is already initialized from sessionStorage in useState above (synchronously)
     console.log('getSession: Starting session check on page load');
     supabase.auth.getSession()
       .then(async ({ data: { session }, error: sessionError }) => {

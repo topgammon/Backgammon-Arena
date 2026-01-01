@@ -624,6 +624,7 @@ function GameBoard() {
           return;
         }
         
+        // Always fetch fresh profile data (don't rely on cache)
         const { data: profile, error } = await supabase
           .from('users')
           .select('*')
@@ -632,8 +633,9 @@ function GameBoard() {
         
         if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
           console.error('Error fetching user profile:', error);
+          setUserProfile(null);
         } else if (profile) {
-          // Profile exists - preserve it completely (username, avatar, stats all stay the same)
+          // Profile exists - always use fresh data from database
           // Only update google_avatar_url if it's not already set and user signed in with Google
           const isGoogleSignIn = session.user.identities?.some(id => id.provider === 'google');
           const googleAvatarUrl = session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null;
@@ -650,9 +652,11 @@ function GameBoard() {
             if (updatedProfile) {
               setUserProfile(updatedProfile);
             } else {
+              // Use fresh profile data even if update failed
               setUserProfile(profile);
             }
           } else {
+            // Always set fresh profile data
             setUserProfile(profile);
           }
         } else if (session.user && !profile) {
@@ -754,13 +758,23 @@ function GameBoard() {
   }, []); // Only run on mount
 
   // Fetch user profile when user changes
+  // This is a backup/fallback - onAuthStateChange should handle profile fetching
   useEffect(() => {
     if (!user || !supabase) {
       setUserProfile(null);
       return;
     }
 
+    // Only fetch if profile is not already set (to avoid unnecessary fetches)
+    // This prevents race conditions with onAuthStateChange
+    if (userProfile && userProfile.id === user.id) {
+      return; // Profile already loaded for this user
+    }
+
     const fetchUserProfile = async () => {
+      // Add a small delay to let onAuthStateChange complete first
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -771,7 +785,10 @@ function GameBoard() {
         console.error('Error fetching user profile:', error);
         setUserProfile(null);
       } else if (data) {
-        setUserProfile(data);
+        // Only update if we don't already have a profile or if this is newer
+        if (!userProfile || userProfile.id !== data.id) {
+          setUserProfile(data);
+        }
       } else {
         // If profile doesn't exist, try to create it from auth metadata
         if (user.user_metadata?.username) {
@@ -797,14 +814,16 @@ function GameBoard() {
               .select('*')
               .eq('id', user.id)
               .single();
-            setUserProfile(newData);
+            if (newData) {
+              setUserProfile(newData);
+            }
           }
         }
       }
     };
 
     fetchUserProfile();
-  }, [user]);
+  }, [user, supabase]); // Removed userProfile from deps to prevent loops
 
   // Sound effects - non-blocking, triggered by game actions
   const playSound = (soundName) => {
@@ -4575,7 +4594,26 @@ function GameBoard() {
         return;
       }
 
-      // Success! User is logged in - onAuthStateChange will handle the rest
+      // Success! User is logged in
+      // Set user immediately
+      setUser(data.user);
+      
+      // Explicitly fetch the profile to ensure it's loaded
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+      
+      if (profileError && profileError.code !== 'PGRST116') {
+        console.error('Error fetching profile after login:', profileError);
+        // Still allow login, profile will be fetched by onAuthStateChange
+      } else if (profile) {
+        // Set profile immediately
+        setUserProfile(profile);
+      }
+      
+      // Close modal and reset form
       setShowLoginModal(false);
       setShowLoginForm(false);
       setLoginFormData({ email: '', password: '' });

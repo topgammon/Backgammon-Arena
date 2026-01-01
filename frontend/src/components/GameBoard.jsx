@@ -562,7 +562,8 @@ function GameBoard() {
           setUser(session.user);
           
           // CRITICAL: Always fetch fresh profile on page load to avoid stale data
-          // Fetch directly here since fetchUserProfileSafely is defined below
+          // Use a direct fetch here since fetchUserProfileSafely is defined later
+          // But we'll also call fetchUserProfileSafely after it's defined to ensure consistency
           const { data: freshProfile, error: profileErr } = await supabase
             .from('users')
             .select('*')
@@ -572,6 +573,10 @@ function GameBoard() {
           if (!profileErr && freshProfile && freshProfile.id === session.user.id) {
             setUserProfile(freshProfile);
             lastFetchedUserIdRef.current = session.user.id;
+            profileFetchingRef.current = false; // Reset flag since we fetched directly
+          } else if (profileErr && profileErr.code === 'PGRST116') {
+            // Profile doesn't exist yet - will be created by onAuthStateChange
+            console.log('Profile not found on page load, will be created by onAuthStateChange');
           }
         } catch (err) {
           console.error('Error verifying initial session:', err);
@@ -758,14 +763,29 @@ function GameBoard() {
   const fetchUserProfileSafely = async (userId, forceRefresh = false) => {
     if (!supabase || !userId) return;
     
-    // Prevent duplicate fetches
-    if (profileFetchingRef.current && !forceRefresh) {
-      return;
-    }
-    
-    // If we already have this user's profile and not forcing refresh, skip
-    if (!forceRefresh && lastFetchedUserIdRef.current === userId && userProfile && userProfile.id === userId) {
-      return;
+    // If forcing refresh, always fetch (but still prevent simultaneous duplicate fetches)
+    // If not forcing refresh, check if we should skip
+    if (!forceRefresh) {
+      // Prevent duplicate fetches
+      if (profileFetchingRef.current) {
+        return;
+      }
+      
+      // If we already have this user's profile and not forcing refresh, skip
+      if (lastFetchedUserIdRef.current === userId && userProfile && userProfile.id === userId) {
+        return;
+      }
+    } else {
+      // Even when forcing refresh, prevent simultaneous duplicate fetches
+      // But allow it if it's for a different user or if previous fetch completed
+      if (profileFetchingRef.current && lastFetchedUserIdRef.current === userId) {
+        // A fetch is already in progress for this user, wait a bit and retry
+        await new Promise(resolve => setTimeout(resolve, 100));
+        // If still fetching, just return (the in-progress fetch will update the profile)
+        if (profileFetchingRef.current && lastFetchedUserIdRef.current === userId) {
+          return;
+        }
+      }
     }
     
     profileFetchingRef.current = true;
@@ -833,13 +853,14 @@ function GameBoard() {
 
     // Use centralized fetch function with small delay to let onAuthStateChange complete
     const fetchUserProfile = async () => {
-      await new Promise(resolve => setTimeout(resolve, 150));
+      await new Promise(resolve => setTimeout(resolve, 200));
       
       // Double-check user still exists (might have signed out during delay)
       if (!user || !supabase) return;
       
-      // Use centralized function to prevent duplicates
-      await fetchUserProfileSafely(user.id, false);
+      // Always fetch fresh - use forceRefresh to ensure we get latest data
+      // This is a backup in case onAuthStateChange didn't fetch it
+      await fetchUserProfileSafely(user.id, true);
     };
 
     fetchUserProfile();
@@ -3941,7 +3962,13 @@ function GameBoard() {
   useEffect(() => {
     if (screen === 'home' && user && supabase) {
       // Always refresh profile when returning to home - force refresh to get latest data
-      fetchUserProfileSafely(user.id, true);
+      // Use a small delay to ensure other effects have completed and avoid race conditions
+      const timeoutId = setTimeout(() => {
+        if (user && supabase && screen === 'home') {
+          fetchUserProfileSafely(user.id, true);
+        }
+      }, 150);
+      return () => clearTimeout(timeoutId);
     }
   }, [screen, user?.id]); // Refresh when screen changes to home or user changes
 

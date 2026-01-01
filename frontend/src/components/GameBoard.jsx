@@ -4255,7 +4255,9 @@ function GameBoard() {
       );
     } else {
       // Registered user avatar - check if they have a Google avatar
-      const googleAvatarUrl = userProfileData?.google_avatar_url || userData?.user_metadata?.avatar_url || userData?.user_metadata?.picture;
+      // Only use google_avatar_url from profile (not user_metadata) so users can override it
+      // If google_avatar_url is null in profile, user has explicitly chosen a regular avatar
+      const googleAvatarUrl = userProfileData?.google_avatar_url;
       
       if (googleAvatarUrl) {
         // Use Google profile photo
@@ -8086,7 +8088,9 @@ function GameBoard() {
             <div style={{ position: 'relative', display: 'inline-block' }}>
               {(() => {
                 // Check if user has Google avatar
-                const googleAvatarUrl = userProfile?.google_avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
+                // Only use google_avatar_url from profile (not user_metadata) so users can override it
+                // If google_avatar_url is null in profile, user has explicitly chosen a regular avatar
+                const googleAvatarUrl = userProfile?.google_avatar_url;
                 const avatarName = userProfile?.avatar || 'Barry';
                 
                 if (googleAvatarUrl) {

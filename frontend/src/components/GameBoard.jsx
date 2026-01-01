@@ -439,7 +439,9 @@ function GameBoard() {
             // Session is invalid - clear it
             console.log('Initial session invalid, clearing...');
             await supabase.auth.signOut();
-            localStorage.clear();
+            // Clear Supabase's specific storage keys
+            const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
+            supabaseKeys.forEach(key => localStorage.removeItem(key));
             sessionStorage.clear();
             setUser(null);
             setUserProfile(null);
@@ -450,7 +452,9 @@ function GameBoard() {
         } catch (err) {
           console.error('Error verifying initial session:', err);
           await supabase.auth.signOut();
-          localStorage.clear();
+          // Clear Supabase's specific storage keys
+          const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
+          supabaseKeys.forEach(key => localStorage.removeItem(key));
           sessionStorage.clear();
           setUser(null);
           setUserProfile(null);
@@ -466,14 +470,23 @@ function GameBoard() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       // Handle SIGNED_OUT event - ensure user is logged out
-      if (event === 'SIGNED_OUT') {
+      if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
         console.log('SIGNED_OUT event received');
         setUser(null);
         setUserProfile(null);
+        // Clear Supabase's specific storage keys
+        const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
+        supabaseKeys.forEach(key => localStorage.removeItem(key));
         return;
       }
       
-      setUser(session?.user ?? null);
+      // Only set user if we have a valid session
+      if (session?.user) {
+        setUser(session.user);
+      } else {
+        setUser(null);
+        setUserProfile(null);
+      }
       
       // Fetch user profile when user logs in
       if (session?.user) {
@@ -484,6 +497,10 @@ function GameBoard() {
             // User doesn't exist anymore - session is invalid, sign out
             console.warn('User session invalid - user was deleted. Signing out...');
             await supabase.auth.signOut();
+            // Clear Supabase's specific storage keys
+            const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
+            supabaseKeys.forEach(key => localStorage.removeItem(key));
+            setUser(null);
             setUserProfile(null);
             return;
           }
@@ -491,6 +508,10 @@ function GameBoard() {
           console.error('Error verifying user session:', err);
           // If we can't verify, sign out to be safe
           await supabase.auth.signOut();
+          // Clear Supabase's specific storage keys
+          const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
+          supabaseKeys.forEach(key => localStorage.removeItem(key));
+          setUser(null);
           setUserProfile(null);
           return;
         }
@@ -4356,35 +4377,55 @@ function GameBoard() {
       if (!emailToUse.includes('@')) {
         console.log('Looking up username:', emailToUse);
         // It's a username, fetch the user's email from the database
-        // Try exact match first, then case-insensitive if needed
-        let { data: userData, error: userError } = await supabase
+        let userData = null;
+        let userError = null;
+        
+        // Try exact match first
+        let { data, error } = await supabase
           .from('users')
           .select('email, username')
           .eq('username', emailToUse)
           .maybeSingle();
+        
+        userData = data;
+        userError = error;
 
-        // If exact match fails, try case-insensitive by fetching and filtering
+        // If exact match fails, try case-insensitive lookup
         if ((userError || !userData) && emailToUse) {
           console.log('Exact match failed, trying case-insensitive lookup');
-          const { data: allUsers, error: fetchError } = await supabase
+          // Use ilike for case-insensitive search (PostgreSQL feature)
+          const { data: caseInsensitiveData, error: caseInsensitiveError } = await supabase
             .from('users')
-            .select('email, username');
+            .select('email, username')
+            .ilike('username', emailToUse)
+            .maybeSingle();
           
-          if (!fetchError && allUsers) {
-            const foundUser = allUsers.find(u => 
-              u.username && u.username.toLowerCase() === emailToUse.toLowerCase()
-            );
-            if (foundUser) {
-              userData = foundUser;
-              userError = null;
-              console.log('Found user with case-insensitive match:', foundUser);
+          if (!caseInsensitiveError && caseInsensitiveData) {
+            userData = caseInsensitiveData;
+            userError = null;
+            console.log('Found user with case-insensitive match:', userData);
+          } else if (!caseInsensitiveError) {
+            // No error but no data - try fetching all and filtering client-side as fallback
+            const { data: allUsers, error: fetchError } = await supabase
+              .from('users')
+              .select('email, username');
+            
+            if (!fetchError && allUsers) {
+              const foundUser = allUsers.find(u => 
+                u.username && u.username.toLowerCase() === emailToUse.toLowerCase()
+              );
+              if (foundUser) {
+                userData = foundUser;
+                userError = null;
+                console.log('Found user with client-side case-insensitive match:', foundUser);
+              }
             }
           }
         }
 
         console.log('Username lookup result:', { userData, userError, searchedUsername: emailToUse });
 
-        if (userError) {
+        if (userError && userError.code !== 'PGRST116') { // PGRST116 = no rows found, which is OK
           console.error('Username lookup error:', userError);
           // Check if it's a permission error (RLS issue)
           if (userError.code === 'PGRST301' || userError.message?.includes('permission') || userError.message?.includes('RLS')) {
@@ -4398,13 +4439,7 @@ function GameBoard() {
 
         if (!userData || !userData.email) {
           console.log('Username not found in database. Searched for:', emailToUse);
-          // Debug: Try to get all usernames to see what's in the database
-          const { data: allUsers } = await supabase
-            .from('users')
-            .select('username, email')
-            .limit(10);
-          console.log('Sample usernames in database:', allUsers?.map(u => ({ username: u.username, email: u.email })));
-          setLoginError('Username not found. Please check your username and try again.');
+          setLoginError('Username not found. Please check your username and try again, or use your email address.');
           setLoginLoading(false);
           return;
         }
@@ -7470,10 +7505,13 @@ function GameBoard() {
           }
           
           // Wait a bit to ensure signOut completes
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 200));
           
-          // Clear all storage AFTER signOut completes
-          localStorage.clear();
+          // Clear Supabase's specific storage keys (more reliable than clearing all localStorage)
+          const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
+          supabaseKeys.forEach(key => localStorage.removeItem(key));
+          
+          // Also clear sessionStorage
           sessionStorage.clear();
           
           // Force a hard reload to clear any cached state
@@ -7482,7 +7520,8 @@ function GameBoard() {
       } catch (err) {
         console.error('Sign out error:', err);
         // Force clear everything and reload
-        localStorage.clear();
+        const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
+        supabaseKeys.forEach(key => localStorage.removeItem(key));
         sessionStorage.clear();
         setUser(null);
         setUserProfile(null);

@@ -3565,6 +3565,19 @@ function GameBoard() {
 
   // Render functions - these are very large, copied from old project
   function renderFirstRollModal() {
+    // Get player names for display
+    const player1Name = isOnlineGame 
+      ? (playerNumber === 1 
+          ? (userProfile?.username || (user ? `Guest ${playerNumber}` : `Guest 1`))
+          : (opponentProfile?.username || (opponent?.isGuest ? `Guest ${opponent.userId?.split('_')[1]?.substring(0, 6) || 'Player'}` : 'Opponent')))
+      : (user && userProfile ? userProfile.username : 'Player 1');
+    
+    const player2Name = isOnlineGame
+      ? (playerNumber === 2
+          ? (userProfile?.username || (user ? `Guest ${playerNumber}` : `Guest 2`))
+          : (opponentProfile?.username || (opponent?.isGuest ? `Guest ${opponent.userId?.split('_')[1]?.substring(0, 6) || 'Player'}` : 'Opponent')))
+      : (isCpuGame ? 'CPU' : (passPlayPlayer2Name || 'Player 2'));
+    
     return (
       <div style={{
         position: 'fixed',

@@ -642,22 +642,26 @@ function GameBoard() {
         }
         
         // CRITICAL: Always fetch fresh profile data from database (never use cache/stale data)
-        // Use centralized function to prevent duplicates
-        await fetchUserProfileSafely(session.user.id, true);
-        
-        // After fetching, check if we need to update google_avatar_url
-        // Get fresh profile to check
-        const { data: currentProfile } = await supabase
+        const { data: profile, error } = await supabase
           .from('users')
           .select('*')
           .eq('id', session.user.id)
           .single();
         
-        if (currentProfile) {
+        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+          console.error('Error fetching user profile:', error);
+          // Don't clear profile on error - keep existing one if we have it
+          if (!userProfile) {
+            setUserProfile(null);
+          }
+        } else if (profile) {
+          // Profile exists - ALWAYS update with fresh data from database
+          // This prevents stale avatar/profile data issues
+          // Only update google_avatar_url if it's not already set and user signed in with Google
           const isGoogleSignIn = session.user.identities?.some(id => id.provider === 'google');
           const googleAvatarUrl = session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null;
           
-          if (isGoogleSignIn && googleAvatarUrl && !currentProfile.google_avatar_url) {
+          if (isGoogleSignIn && googleAvatarUrl && !profile.google_avatar_url) {
             // Update google_avatar_url only if it's not already set
             const { data: updatedProfile } = await supabase
               .from('users')
@@ -667,10 +671,17 @@ function GameBoard() {
               .single();
             
             if (updatedProfile) {
+              // Always update with fresh data
               setUserProfile(updatedProfile);
+            } else {
+              // Use fresh profile data even if update failed
+              setUserProfile(profile);
             }
+          } else {
+            // CRITICAL: Always set fresh profile data - never skip this
+            // This ensures avatar is always current, even if we already have a profile
+            setUserProfile(profile);
           }
-        }
         } else if (session.user && !profile) {
           // User exists in auth but no profile - create one
           // This happens for first-time Google OAuth sign-ins (Supabase auto-links accounts)

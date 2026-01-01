@@ -4813,9 +4813,13 @@ function GameBoard() {
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
                         whiteSpace: isMobile ? 'normal' : 'nowrap'
                       }}>
-                        Rating {userProfile?.elo_rating || 1000}
+                        {userProfile?.elo_rating || 1000}
                       </span>
-                      <span style={{ fontSize: '18px', flexShrink: 0 }}>
+                      <span style={{ 
+                        fontSize: '18px', 
+                        flexShrink: 0,
+                        fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif'
+                      }}>
                         {getCountryFlag(userProfile?.country)}
                       </span>
                     </div>
@@ -7397,18 +7401,21 @@ function GameBoard() {
     };
 
     const handleUpdateCountry = async () => {
-      if (!supabase || !newCountry) return;
+      if (!supabase) return;
+      
+      const countryToSave = newCountry || userProfile?.country || 'US';
+      if (!countryToSave) return;
 
       const { error } = await supabase
         .from('users')
-        .update({ country: newCountry })
+        .update({ country: countryToSave })
         .eq('id', user.id);
 
       if (error) {
         console.error('Error updating country:', error);
         alert('Failed to update country');
       } else {
-        setUserProfile({ ...userProfile, country: newCountry });
+        setUserProfile({ ...userProfile, country: countryToSave });
         setEditingCountry(false);
         setNewCountry('');
       }
@@ -7572,7 +7579,7 @@ function GameBoard() {
                 color: '#000',
                 fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
               }}>
-                {userProfile?.username || 'User'}
+                {userProfile?.username || user?.user_metadata?.username || user?.email?.split('@')[0] || 'User'}
               </h1>
               <p style={{ 
                 margin: '0 0 8px 0', 
@@ -7644,7 +7651,10 @@ function GameBoard() {
                     </div>
                   ) : (
                     <>
-                      <span style={{ fontSize: '20px' }}>
+                      <span style={{ 
+                        fontSize: '20px',
+                        fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif'
+                      }}>
                         {getCountryFlag(userProfile?.country)}
                       </span>
                       <button

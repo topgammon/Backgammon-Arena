@@ -4221,11 +4221,11 @@ function GameBoard() {
               objectFit: 'cover',
               display: 'block'
             }}
-            onError={(e) => {
-              // Fallback if image fails to load
-              e.target.style.display = 'none';
-              e.target.parentElement.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-              e.target.parentElement.textContent = avatarName[0];
+              onError={(e) => {
+                // Fallback if image fails to load
+                e.target.style.display = 'none';
+                e.target.parentElement.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                e.target.parentElement.textContent = finalAvatarName[0];
               e.target.parentElement.style.fontSize = `${size * 0.4}px`;
               e.target.parentElement.style.fontWeight = 'bold';
               e.target.parentElement.style.color = '#fff';
@@ -4255,11 +4255,15 @@ function GameBoard() {
       );
     } else {
       // Registered user avatar - check if they have a Google avatar
-      // Only use google_avatar_url from profile (not user_metadata) so users can override it
-      // If google_avatar_url is null in profile, user has explicitly chosen a regular avatar
+      // Show Google avatar only if:
+      // 1. google_avatar_url is set in profile
+      // 2. AND avatar is still the default ('Barry') - meaning user hasn't explicitly chosen a regular avatar
+      // This allows new Google users to see their Google photo, but existing accounts keep their chosen avatar
       const googleAvatarUrl = userProfileData?.google_avatar_url;
+      const avatarName = userProfileData?.avatar || 'Barry';
+      const shouldUseGoogleAvatar = googleAvatarUrl && avatarName === 'Barry';
       
-      if (googleAvatarUrl) {
+      if (shouldUseGoogleAvatar) {
         // Use Google profile photo
         return (
           <div style={{
@@ -4358,7 +4362,7 @@ function GameBoard() {
             justifyContent: 'center'
           }}>
             <img 
-              src={`/avatars/${avatarName}.png`}
+              src={`/avatars/${avatarName || 'Barry'}.png`}
               alt={avatarName}
               style={{
                 width: '100%',
@@ -8088,12 +8092,15 @@ function GameBoard() {
             <div style={{ position: 'relative', display: 'inline-block' }}>
               {(() => {
                 // Check if user has Google avatar
-                // Only use google_avatar_url from profile (not user_metadata) so users can override it
-                // If google_avatar_url is null in profile, user has explicitly chosen a regular avatar
+                // Show Google avatar only if:
+                // 1. google_avatar_url is set in profile
+                // 2. AND avatar is still the default ('Barry') - meaning user hasn't explicitly chosen a regular avatar
+                // This allows new Google users to see their Google photo, but existing accounts keep their chosen avatar
                 const googleAvatarUrl = userProfile?.google_avatar_url;
                 const avatarName = userProfile?.avatar || 'Barry';
+                const shouldUseGoogleAvatar = googleAvatarUrl && avatarName === 'Barry';
                 
-                if (googleAvatarUrl) {
+                if (shouldUseGoogleAvatar) {
                   // Show Google avatar
                   return (
                     <div

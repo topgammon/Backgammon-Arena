@@ -577,6 +577,7 @@ function GameBoard() {
               console.warn('Profile loaded but avatar field is missing or empty, defaulting to Barry');
               freshProfile.avatar = 'Barry';
             }
+            console.log('Page load: Setting userProfile with avatar:', freshProfile.avatar, 'country:', freshProfile.country);
             setUserProfile(freshProfile);
             lastFetchedUserIdRef.current = session.user.id;
             profileFetchingRef.current = false; // Reset flag since we fetched directly
@@ -610,6 +611,8 @@ function GameBoard() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('onAuthStateChange event:', event, 'has session:', !!session);
+      
       // Handle SIGNED_OUT event - ensure user is logged out
       if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
         console.log('SIGNED_OUT event received');
@@ -622,8 +625,18 @@ function GameBoard() {
       
       // Only set user if we have a valid session
       if (session?.user) {
+        // Don't clear existing profile - keep it until we fetch fresh data
+        // This prevents UI from showing defaults while fetching
+        const currentUserId = user?.id;
+        const newUserId = session.user.id;
+        
+        // Only clear profile if user changed (different user logged in)
+        if (currentUserId && currentUserId !== newUserId) {
+          console.log('User changed, clearing old profile');
+          setUserProfile(null);
+        }
+        
         setUser(session.user);
-        // Don't clear profile here - it will be fetched below if needed
       } else {
         // Only clear if we're actually signed out
         setUser(null);
@@ -704,6 +717,7 @@ function GameBoard() {
           } else {
             // CRITICAL: Always set fresh profile data - never skip this
             // This ensures avatar is always current, even if we already have a profile
+            console.log('onAuthStateChange: Setting userProfile with avatar:', profile.avatar, 'country:', profile.country);
             setUserProfile(profile);
           }
         } else if (session.user && !profile) {
@@ -825,6 +839,7 @@ function GameBoard() {
             console.warn('Profile loaded but avatar field is missing or empty, defaulting to Barry');
             data.avatar = 'Barry';
           }
+          console.log('fetchUserProfileSafely: Setting userProfile with avatar:', data.avatar, 'country:', data.country);
           setUserProfile(data);
         }
       } else if (error && error.code !== 'PGRST116') {
@@ -875,26 +890,17 @@ function GameBoard() {
       return;
     }
 
-    // Use centralized fetch function - fetch immediately if profile not loaded
+    // Use centralized fetch function - ensure profile is always loaded
     const fetchUserProfile = async () => {
-      // If profile is already loaded for this user, skip (but only if it was recently fetched)
-      if (userProfile && userProfile.id === user.id && lastFetchedUserIdRef.current === user.id) {
-        return;
-      }
-      
-      // Very small delay to let onAuthStateChange complete first (if it's running)
-      // But don't wait too long - we want the profile to load quickly
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Small delay to let onAuthStateChange complete first (if it's running)
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       // Double-check user still exists (might have signed out during delay)
       if (!user || !supabase) return;
       
-      // If profile still not loaded, fetch it now
-      if (!userProfile || userProfile.id !== user.id) {
-        // Always fetch fresh - use forceRefresh to ensure we get latest data
-        // This is a backup in case onAuthStateChange didn't fetch it
-        await fetchUserProfileSafely(user.id, true);
-      }
+      // Always fetch fresh profile - don't skip even if we have one
+      // This ensures we always have the latest avatar and country data
+      await fetchUserProfileSafely(user.id, true);
     };
 
     fetchUserProfile();

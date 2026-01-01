@@ -232,6 +232,7 @@ function GameBoard() {
   const [userProfile, setUserProfile] = useState(null);
   const profileFetchingRef = useRef(false); // Prevent duplicate profile fetches
   const lastFetchedUserIdRef = useRef(null); // Track last fetched user ID to prevent stale updates
+  const isInitialLoadRef = useRef(true); // Track if this is the initial page load
   const [signupFormData, setSignupFormData] = useState({
     email: '',
     password: '',
@@ -627,6 +628,7 @@ function GameBoard() {
             setUserProfile(freshProfile);
             lastFetchedUserIdRef.current = session.user.id;
             profileFetchingRef.current = false; // Reset flag since we fetched directly
+            isInitialLoadRef.current = false; // Mark initial load as complete
           } else if (profileErr && profileErr.code === 'PGRST116') {
             // Profile doesn't exist yet - will be created by onAuthStateChange
             console.log('Profile not found on page load, will be created by onAuthStateChange');

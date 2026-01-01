@@ -556,19 +556,9 @@ function GameBoard() {
             return;
           }
           
-          // Session is valid - set user and immediately fetch profile
+          // Session is valid
           setUser(session.user);
-          
-          // Immediately fetch profile to ensure avatar is loaded correctly
-          const { data: profileData, error: profileError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          
-          if (!profileError && profileData) {
-            setUserProfile(profileData);
-          }
+          // Profile will be fetched by onAuthStateChange and the useEffect hook
         } catch (err) {
           console.error('Error verifying initial session:', err);
           await supabase.auth.signOut({ scope: 'global' });
@@ -606,7 +596,9 @@ function GameBoard() {
       // Only set user if we have a valid session
       if (session?.user) {
         setUser(session.user);
+        // Don't clear profile here - it will be fetched below if needed
       } else {
+        // Only clear if we're actually signed out
         setUser(null);
         setUserProfile(null);
       }
@@ -644,7 +636,10 @@ function GameBoard() {
         
         if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
           console.error('Error fetching user profile:', error);
-          setUserProfile(null);
+          // Don't clear profile on error - keep existing one if we have it
+          if (!userProfile) {
+            setUserProfile(null);
+          }
         } else if (profile) {
           // Profile exists - always use fresh data from database
           // Only update google_avatar_url if it's not already set and user signed in with Google
@@ -733,9 +728,9 @@ function GameBoard() {
             console.error('Error creating user profile:', insertError);
           }
         }
-      } else {
-        setUserProfile(null);
       }
+      // Don't clear profile here - only clear on explicit sign out
+      // Profile will persist across navigation and screen changes
     });
 
     return () => subscription.unsubscribe();
@@ -769,16 +764,26 @@ function GameBoard() {
   }, []); // Only run on mount
 
   // Fetch user profile when user changes
-  // This is a backup/fallback - onAuthStateChange should handle profile fetching
+  // This is a backup - onAuthStateChange should handle most cases
   useEffect(() => {
     if (!user || !supabase) {
-      setUserProfile(null);
+      if (!user) {
+        setUserProfile(null);
+      }
       return;
     }
 
+    // Only fetch if we don't already have a profile for this user
+    if (userProfile && userProfile.id === user.id) {
+      return; // Already have the correct profile
+    }
+
     const fetchUserProfile = async () => {
-      // Add a small delay to let onAuthStateChange complete first
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Delay to let onAuthStateChange complete first
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Double-check user still exists (might have signed out during delay)
+      if (!user || !supabase) return;
       
       const { data, error } = await supabase
         .from('users')
@@ -786,14 +791,10 @@ function GameBoard() {
         .eq('id', user.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 = not found
+      if (error && error.code !== 'PGRST116') {
         console.error('Error fetching user profile:', error);
-        // Don't set to null if we already have a profile - keep existing one
-        if (!userProfile) {
-          setUserProfile(null);
-        }
+        // Keep existing profile if we have one
       } else if (data) {
-        // Always update with fresh data to ensure avatar and other fields are current
         setUserProfile(data);
       } else {
         // If profile doesn't exist, try to create it from auth metadata
@@ -3926,7 +3927,7 @@ function GameBoard() {
   // Refresh user profile when returning to home screen to ensure avatar is current
   useEffect(() => {
     if (screen === 'home' && user && supabase) {
-      // Immediately refresh profile to ensure we have the latest data (especially avatar)
+      // Refresh profile when returning to home to ensure avatar is current
       const refreshProfile = async () => {
         try {
           const { data, error } = await supabase
@@ -3936,22 +3937,23 @@ function GameBoard() {
             .single();
           
           if (!error && data) {
-            // Always update to ensure avatar is current - this fixes the issue where
-            // avatar shows as default after returning from game modes
+            // Update to ensure avatar is current
             setUserProfile(data);
           } else if (error && error.code === 'PGRST116') {
-            // Profile doesn't exist - this shouldn't happen for logged-in users
+            // Profile doesn't exist - don't clear existing profile, just log
             console.warn('Profile not found when refreshing on home screen');
           }
         } catch (err) {
           console.error('Error refreshing profile on home screen:', err);
+          // Don't clear profile on error - keep what we have
         }
       };
       
-      // Refresh immediately - no delay needed
-      refreshProfile();
+      // Delay to avoid race conditions with other profile fetches
+      const timeoutId = setTimeout(refreshProfile, 400);
+      return () => clearTimeout(timeoutId);
     }
-  }, [screen, user?.id, supabase]); // Refresh when screen changes to home or user changes
+  }, [screen, user?.id]); // Refresh when screen changes to home or user changes
 
   // Avatar component
   const renderAvatar = (isGuest = false, isCpu = false, cpuDifficulty = null, size = 60, userProfileData = null, userData = null) => {
@@ -4063,33 +4065,11 @@ function GameBoard() {
         let avatarName = null;
         
         if (userProfileData) {
-          // Profile exists - use its avatar field
-          // IMPORTANT: Only default to Barry if avatar is explicitly null/undefined/empty
-          // This ensures we use the actual selected avatar from the database
-          avatarName = userProfileData.avatar;
-          if (!avatarName || avatarName === '') {
-            avatarName = 'Barry';
-          }
-        } else if (userData) {
-          // User is logged in but profile not loaded yet
-          // Show a loading placeholder instead of defaulting to Barry
-          return (
-            <div style={{
-              width: size,
-              height: size,
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, #e0e0e0 0%, #bdbdbd 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '3px solid #333',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-            }}>
-              <span style={{ fontSize: size * 0.3, color: '#666' }}>...</span>
-            </div>
-          );
+          // Profile exists - use its avatar field (or default to Barry if null/undefined)
+          avatarName = userProfileData.avatar || 'Barry';
         } else {
-          // No user data at all - default to Barry (guest case)
+          // No profile data - default to Barry
+          // This handles both guest users and logged-in users whose profile hasn't loaded yet
           avatarName = 'Barry';
         }
         
@@ -4672,19 +4652,20 @@ function GameBoard() {
       // Set user immediately
       setUser(data.user);
       
-      // Explicitly fetch the profile to ensure it's loaded
-      const { data: profile, error: profileError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', data.user.id)
-        .single();
-      
-      if (profileError && profileError.code !== 'PGRST116') {
-        console.error('Error fetching profile after login:', profileError);
-        // Still allow login, profile will be fetched by onAuthStateChange
-      } else if (profile) {
-        // Set profile immediately
-        setUserProfile(profile);
+      // Fetch profile immediately to ensure it's loaded
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+        
+        if (!profileError && profile) {
+          setUserProfile(profile);
+        }
+      } catch (err) {
+        console.error('Error fetching profile after login:', err);
+        // Continue anyway - onAuthStateChange will also try to fetch it
       }
       
       // Close modal and reset form

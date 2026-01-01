@@ -4315,6 +4315,7 @@ function GameBoard() {
     e.preventDefault();
     if (!supabase) {
       setLoginError('Supabase not configured');
+      setLoginLoading(false);
       return;
     }
 
@@ -4322,18 +4323,29 @@ function GameBoard() {
     setLoginLoading(true);
 
     try {
-      let emailToUse = loginFormData.email;
+      let emailToUse = loginFormData.email.trim();
 
       // Check if input is a username (not containing @)
-      if (!loginFormData.email.includes('@')) {
+      if (!emailToUse.includes('@')) {
         // It's a username, fetch the user's email from the database
         const { data: userData, error: userError } = await supabase
           .from('users')
           .select('email')
-          .eq('username', loginFormData.email)
+          .eq('username', emailToUse)
           .single();
 
-        if (userError || !userData) {
+        if (userError) {
+          console.error('Username lookup error:', userError);
+          if (userError.code === 'PGRST116') {
+            setLoginError('Username not found');
+          } else {
+            setLoginError('Error looking up username: ' + userError.message);
+          }
+          setLoginLoading(false);
+          return;
+        }
+
+        if (!userData || !userData.email) {
           setLoginError('Username not found');
           setLoginLoading(false);
           return;
@@ -4349,30 +4361,27 @@ function GameBoard() {
       });
 
       if (error) {
-        setLoginError(error.message);
+        console.error('Login error:', error);
+        setLoginError(error.message || 'Invalid email or password');
         setLoginLoading(false);
         return;
       }
 
-      // Wait a moment for the session to be established
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Verify session was created
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session && session.user) {
-        // Success! User is logged in - onAuthStateChange will handle the rest
-        setShowLoginModal(false);
-        setShowLoginForm(false);
-        setLoginFormData({ email: '', password: '' });
-        setLoginError('');
+      if (!data || !data.user) {
+        setLoginError('Login failed - no user data returned');
         setLoginLoading(false);
-      } else {
-        setLoginError('Login failed - please try again');
-        setLoginLoading(false);
+        return;
       }
+
+      // Success! User is logged in - onAuthStateChange will handle the rest
+      setShowLoginModal(false);
+      setShowLoginForm(false);
+      setLoginFormData({ email: '', password: '' });
+      setLoginError('');
+      setLoginLoading(false);
     } catch (error) {
       console.error('Login error:', error);
-      setLoginError('An unexpected error occurred');
+      setLoginError('An unexpected error occurred: ' + error.message);
       setLoginLoading(false);
     }
   };
@@ -7389,31 +7398,26 @@ function GameBoard() {
     const handleSignOut = async () => {
       try {
         if (supabase) {
-          // Sign out from Supabase first (this clears the session from Supabase storage)
-          const { error } = await supabase.auth.signOut();
-          if (error) {
-            console.error('Sign out error:', error);
-            alert('Failed to sign out: ' + error.message);
-            return;
-          }
+          console.log('Signing out...');
           
-          // Wait a moment for signOut to complete
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-          // Clear all localStorage (Supabase stores session here)
-          localStorage.clear();
-          // Also clear sessionStorage just in case
-          sessionStorage.clear();
-          
-          // Clear all state
+          // Clear state immediately
           setUser(null);
           setUserProfile(null);
           
-          // Navigate to home
-          setScreen('home');
+          // Sign out from Supabase
+          const { error } = await supabase.auth.signOut();
+          if (error) {
+            console.error('Sign out error:', error);
+            // Continue anyway to clear storage
+          }
           
-          // Reload to ensure clean state
-          window.location.reload();
+          // Clear all storage
+          localStorage.clear();
+          sessionStorage.clear();
+          
+          // Navigate and reload
+          setScreen('home');
+          window.location.href = '/';
         }
       } catch (err) {
         console.error('Sign out error:', err);
@@ -7422,7 +7426,7 @@ function GameBoard() {
         sessionStorage.clear();
         setUser(null);
         setUserProfile(null);
-        window.location.reload();
+        window.location.href = '/';
       }
     };
 

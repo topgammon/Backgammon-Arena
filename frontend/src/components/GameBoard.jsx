@@ -556,8 +556,19 @@ function GameBoard() {
             return;
           }
           
-          // Session is valid
+          // Session is valid - set user and immediately fetch profile
           setUser(session.user);
+          
+          // Immediately fetch profile to ensure avatar is loaded correctly
+          const { data: profileData, error: profileError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (!profileError && profileData) {
+            setUserProfile(profileData);
+          }
         } catch (err) {
           console.error('Error verifying initial session:', err);
           await supabase.auth.signOut({ scope: 'global' });
@@ -3915,24 +3926,32 @@ function GameBoard() {
   // Refresh user profile when returning to home screen to ensure avatar is current
   useEffect(() => {
     if (screen === 'home' && user && supabase) {
-      // Refresh profile to ensure we have the latest data (especially avatar)
+      // Immediately refresh profile to ensure we have the latest data (especially avatar)
       const refreshProfile = async () => {
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-        
-        if (!error && data) {
-          setUserProfile(data);
+        try {
+          const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+          
+          if (!error && data) {
+            // Always update to ensure avatar is current - this fixes the issue where
+            // avatar shows as default after returning from game modes
+            setUserProfile(data);
+          } else if (error && error.code === 'PGRST116') {
+            // Profile doesn't exist - this shouldn't happen for logged-in users
+            console.warn('Profile not found when refreshing on home screen');
+          }
+        } catch (err) {
+          console.error('Error refreshing profile on home screen:', err);
         }
       };
       
-      // Small delay to avoid race conditions with other profile fetches
-      const timeoutId = setTimeout(refreshProfile, 200);
-      return () => clearTimeout(timeoutId);
+      // Refresh immediately - no delay needed
+      refreshProfile();
     }
-  }, [screen, user?.id, supabase]); // Only refresh when screen changes to home or user changes
+  }, [screen, user?.id, supabase]); // Refresh when screen changes to home or user changes
 
   // Avatar component
   const renderAvatar = (isGuest = false, isCpu = false, cpuDifficulty = null, size = 60, userProfileData = null, userData = null) => {
@@ -4039,7 +4058,41 @@ function GameBoard() {
         );
       } else {
         // Use default avatar based on stored avatar name
-        const avatarName = userProfileData?.avatar || 'Barry';
+        // If userProfileData exists, use its avatar (even if null/undefined, we'll default to Barry)
+        // If userProfileData is null but userData exists, we might be loading - show a loading state or wait
+        let avatarName = null;
+        
+        if (userProfileData) {
+          // Profile exists - use its avatar field
+          // IMPORTANT: Only default to Barry if avatar is explicitly null/undefined/empty
+          // This ensures we use the actual selected avatar from the database
+          avatarName = userProfileData.avatar;
+          if (!avatarName || avatarName === '') {
+            avatarName = 'Barry';
+          }
+        } else if (userData) {
+          // User is logged in but profile not loaded yet
+          // Show a loading placeholder instead of defaulting to Barry
+          return (
+            <div style={{
+              width: size,
+              height: size,
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #e0e0e0 0%, #bdbdbd 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '3px solid #333',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+            }}>
+              <span style={{ fontSize: size * 0.3, color: '#666' }}>...</span>
+            </div>
+          );
+        } else {
+          // No user data at all - default to Barry (guest case)
+          avatarName = 'Barry';
+        }
+        
         if (avatarName === 'google') {
           // Fallback if avatar is set to 'google' but no URL
           const initial = userProfileData?.username?.[0]?.toUpperCase() || userData?.email?.[0]?.toUpperCase() || 'U';

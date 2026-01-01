@@ -4346,15 +4346,25 @@ function GameBoard() {
         return;
       }
 
-      // Success! User is logged in
-      setShowLoginModal(false);
-      setShowLoginForm(false);
-      setLoginFormData({ email: '', password: '' });
-      setLoginError('');
+      // Wait a moment for the session to be established
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Verify session was created
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session && session.user) {
+        // Success! User is logged in - onAuthStateChange will handle the rest
+        setShowLoginModal(false);
+        setShowLoginForm(false);
+        setLoginFormData({ email: '', password: '' });
+        setLoginError('');
+        setLoginLoading(false);
+      } else {
+        setLoginError('Login failed - please try again');
+        setLoginLoading(false);
+      }
     } catch (error) {
       console.error('Login error:', error);
       setLoginError('An unexpected error occurred');
-    } finally {
       setLoginLoading(false);
     }
   };
@@ -7375,46 +7385,57 @@ function GameBoard() {
           setUser(null);
           setUserProfile(null);
           
-          // Sign out from Supabase
+          // Sign out from Supabase (this clears the session)
           const { error } = await supabase.auth.signOut();
           if (error) {
             console.error('Sign out error:', error);
             alert('Failed to sign out: ' + error.message);
-            // Reload page to force clear state
-            window.location.reload();
             return;
           }
           
           // Navigate to home
           setScreen('home');
           
-          // Force reload to clear any cached state
+          // Clear localStorage completely to prevent session restoration
+          localStorage.clear();
+          
+          // Small delay to ensure state is cleared, then reload
           setTimeout(() => {
             window.location.reload();
-          }, 100);
+          }, 200);
         }
       } catch (err) {
         console.error('Sign out error:', err);
-        alert('An error occurred while signing out. Reloading page...');
+        // Still try to clear and reload
+        setUser(null);
+        setUserProfile(null);
+        localStorage.clear();
         window.location.reload();
       }
     };
 
     const handleUpdateCountry = async () => {
-      if (!supabase) return;
+      if (!supabase || !user) {
+        console.error('Cannot update country: missing supabase or user');
+        return;
+      }
       
+      // Use newCountry if set, otherwise use current profile country, fallback to US
       const countryToSave = newCountry || userProfile?.country || 'US';
-      if (!countryToSave) return;
+      console.log('Updating country to:', countryToSave, 'newCountry:', newCountry, 'userProfile?.country:', userProfile?.country);
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('users')
         .update({ country: countryToSave })
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .select()
+        .single();
 
       if (error) {
         console.error('Error updating country:', error);
-        alert('Failed to update country');
+        alert('Failed to update country: ' + error.message);
       } else {
+        console.log('Country updated successfully:', data);
         setUserProfile({ ...userProfile, country: countryToSave });
         setEditingCountry(false);
         setNewCountry('');

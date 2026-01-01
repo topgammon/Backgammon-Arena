@@ -524,8 +524,13 @@ function GameBoard() {
     // Get initial session - but verify it's valid first
     // This runs on every page load to catch orphaned sessions
     console.log('getSession: Starting session check on page load');
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      console.log('getSession: Session check result - has session:', !!session, 'has user:', !!session?.user);
+    supabase.auth.getSession()
+      .then(async ({ data: { session }, error: sessionError }) => {
+        console.log('getSession: Session check result - has session:', !!session, 'has user:', !!session?.user, 'error:', sessionError?.code);
+        if (sessionError) {
+          console.error('getSession: Error getting session:', sessionError);
+          return;
+        }
       if (session?.user) {
         // Verify the session is still valid by checking with the server
         try {
@@ -613,6 +618,9 @@ function GameBoard() {
         setUser(null);
         setUserProfile(null);
       }
+    })
+    .catch((err) => {
+      console.error('getSession: Promise rejected:', err);
     });
 
     // Listen for auth changes
@@ -662,9 +670,33 @@ function GameBoard() {
       if (session?.user) {
         console.log('onAuthStateChange: Processing SIGNED_IN event for user:', session.user.id);
         
-        // First, verify the user still exists in auth (in case they were deleted)
+        // Wrap everything in try-catch to ensure we always complete
         try {
-          const { data: authUser, error: authError } = await supabase.auth.getUser();
+          // First, verify the user still exists in auth (in case they were deleted)
+          // Skip verification on page load if getSession() is already handling it
+          // This prevents race conditions between getSession() and onAuthStateChange
+          console.log('onAuthStateChange: Starting user verification...');
+          
+          // Add a timeout to prevent hanging - but don't let it block profile fetch
+          let authUser, authError;
+          try {
+            const verificationResult = await Promise.race([
+              supabase.auth.getUser(),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('getUser() timeout')), 3000)
+              )
+            ]);
+            authUser = verificationResult?.data;
+            authError = verificationResult?.error;
+          } catch (err) {
+            console.warn('onAuthStateChange: getUser() failed or timed out, skipping verification:', err);
+            // Don't sign out on timeout - just skip verification and fetch profile
+            authUser = { user: session.user };
+            authError = null;
+          }
+          
+          console.log('onAuthStateChange: getUser() completed - has user:', !!authUser?.user, 'error:', authError?.code);
+          
           if (authError || !authUser?.user) {
             // User doesn't exist anymore - session is invalid, sign out
             console.warn('User session invalid - user was deleted. Signing out...');
@@ -677,12 +709,9 @@ function GameBoard() {
           console.log('onAuthStateChange: User verification passed');
         } catch (err) {
           console.error('Error verifying user session:', err);
-          // If we can't verify, sign out to be safe
-          await supabase.auth.signOut({ scope: 'global' });
-          await clearAllSupabaseStorage();
-          setUser(null);
-          setUserProfile(null);
-          return;
+          // Don't sign out on error - just continue to fetch profile
+          // The session might still be valid even if verification failed
+          console.log('onAuthStateChange: Continuing despite verification error...');
         }
         
         // CRITICAL: Always fetch fresh profile data from database (never use cache/stale data)

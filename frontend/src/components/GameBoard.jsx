@@ -958,16 +958,46 @@ function GameBoard() {
             });
           
           if (!insertError) {
-            const { data: newProfile } = await supabase
+            // Fetch the newly created profile
+            const { data: newProfile, error: fetchError } = await supabase
               .from('users')
               .select('*')
               .eq('id', session.user.id)
-              .single();
-            if (newProfile) {
+              .maybeSingle();
+            
+            if (fetchError) {
+              console.error('Error fetching newly created profile:', fetchError);
+            } else if (newProfile) {
+              console.log('Profile created successfully:', newProfile);
               setUserProfile(newProfile);
+              // Store in sessionStorage
+              try {
+                sessionStorage.setItem('_userProfile', JSON.stringify(newProfile));
+              } catch (e) {
+                console.warn('Failed to store profile in sessionStorage:', e);
+              }
             }
           } else {
             console.error('Error creating user profile:', insertError);
+            // If it's a duplicate key error, try to fetch the existing profile
+            if (insertError.code === '23505' || insertError.message?.includes('duplicate')) {
+              console.log('Profile already exists, fetching it...');
+              const { data: existingProfile, error: fetchError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', session.user.id)
+                .maybeSingle();
+              
+              if (!fetchError && existingProfile) {
+                console.log('Fetched existing profile:', existingProfile);
+                setUserProfile(existingProfile);
+                try {
+                  sessionStorage.setItem('_userProfile', JSON.stringify(existingProfile));
+                } catch (e) {
+                  console.warn('Failed to store profile in sessionStorage:', e);
+                }
+              }
+            }
           }
         }
       }
@@ -8062,18 +8092,60 @@ function GameBoard() {
       const countryToSave = newCountry || userProfile?.country || 'US';
       console.log('Updating country to:', countryToSave, 'newCountry:', newCountry, 'userProfile?.country:', userProfile?.country);
 
-      const { data, error } = await supabase
+      // First, check if profile exists
+      const { data: existingProfile, error: checkError } = await supabase
         .from('users')
-        .update({ country: countryToSave })
+        .select('*')
         .eq('id', user.id)
-        .select()
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        console.error('Error updating country:', error);
-        alert('Failed to update country: ' + error.message);
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('Error checking profile:', checkError);
+        alert('Failed to check profile: ' + checkError.message);
+        return;
+      }
+
+      let result;
+      if (!existingProfile) {
+        // Profile doesn't exist, create it
+        console.log('Profile does not exist, creating it with country:', countryToSave);
+        const email = user.email || '';
+        const username = user.user_metadata?.username || email.split('@')[0];
+        const isGoogleSignIn = user.identities?.some(id => id.provider === 'google');
+        const googleAvatarUrl = isGoogleSignIn ? 
+          (user.user_metadata?.avatar_url || user.user_metadata?.picture || null) : null;
+
+        result = await supabase
+          .from('users')
+          .insert({
+            id: user.id,
+            email: email,
+            username: username,
+            country: countryToSave,
+            avatar: 'Barry',
+            google_avatar_url: googleAvatarUrl,
+            elo_rating: 1000,
+            wins: 0,
+            losses: 0,
+            games_played: 0
+          })
+          .select()
+          .single();
       } else {
-        console.log('Country updated successfully:', data);
+        // Profile exists, update it
+        result = await supabase
+          .from('users')
+          .update({ country: countryToSave })
+          .eq('id', user.id)
+          .select()
+          .single();
+      }
+
+      if (result.error) {
+        console.error('Error updating country:', result.error);
+        alert('Failed to update country: ' + result.error.message);
+      } else {
+        console.log('Country updated successfully:', result.data);
         setUserProfile({ ...userProfile, country: countryToSave });
         setEditingCountry(false);
         setNewCountry('');

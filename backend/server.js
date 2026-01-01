@@ -232,7 +232,9 @@ io.on('connection', (socket) => {
             const isPlayer2 = currentMatch.player2.socketId === socket.id;
             if (isPlayer1 || isPlayer2) {
               activeMatches.delete(matchId);
-          console.log(`🗑️ Cleaned up match ${matchId}`);
+              console.log(`🗑️ Cleaned up match ${matchId}`);
+            }
+          }
         }, 30000); // 30 second grace period
       }
     }

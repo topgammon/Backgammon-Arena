@@ -442,6 +442,24 @@ function GameBoard() {
       
       // Fetch user profile when user logs in
       if (session?.user) {
+        // First, verify the user still exists in auth (in case they were deleted)
+        try {
+          const { data: authUser, error: authError } = await supabase.auth.getUser();
+          if (authError || !authUser?.user) {
+            // User doesn't exist anymore - session is invalid, sign out
+            console.warn('User session invalid - user was deleted. Signing out...');
+            await supabase.auth.signOut();
+            setUserProfile(null);
+            return;
+          }
+        } catch (err) {
+          console.error('Error verifying user session:', err);
+          // If we can't verify, sign out to be safe
+          await supabase.auth.signOut();
+          setUserProfile(null);
+          return;
+        }
+        
         const { data: profile, error } = await supabase
           .from('users')
           .select('*')
@@ -4489,38 +4507,54 @@ function GameBoard() {
         return;
       }
 
-      // Create user profile in database (default avatar is first one: Barry)
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert({
-          id: authData.user.id,
-          email: signupFormData.email,
-          username: signupFormData.username,
-          country: signupFormData.country,
-          avatar: 'Barry', // Always default to first avatar
-          google_avatar_url: null, // No Google avatar for email signups
-          elo_rating: 1000,
-          wins: 0,
-          losses: 0,
-          games_played: 0
-        });
-
-      if (profileError) {
-        console.error('Error creating user profile:', profileError);
-        setSignupError(profileError.message || 'Failed to create profile. Please try again.');
-        setSignupLoading(false);
-        return;
-      }
-
-      // Immediately fetch the profile to ensure it's available
-      const { data: newProfile } = await supabase
+      // Check if profile already exists (in case onAuthStateChange created it)
+      const { data: existingProfile, error: checkError } = await supabase
         .from('users')
         .select('*')
         .eq('id', authData.user.id)
         .single();
+
+      let profile = existingProfile;
+
+      // Only create profile if it doesn't already exist
+      if (checkError && checkError.code === 'PGRST116') {
+        // Profile doesn't exist, create it
+        const { data: newProfile, error: profileError } = await supabase
+          .from('users')
+          .insert({
+            id: authData.user.id,
+            email: signupFormData.email,
+            username: signupFormData.username,
+            country: signupFormData.country,
+            avatar: 'Barry', // Always default to first avatar
+            google_avatar_url: null, // No Google avatar for email signups
+            elo_rating: 1000,
+            wins: 0,
+            losses: 0,
+            games_played: 0
+          })
+          .select()
+          .single();
+
+        if (profileError) {
+          console.error('Error creating user profile:', profileError);
+          setSignupError(profileError.message || 'Failed to create profile. Please try again.');
+          setSignupLoading(false);
+          return;
+        }
+
+        profile = newProfile;
+      } else if (checkError) {
+        // Some other error occurred
+        console.error('Error checking user profile:', checkError);
+        setSignupError('Failed to check profile. Please try again.');
+        setSignupLoading(false);
+        return;
+      }
       
-      if (newProfile) {
-        setUserProfile(newProfile);
+      // Set the profile if we have one
+      if (profile) {
+        setUserProfile(profile);
       }
 
       // Success! User is automatically logged in

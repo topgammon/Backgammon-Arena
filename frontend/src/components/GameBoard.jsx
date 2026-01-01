@@ -355,15 +355,13 @@ function GameBoard() {
   ];
 
   // Helper function to get country flag
-  const getCountryFlag = (countryCode, hasUser = false) => {
-    // If user is logged in but profile not loaded yet, don't show default
-    // This prevents the flash of default values
-    if (!countryCode && hasUser) {
-      // User is logged in but country not loaded yet - return null to indicate loading
-      // The component should handle this gracefully
+  const getCountryFlag = (countryCode, hasUser = false, hasProfile = false) => {
+    // If user is logged in but profile not loaded yet, return null to show nothing
+    // This prevents showing default flag while fetching
+    if (hasUser && !hasProfile) {
       return null;
     }
-    if (!countryCode) return '🌍'; // Default if no country code and no user
+    if (!countryCode) return '🌍'; // Default if no country code
     const country = countries.find(c => c.code === countryCode);
     return country ? country.flag : '🌍';
   };
@@ -4176,6 +4174,12 @@ function GameBoard() {
 
   // Avatar component
   const renderAvatar = (isGuest = false, isCpu = false, cpuDifficulty = null, size = 60, userProfileData = null, userData = null) => {
+    // If user is logged in but profile not loaded yet, return null to show nothing
+    // This prevents showing default avatar while fetching
+    if (!isGuest && !isCpu && userData && !userProfileData) {
+      return null;
+    }
+    
     if (isCpu && cpuDifficulty) {
       // CPU avatar - use the actual avatar image from difficulty selector
       const avatarName = DIFFICULTY_LEVELS[cpuDifficulty]?.avatar || 'CPU';
@@ -5356,7 +5360,7 @@ function GameBoard() {
                         flexShrink: 0,
                         fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif'
                       }}>
-                        {getCountryFlag(userProfile?.country || (user ? 'US' : null))}
+                        {getCountryFlag(userProfile?.country || (user ? 'US' : null), !!user, !!userProfile) || ''}
                       </span>
                     </div>
                     <button style={buttonStyle} onClick={() => {
@@ -8330,7 +8334,7 @@ function GameBoard() {
                         fontSize: '20px',
                         fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif'
                       }}>
-                        {getCountryFlag(userProfile?.country || (user ? 'US' : null))}
+                        {getCountryFlag(userProfile?.country || (user ? 'US' : null), !!user, !!userProfile) || ''}
                       </span>
                       <button
                         onClick={() => {

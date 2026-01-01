@@ -342,6 +342,7 @@ function GameBoard() {
 
   // Helper function to get country flag
   const getCountryFlag = (countryCode) => {
+    if (!countryCode) return '🌍'; // Default if no country code
     const country = countries.find(c => c.code === countryCode);
     return country ? country.flag : '🌍';
   };
@@ -562,8 +563,7 @@ function GameBoard() {
           setUser(session.user);
           
           // CRITICAL: Always fetch fresh profile on page load to avoid stale data
-          // Use a direct fetch here since fetchUserProfileSafely is defined later
-          // But we'll also call fetchUserProfileSafely after it's defined to ensure consistency
+          // Fetch immediately and synchronously to prevent UI from showing defaults
           const { data: freshProfile, error: profileErr } = await supabase
             .from('users')
             .select('*')
@@ -571,12 +571,15 @@ function GameBoard() {
             .single();
           
           if (!profileErr && freshProfile && freshProfile.id === session.user.id) {
+            // Set profile immediately to prevent default avatar/country from showing
             setUserProfile(freshProfile);
             lastFetchedUserIdRef.current = session.user.id;
             profileFetchingRef.current = false; // Reset flag since we fetched directly
           } else if (profileErr && profileErr.code === 'PGRST116') {
             // Profile doesn't exist yet - will be created by onAuthStateChange
             console.log('Profile not found on page load, will be created by onAuthStateChange');
+          } else if (profileErr) {
+            console.error('Error fetching profile on page load:', profileErr);
           }
         } catch (err) {
           console.error('Error verifying initial session:', err);
@@ -851,16 +854,26 @@ function GameBoard() {
       return;
     }
 
-    // Use centralized fetch function with small delay to let onAuthStateChange complete
+    // Use centralized fetch function - fetch immediately if profile not loaded
     const fetchUserProfile = async () => {
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // If profile is already loaded for this user, skip (but only if it was recently fetched)
+      if (userProfile && userProfile.id === user.id && lastFetchedUserIdRef.current === user.id) {
+        return;
+      }
+      
+      // Very small delay to let onAuthStateChange complete first (if it's running)
+      // But don't wait too long - we want the profile to load quickly
+      await new Promise(resolve => setTimeout(resolve, 50));
       
       // Double-check user still exists (might have signed out during delay)
       if (!user || !supabase) return;
       
-      // Always fetch fresh - use forceRefresh to ensure we get latest data
-      // This is a backup in case onAuthStateChange didn't fetch it
-      await fetchUserProfileSafely(user.id, true);
+      // If profile still not loaded, fetch it now
+      if (!userProfile || userProfile.id !== user.id) {
+        // Always fetch fresh - use forceRefresh to ensure we get latest data
+        // This is a backup in case onAuthStateChange didn't fetch it
+        await fetchUserProfileSafely(user.id, true);
+      }
     };
 
     fetchUserProfile();
@@ -5146,7 +5159,7 @@ function GameBoard() {
                         flexShrink: 0,
                         fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif'
                       }}>
-                        {getCountryFlag(userProfile?.country)}
+                        {getCountryFlag(userProfile?.country || (user ? 'US' : null))}
                       </span>
                     </div>
                     <button style={buttonStyle} onClick={() => {
@@ -8120,7 +8133,7 @@ function GameBoard() {
                         fontSize: '20px',
                         fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif'
                       }}>
-                        {getCountryFlag(userProfile?.country)}
+                        {getCountryFlag(userProfile?.country || (user ? 'US' : null))}
                       </span>
                       <button
                         onClick={() => {

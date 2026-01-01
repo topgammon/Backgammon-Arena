@@ -429,17 +429,71 @@ function GameBoard() {
     // Check for OAuth callback on mount
     handleOAuthCallback();
 
+    // Check if we're coming from a sign-out and clear everything
+    (async () => {
+      const isSigningOut = sessionStorage.getItem('signing_out') === 'true';
+      if (isSigningOut) {
+        // Clear the flag
+        sessionStorage.removeItem('signing_out');
+        // Force clear all Supabase storage
+        const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
+        supabaseKeys.forEach(key => localStorage.removeItem(key));
+        // Clear IndexedDB
+        try {
+          if ('indexedDB' in window) {
+            const databases = await indexedDB.databases();
+            for (const db of databases) {
+              if (db.name && db.name.includes('supabase')) {
+                indexedDB.deleteDatabase(db.name);
+              }
+            }
+          }
+        } catch (idbError) {
+          console.warn('Could not clear IndexedDB:', idbError);
+        }
+        // Force sign out from Supabase
+        await supabase.auth.signOut({ scope: 'global' });
+        setUser(null);
+        setUserProfile(null);
+        return;
+      }
+    })();
+
     // Get initial session - but verify it's valid first
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
-        // Verify the session is still valid
+        // Verify the session is still valid by checking with the server
         try {
           const { data: authUser, error: authError } = await supabase.auth.getUser();
           if (authError || !authUser?.user) {
-            // Session is invalid - clear it
+            // Session is invalid - clear it completely
             console.log('Initial session invalid, clearing...');
-            await supabase.auth.signOut();
-            // Clear Supabase's specific storage keys
+            await supabase.auth.signOut({ scope: 'global' });
+            // Clear all Supabase storage
+            const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
+            supabaseKeys.forEach(key => localStorage.removeItem(key));
+            sessionStorage.clear();
+            // Clear IndexedDB
+            try {
+              if ('indexedDB' in window) {
+                const databases = await indexedDB.databases();
+                for (const db of databases) {
+                  if (db.name && db.name.includes('supabase')) {
+                    indexedDB.deleteDatabase(db.name);
+                  }
+                }
+              }
+            } catch (idbError) {
+              console.warn('Could not clear IndexedDB:', idbError);
+            }
+            setUser(null);
+            setUserProfile(null);
+            return;
+          }
+          // Session is valid - double check it's not expired
+          if (session.expires_at && session.expires_at * 1000 < Date.now()) {
+            console.log('Session expired, clearing...');
+            await supabase.auth.signOut({ scope: 'global' });
             const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
             supabaseKeys.forEach(key => localStorage.removeItem(key));
             sessionStorage.clear();
@@ -451,8 +505,8 @@ function GameBoard() {
           setUser(session.user);
         } catch (err) {
           console.error('Error verifying initial session:', err);
-          await supabase.auth.signOut();
-          // Clear Supabase's specific storage keys
+          await supabase.auth.signOut({ scope: 'global' });
+          // Clear all Supabase storage
           const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
           supabaseKeys.forEach(key => localStorage.removeItem(key));
           sessionStorage.clear();
@@ -460,6 +514,12 @@ function GameBoard() {
           setUserProfile(null);
         }
       } else {
+        // No session - make sure storage is clean
+        const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
+        if (supabaseKeys.length > 0) {
+          console.log('No session but Supabase keys found, clearing...');
+          supabaseKeys.forEach(key => localStorage.removeItem(key));
+        }
         setUser(null);
         setUserProfile(null);
       }
@@ -7498,24 +7558,55 @@ function GameBoard() {
           setUser(null);
           setUserProfile(null);
           
-          // Sign out from Supabase - wait for it to complete
-          const { error } = await supabase.auth.signOut();
+          // Sign out from Supabase with global scope to invalidate all sessions
+          const { error } = await supabase.auth.signOut({ scope: 'global' });
           if (error) {
             console.error('Sign out error:', error);
           }
           
-          // Wait a bit to ensure signOut completes
-          await new Promise(resolve => setTimeout(resolve, 200));
+          // Set a flag in sessionStorage to indicate we're signing out
+          sessionStorage.setItem('signing_out', 'true');
           
-          // Clear Supabase's specific storage keys (more reliable than clearing all localStorage)
+          // Wait for signOut to complete
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // Clear all Supabase storage keys from localStorage
           const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
           supabaseKeys.forEach(key => localStorage.removeItem(key));
           
-          // Also clear sessionStorage
+          // Clear sessionStorage (but we'll set the flag again after)
           sessionStorage.clear();
+          sessionStorage.setItem('signing_out', 'true');
           
-          // Force a hard reload to clear any cached state
-          window.location.href = '/';
+          // Clear IndexedDB (Supabase may use it for session storage)
+          try {
+            if ('indexedDB' in window) {
+              const databases = await indexedDB.databases();
+              for (const db of databases) {
+                if (db.name && db.name.includes('supabase')) {
+                  indexedDB.deleteDatabase(db.name);
+                }
+              }
+            }
+          } catch (idbError) {
+            console.warn('Could not clear IndexedDB:', idbError);
+          }
+          
+          // Verify session is cleared before reloading
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            console.warn('Session still exists after signOut, forcing clear...');
+            // Force clear all localStorage as last resort
+            localStorage.clear();
+            sessionStorage.clear();
+            // Try signOut again
+            await supabase.auth.signOut({ scope: 'global' });
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+          
+          // Use replace instead of href to prevent back button from restoring state
+          // Add timestamp to prevent cache
+          window.location.replace(window.location.origin + window.location.pathname + '?t=' + Date.now());
         }
       } catch (err) {
         console.error('Sign out error:', err);
@@ -7525,7 +7616,7 @@ function GameBoard() {
         sessionStorage.clear();
         setUser(null);
         setUserProfile(null);
-        window.location.href = '/';
+        window.location.replace(window.location.origin + window.location.pathname + '?t=' + Date.now());
       }
     };
 

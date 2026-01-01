@@ -4787,7 +4787,16 @@ function GameBoard() {
                         e.currentTarget.style.background = '#a8a7a8';
                       }}
                     >
-                      {renderAvatar(false, false, null, 50, userProfile, user)}
+                      <div style={{ 
+                        width: '42px', 
+                        height: '42px', 
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        {renderAvatar(false, false, null, 42, userProfile, user)}
+                      </div>
                       <span style={{ 
                         fontSize: isMobile ? '14px' : '18px', 
                         fontWeight: '600',
@@ -4795,7 +4804,7 @@ function GameBoard() {
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
                         whiteSpace: isMobile ? 'normal' : 'nowrap'
                       }}>
-                        {userProfile?.username || 'User'}
+                        {userProfile?.username || user?.user_metadata?.username || user?.email?.split('@')[0] || 'User'}
                       </span>
                       <span style={{ 
                         fontSize: isMobile ? '14px' : '18px', 

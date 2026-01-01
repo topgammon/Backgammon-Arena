@@ -3609,9 +3609,15 @@ function GameBoard() {
             </div>
           )}
           <div style={{ display: 'flex', gap: 32, marginBottom: 18 }}>
-            <div style={{ textAlign: 'center' }}>
+            <div style={{ 
+              textAlign: 'center', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center',
+              width: '100%'
+            }}>
               {/* Player 1 Avatar */}
-              <div style={{ marginBottom: 8 }}>
+              <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center' }}>
                 {renderAvatar(
                   isOnlineGame 
                     ? (playerNumber === 1 ? (user ? false : true) : (opponent?.isGuest || false))
@@ -3628,43 +3634,53 @@ function GameBoard() {
                 )}
               </div>
               {/* Player 1 Name */}
-              <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 16 }}>{player1Name}</div>
+              <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 16, textAlign: 'center' }}>{player1Name}</div>
               {/* Player 1 Checker Indicator */}
-              <svg width="38" height="38" style={{ display: 'block', margin: '0 auto 8px auto' }}>
-                <g filter="url(#mini-checker-shadow)">
-                  <circle cx="19" cy="19" r="18" fill="#fff" stroke="#000" strokeWidth="1.5" />
-                  <circle cx="19" cy="19" r="13.5" fill="none" stroke="#e5e5e5" strokeWidth="2.5" />
-                  <circle cx="19" cy="19" r="9" fill="none" stroke="#e5e5e5" strokeWidth="2" />
-                  <circle cx="19" cy="19" r="5" fill="none" stroke="#e5e5e5" strokeWidth="1.5" />
-                </g>
-                <defs>
-                  <filter id="mini-checker-shadow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feDropShadow dx="0" dy="1" stdDeviation="1" floodColor="#000" floodOpacity="0.18" />
-                  </filter>
-                </defs>
-              </svg>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+                <svg width="38" height="38">
+                  <g filter="url(#mini-checker-shadow)">
+                    <circle cx="19" cy="19" r="18" fill="#fff" stroke="#000" strokeWidth="1.5" />
+                    <circle cx="19" cy="19" r="13.5" fill="none" stroke="#e5e5e5" strokeWidth="2.5" />
+                    <circle cx="19" cy="19" r="9" fill="none" stroke="#e5e5e5" strokeWidth="2" />
+                    <circle cx="19" cy="19" r="5" fill="none" stroke="#e5e5e5" strokeWidth="1.5" />
+                  </g>
+                  <defs>
+                    <filter id="mini-checker-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feDropShadow dx="0" dy="1" stdDeviation="1" floodColor="#000" floodOpacity="0.18" />
+                    </filter>
+                  </defs>
+                </svg>
+              </div>
               {/* Player 1 Dice */}
-              {firstRolls[0] ? (
-                <Dice 
-                  value={firstRolls[0]} 
-                  isRolling={isFirstRolling && firstRollTurn === 1}
-                  frame={firstRollAnimationFrame}
-                />
-              ) : (
-                isFirstRolling && firstRollTurn === 1 ? (
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                {firstRolls[0] ? (
                   <Dice 
-                    value={Math.floor(Math.random() * 6) + 1}
-                    isRolling={true}
+                    value={firstRolls[0]} 
+                    isRolling={isFirstRolling && firstRollTurn === 1}
                     frame={firstRollAnimationFrame}
                   />
                 ) : (
-                  <div style={{ height: 48 }} />
-                )
-              )}
+                  isFirstRolling && firstRollTurn === 1 ? (
+                    <Dice 
+                      value={Math.floor(Math.random() * 6) + 1}
+                      isRolling={true}
+                      frame={firstRollAnimationFrame}
+                    />
+                  ) : (
+                    <div style={{ height: 48 }} />
+                  )
+                )}
+              </div>
             </div>
-            <div style={{ textAlign: 'center' }}>
+            <div style={{ 
+              textAlign: 'center', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center',
+              width: '100%'
+            }}>
               {/* Player 2 Avatar */}
-              <div style={{ marginBottom: 8 }}>
+              <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center' }}>
                 {renderAvatar(
                   isOnlineGame 
                     ? (playerNumber === 2 ? (user ? false : true) : (opponent?.isGuest || false))
@@ -3681,39 +3697,43 @@ function GameBoard() {
                 )}
               </div>
               {/* Player 2 Name */}
-              <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 16 }}>{player2Name}</div>
+              <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 16, textAlign: 'center' }}>{player2Name}</div>
               {/* Player 2 Checker Indicator */}
-              <svg width="38" height="38" style={{ display: 'block', margin: '0 auto 8px auto' }}>
-                <g filter="url(#mini-checker-shadow)">
-                  <circle cx="19" cy="19" r="18" fill="#111" stroke="#000" strokeWidth="1.5" />
-                  <circle cx="19" cy="19" r="13.5" fill="none" stroke="#222" strokeWidth="2.5" />
-                  <circle cx="19" cy="19" r="9" fill="none" stroke="#222" strokeWidth="2" />
-                  <circle cx="19" cy="19" r="5" fill="none" stroke="#222" strokeWidth="1.5" />
-                </g>
-                <defs>
-                  <filter id="mini-checker-shadow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feDropShadow dx="0" dy="1" stdDeviation="1" floodColor="#000" floodOpacity="0.18" />
-                  </filter>
-                </defs>
-              </svg>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+                <svg width="38" height="38">
+                  <g filter="url(#mini-checker-shadow)">
+                    <circle cx="19" cy="19" r="18" fill="#111" stroke="#000" strokeWidth="1.5" />
+                    <circle cx="19" cy="19" r="13.5" fill="none" stroke="#222" strokeWidth="2.5" />
+                    <circle cx="19" cy="19" r="9" fill="none" stroke="#222" strokeWidth="2" />
+                    <circle cx="19" cy="19" r="5" fill="none" stroke="#222" strokeWidth="1.5" />
+                  </g>
+                  <defs>
+                    <filter id="mini-checker-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feDropShadow dx="0" dy="1" stdDeviation="1" floodColor="#000" floodOpacity="0.18" />
+                    </filter>
+                  </defs>
+                </svg>
+              </div>
               {/* Player 2 Dice */}
-              {firstRolls[1] ? (
-                <Dice 
-                  value={firstRolls[1]} 
-                  isRolling={isFirstRolling && firstRollTurn === 2}
-                  frame={firstRollAnimationFrame}
-                />
-              ) : (
-                isFirstRolling && firstRollTurn === 2 ? (
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                {firstRolls[1] ? (
                   <Dice 
-                    value={Math.floor(Math.random() * 6) + 1}
-                    isRolling={true}
+                    value={firstRolls[1]} 
+                    isRolling={isFirstRolling && firstRollTurn === 2}
                     frame={firstRollAnimationFrame}
                   />
                 ) : (
-                  <div style={{ height: 48 }} />
-                )
-              )}
+                  isFirstRolling && firstRollTurn === 2 ? (
+                    <Dice 
+                      value={Math.floor(Math.random() * 6) + 1}
+                      isRolling={true}
+                      frame={firstRollAnimationFrame}
+                    />
+                  ) : (
+                    <div style={{ height: 48 }} />
+                  )
+                )}
+              </div>
             </div>
           </div>
           {(!firstRollResult && !isFirstRolling) && (

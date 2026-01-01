@@ -4255,15 +4255,24 @@ function GameBoard() {
       );
     } else {
       // Registered user avatar - check if they have a Google avatar
-      // Show Google avatar only if:
-      // 1. google_avatar_url is set in profile
-      // 2. AND avatar is still the default ('Barry') - meaning user hasn't explicitly chosen a regular avatar
-      // This allows new Google users to see their Google photo, but existing accounts keep their chosen avatar
+      // Show Google avatar if:
+      // 1. google_avatar_url is set in profile AND avatar is still 'Barry' (default)
+      // OR
+      // 2. Profile not loaded yet but user has Google metadata (fallback for new Google users)
+      // This allows new Google users to see their Google photo immediately, but existing accounts keep their chosen avatar
       const googleAvatarUrl = userProfileData?.google_avatar_url;
       const avatarName = userProfileData?.avatar || 'Barry';
-      const shouldUseGoogleAvatar = googleAvatarUrl && avatarName === 'Barry';
+      const isGoogleUser = userData?.identities?.some(id => id.provider === 'google') || 
+                          userData?.user_metadata?.avatar_url || 
+                          userData?.user_metadata?.picture;
+      const fallbackGoogleAvatarUrl = !userProfileData && isGoogleUser ? 
+        (userData?.user_metadata?.avatar_url || userData?.user_metadata?.picture) : null;
+      
+      const shouldUseGoogleAvatar = (googleAvatarUrl && avatarName === 'Barry') || 
+                                    (fallbackGoogleAvatarUrl && !userProfileData);
       
       if (shouldUseGoogleAvatar) {
+        const avatarUrlToUse = googleAvatarUrl || fallbackGoogleAvatarUrl;
         // Use Google profile photo
         return (
           <div style={{
@@ -4279,7 +4288,7 @@ function GameBoard() {
             justifyContent: 'center'
           }}>
             <img 
-              src={googleAvatarUrl}
+              src={avatarUrlToUse}
               alt="User avatar"
               style={{
                 width: '100%',
@@ -8092,15 +8101,24 @@ function GameBoard() {
             <div style={{ position: 'relative', display: 'inline-block' }}>
               {(() => {
                 // Check if user has Google avatar
-                // Show Google avatar only if:
-                // 1. google_avatar_url is set in profile
-                // 2. AND avatar is still the default ('Barry') - meaning user hasn't explicitly chosen a regular avatar
-                // This allows new Google users to see their Google photo, but existing accounts keep their chosen avatar
+                // Show Google avatar if:
+                // 1. google_avatar_url is set in profile AND avatar is still 'Barry' (default)
+                // OR
+                // 2. Profile not loaded yet but user has Google metadata (fallback for new Google users)
+                // This allows new Google users to see their Google photo immediately, but existing accounts keep their chosen avatar
                 const googleAvatarUrl = userProfile?.google_avatar_url;
                 const avatarName = userProfile?.avatar || 'Barry';
-                const shouldUseGoogleAvatar = googleAvatarUrl && avatarName === 'Barry';
+                const isGoogleUser = user?.identities?.some(id => id.provider === 'google') || 
+                                    user?.user_metadata?.avatar_url || 
+                                    user?.user_metadata?.picture;
+                const fallbackGoogleAvatarUrl = !userProfile && isGoogleUser ? 
+                  (user?.user_metadata?.avatar_url || user?.user_metadata?.picture) : null;
+                
+                const shouldUseGoogleAvatar = (googleAvatarUrl && avatarName === 'Barry') || 
+                                              (fallbackGoogleAvatarUrl && !userProfile);
                 
                 if (shouldUseGoogleAvatar) {
+                  const avatarUrlToUse = googleAvatarUrl || fallbackGoogleAvatarUrl;
                   // Show Google avatar
                   return (
                     <div
@@ -8127,7 +8145,7 @@ function GameBoard() {
                       }}
                     >
                       <img 
-                        src={googleAvatarUrl}
+                        src={avatarUrlToUse}
                         alt="User avatar"
                         style={{
                           width: '100%',

@@ -3602,6 +3602,22 @@ function GameBoard() {
               )}
             </>
           )}
+          {/* Quit button for CPU games during break the dice */}
+          {isCpuGame && !isOnlineGame && (
+            <button
+              style={{
+                ...buttonStyle,
+                background: '#6c757d',
+                color: '#fff',
+                minWidth: 160,
+                marginTop: 12,
+                fontSize: 16
+              }}
+              onClick={handleQuit}
+            >
+              Quit
+            </button>
+          )}
           {firstRollResult === 1 && <div style={{ color: '#28a745', fontWeight: 600, fontSize: 20, marginTop: 16 }}>Player 1 goes first!</div>}
           {firstRollResult === 2 && <div style={{ color: '#007bff', fontWeight: 600, fontSize: 20, marginTop: 16 }}>{isCpuGame ? 'CPU goes first!' : 'Player 2 goes first!'}</div>}
           {firstRollResult === 'tie' && <div style={{ color: '#dc3545', fontWeight: 600, fontSize: 20, marginTop: 16 }}>Tie! Roll again.</div>}

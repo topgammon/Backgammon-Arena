@@ -437,7 +437,15 @@ function GameBoard() {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Handle SIGNED_OUT event - ensure user is logged out
+      if (event === 'SIGNED_OUT') {
+        console.log('SIGNED_OUT event received');
+        setUser(null);
+        setUserProfile(null);
+        return;
+      }
+      
       setUser(session?.user ?? null);
       
       // Fetch user profile when user logs in
@@ -7381,11 +7389,7 @@ function GameBoard() {
     const handleSignOut = async () => {
       try {
         if (supabase) {
-          // Clear all state first
-          setUser(null);
-          setUserProfile(null);
-          
-          // Sign out from Supabase (this clears the session)
+          // Sign out from Supabase first (this clears the session from Supabase storage)
           const { error } = await supabase.auth.signOut();
           if (error) {
             console.error('Sign out error:', error);
@@ -7393,23 +7397,31 @@ function GameBoard() {
             return;
           }
           
+          // Wait a moment for signOut to complete
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Clear all localStorage (Supabase stores session here)
+          localStorage.clear();
+          // Also clear sessionStorage just in case
+          sessionStorage.clear();
+          
+          // Clear all state
+          setUser(null);
+          setUserProfile(null);
+          
           // Navigate to home
           setScreen('home');
           
-          // Clear localStorage completely to prevent session restoration
-          localStorage.clear();
-          
-          // Small delay to ensure state is cleared, then reload
-          setTimeout(() => {
-            window.location.reload();
-          }, 200);
+          // Reload to ensure clean state
+          window.location.reload();
         }
       } catch (err) {
         console.error('Sign out error:', err);
-        // Still try to clear and reload
+        // Force clear everything and reload
+        localStorage.clear();
+        sessionStorage.clear();
         setUser(null);
         setUserProfile(null);
-        localStorage.clear();
         window.location.reload();
       }
     };

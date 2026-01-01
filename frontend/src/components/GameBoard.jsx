@@ -7294,36 +7294,12 @@ function GameBoard() {
     // Chat handler
     const handleChat = (data) => {
       if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
-        // Determine sender's username based on which player sent it
-        let senderDisplayName;
+        // Always use username from message data if provided (should always be provided now)
+        // Fallback to opponent profile or guest name only if username is missing
+        let senderDisplayName = data.username;
         
-        if (data.username) {
-          // Use username from message data if provided (best case)
-          senderDisplayName = data.username;
-        } else if (data.player === 1) {
-          // Message from player 1
-          if (playerNumber === 1) {
-            // We are player 1, so this shouldn't happen (we filter out our own messages)
-            senderDisplayName = userProfile?.username || `Guest 1`;
-          } else {
-            // We are player 2, so player 1 is our opponent
-            senderDisplayName = opponentProfile?.username || (opponent?.isGuest 
-              ? `Guest ${opponent.userId?.split('_')[1]?.substring(0, 6) || 'Player'}`
-              : 'Player 1');
-          }
-        } else if (data.player === 2) {
-          // Message from player 2
-          if (playerNumber === 2) {
-            // We are player 2, so this shouldn't happen (we filter out our own messages)
-            senderDisplayName = userProfile?.username || `Guest 2`;
-          } else {
-            // We are player 1, so player 2 is our opponent
-            senderDisplayName = opponentProfile?.username || (opponent?.isGuest 
-              ? `Guest ${opponent.userId?.split('_')[1]?.substring(0, 6) || 'Player'}`
-              : 'Player 2');
-          }
-        } else {
-          // Fallback
+        if (!senderDisplayName) {
+          // Fallback: use opponent profile or guest name
           senderDisplayName = opponentProfile?.username || (opponent?.isGuest 
             ? `Guest ${opponent.userId?.split('_')[1]?.substring(0, 6) || 'Player'}`
             : `Player ${data.player}`);
@@ -7725,16 +7701,20 @@ function GameBoard() {
                   onKeyPress={(e) => {
                     if (e.key === 'Enter' && chatInput.trim() && socketRef.current && matchId) {
                       const message = chatInput.trim();
+                      // Get current player's username for the message
+                      const currentPlayerDisplayName = user && userProfile 
+                        ? userProfile.username 
+                        : (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`);
+                      
                       socketRef.current.emit('game:chat', {
                         matchId,
                         player: playerNumber,
-                        message
+                        message,
+                        username: currentPlayerDisplayName // Include username in message
                       });
-                      // Use current player's username from profile, or fallback to guest name or player number
-                    const currentPlayerDisplayName = user && userProfile 
-                      ? userProfile.username 
-                      : (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`);
-                    setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: message }]);
+                      
+                      // Add to local chat messages
+                      setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: message }]);
                       setChatInput('');
                     }
                   }}
@@ -7767,16 +7747,20 @@ function GameBoard() {
                   onClick={() => {
                     if (chatInput.trim() && socketRef.current && matchId) {
                       const message = chatInput.trim();
+                      // Get current player's username for the message
+                      const currentPlayerDisplayName = user && userProfile 
+                        ? userProfile.username 
+                        : (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`);
+                      
                       socketRef.current.emit('game:chat', {
                         matchId,
                         player: playerNumber,
-                        message
+                        message,
+                        username: currentPlayerDisplayName // Include username in message
                       });
-                      // Use current player's username from profile, or fallback to guest name or player number
-                    const currentPlayerDisplayName = user && userProfile 
-                      ? userProfile.username 
-                      : (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`);
-                    setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: message }]);
+                      
+                      // Add to local chat messages
+                      setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: message }]);
                       setChatInput('');
                     }
                   }}

@@ -765,12 +765,6 @@ function GameBoard() {
       return;
     }
 
-    // Only fetch if profile is not already set (to avoid unnecessary fetches)
-    // This prevents race conditions with onAuthStateChange
-    if (userProfile && userProfile.id === user.id) {
-      return; // Profile already loaded for this user
-    }
-
     const fetchUserProfile = async () => {
       // Add a small delay to let onAuthStateChange complete first
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -783,12 +777,13 @@ function GameBoard() {
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = not found
         console.error('Error fetching user profile:', error);
-        setUserProfile(null);
-      } else if (data) {
-        // Only update if we don't already have a profile or if this is newer
-        if (!userProfile || userProfile.id !== data.id) {
-          setUserProfile(data);
+        // Don't set to null if we already have a profile - keep existing one
+        if (!userProfile) {
+          setUserProfile(null);
         }
+      } else if (data) {
+        // Always update with fresh data to ensure avatar and other fields are current
+        setUserProfile(data);
       } else {
         // If profile doesn't exist, try to create it from auth metadata
         if (user.user_metadata?.username) {
@@ -823,7 +818,7 @@ function GameBoard() {
     };
 
     fetchUserProfile();
-  }, [user, supabase]); // Removed userProfile from deps to prevent loops
+  }, [user, supabase]); // Removed userProfile from deps to prevent loops, but will always fetch fresh data
 
   // Sound effects - non-blocking, triggered by game actions
   const playSound = (soundName) => {
@@ -3917,6 +3912,28 @@ function GameBoard() {
     }
   }, [screen, passPlayPlayer1Name]);
 
+  // Refresh user profile when returning to home screen to ensure avatar is current
+  useEffect(() => {
+    if (screen === 'home' && user && supabase) {
+      // Refresh profile to ensure we have the latest data (especially avatar)
+      const refreshProfile = async () => {
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        if (!error && data) {
+          setUserProfile(data);
+        }
+      };
+      
+      // Small delay to avoid race conditions with other profile fetches
+      const timeoutId = setTimeout(refreshProfile, 200);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [screen, user?.id, supabase]); // Only refresh when screen changes to home or user changes
+
   // Avatar component
   const renderAvatar = (isGuest = false, isCpu = false, cpuDifficulty = null, size = 60, userProfileData = null, userData = null) => {
     if (isCpu && cpuDifficulty) {
@@ -4090,11 +4107,15 @@ function GameBoard() {
   // Player info component (for below board)
   const renderPlayerInfo = (playerNum, isGuest = false, username = null, country = null, rating = null, showControls = true, isPassPlay = false, showQuit = false) => {
     // For logged-in users, use their profile data
-    const isLoggedInUser = !isGuest && user && userProfile && playerNum === playerNumber;
+    // Check if: 1) Online game and playerNum matches playerNumber, OR 2) CPU game and playerNum is 1 (human player)
+    const isLoggedInUser = !isGuest && user && userProfile && (
+      (isOnlineGame && playerNum === playerNumber) || 
+      (isCpuGame && playerNum === 1)
+    );
     const displayName = username || (isLoggedInUser ? userProfile.username : (isGuest ? (playerNum === 1 ? passPlayPlayer1Name : passPlayPlayer2Name) : `Player ${playerNum}`));
     const displayCountry = country || (isLoggedInUser ? userProfile.country : (isGuest ? 'N/A' : 'N/A'));
     const displayRating = rating || (isLoggedInUser ? userProfile.elo_rating : (isGuest ? 'Unranked' : '1000'));
-    const isCurrentPlayer = isPassPlay ? (currentPlayer === playerNum) : (playerNum === playerNumber);
+    const isCurrentPlayer = isPassPlay ? (currentPlayer === playerNum) : (isOnlineGame ? (playerNum === playerNumber) : (isCpuGame ? (playerNum === 1 && currentPlayer === 1) : (currentPlayer === playerNum)));
     
     return (
       <div style={{
@@ -6044,7 +6065,7 @@ function GameBoard() {
         
         {/* Player info below board (left side) */}
         <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 20px', marginTop: 16, maxWidth: 900, margin: '16px auto 0' }}>
-          {renderPlayerInfo(1, true, passPlayPlayer1Name || 'Guest Player', null, null, true, false, true)}
+          {renderPlayerInfo(1, !user, null, null, null, true, false, true)}
         </div>
         
         {/* Test End Game button - Hidden for production, uncomment for testing */}
@@ -6100,9 +6121,11 @@ function GameBoard() {
                     padding: '4px',
                     boxShadow: gameOver.winner === 1 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
                   }}>
-                    {renderAvatar(true, false, null, 80, null, null)}
+                    {renderAvatar(!user, false, null, 80, user ? userProfile : null, user ? user : null)}
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>{passPlayPlayer1Name || 'Player 1'}</div>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>
+                    {user && userProfile ? userProfile.username : (passPlayPlayer1Name || 'Player 1')}
+                  </div>
                   {gameOver.winner === 1 && (
                     <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
                   )}

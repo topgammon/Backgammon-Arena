@@ -803,39 +803,6 @@ function GameBoard() {
     };
 
     fetchUserProfile();
-        // If profile doesn't exist, try to create it from auth metadata
-        if (user.user_metadata?.username) {
-          const { error: insertError } = await supabase
-            .from('users')
-            .insert({
-              id: user.id,
-              email: user.email,
-              username: user.user_metadata.username,
-              country: user.user_metadata.country || 'US',
-              avatar: 'Barry', // Always default to first avatar
-              google_avatar_url: null, // No Google avatar for email signups
-              elo_rating: 1000,
-              wins: 0,
-              losses: 0,
-              games_played: 0
-            });
-          
-          if (!insertError) {
-            // Fetch again after creating
-            const { data: newData } = await supabase
-              .from('users')
-              .select('*')
-              .eq('id', user.id)
-              .single();
-            if (newData) {
-              setUserProfile(newData);
-            }
-          }
-        }
-      }
-    };
-
-    fetchUserProfile();
   }, [user, supabase]); // Removed userProfile from deps to prevent loops, but will always fetch fresh data
 
   // Sound effects - non-blocking, triggered by game actions

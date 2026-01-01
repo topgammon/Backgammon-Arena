@@ -572,6 +572,11 @@ function GameBoard() {
           
           if (!profileErr && freshProfile && freshProfile.id === session.user.id) {
             // Set profile immediately to prevent default avatar/country from showing
+            // CRITICAL: Ensure avatar field exists - if it's null/undefined, it means the profile wasn't saved correctly
+            if (!freshProfile.avatar || freshProfile.avatar === null || freshProfile.avatar === undefined || freshProfile.avatar === '') {
+              console.warn('Profile loaded but avatar field is missing or empty, defaulting to Barry');
+              freshProfile.avatar = 'Barry';
+            }
             setUserProfile(freshProfile);
             lastFetchedUserIdRef.current = session.user.id;
             profileFetchingRef.current = false; // Reset flag since we fetched directly
@@ -665,6 +670,13 @@ function GameBoard() {
         } else if (profile) {
           // Profile exists - ALWAYS update with fresh data from database
           // This prevents stale avatar/profile data issues
+          
+          // CRITICAL: Ensure avatar field exists - if it's null/undefined/empty, default to Barry
+          if (!profile.avatar || profile.avatar === null || profile.avatar === undefined || profile.avatar === '') {
+            console.warn('Profile loaded but avatar field is missing or empty, defaulting to Barry');
+            profile.avatar = 'Barry';
+          }
+          
           // Only update google_avatar_url if it's not already set and user signed in with Google
           const isGoogleSignIn = session.user.identities?.some(id => id.provider === 'google');
           const googleAvatarUrl = session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null;
@@ -679,6 +691,10 @@ function GameBoard() {
               .single();
             
             if (updatedProfile) {
+              // Ensure avatar exists in updated profile too
+              if (!updatedProfile.avatar || updatedProfile.avatar === null || updatedProfile.avatar === undefined || updatedProfile.avatar === '') {
+                updatedProfile.avatar = 'Barry';
+              }
               // Always update with fresh data
               setUserProfile(updatedProfile);
             } else {
@@ -804,6 +820,11 @@ function GameBoard() {
       if (!error && data) {
         // Double-check user ID matches (prevent stale updates)
         if (data.id === userId) {
+          // CRITICAL: Ensure avatar field exists - if it's null/undefined, default to Barry
+          if (!data.avatar || data.avatar === null || data.avatar === undefined || data.avatar === '') {
+            console.warn('Profile loaded but avatar field is missing or empty, defaulting to Barry');
+            data.avatar = 'Barry';
+          }
           setUserProfile(data);
         }
       } else if (error && error.code !== 'PGRST116') {
@@ -4095,11 +4116,19 @@ function GameBoard() {
         let avatarName = null;
         
         if (userProfileData) {
-          // Profile exists - use its avatar field (or default to Barry if null/undefined)
-          avatarName = userProfileData.avatar || 'Barry';
+          // Profile exists - use its avatar field
+          // IMPORTANT: Only default to Barry if avatar is explicitly null/undefined/empty
+          // Don't default if we have a valid avatar value
+          avatarName = userProfileData.avatar;
+          if (!avatarName || avatarName === '' || avatarName === null || avatarName === undefined) {
+            avatarName = 'Barry';
+          }
+        } else if (userData) {
+          // User is logged in but profile not loaded yet - show default temporarily
+          // The profile will load and update the avatar
+          avatarName = 'Barry';
         } else {
-          // No profile data - default to Barry
-          // This handles both guest users and logged-in users whose profile hasn't loaded yet
+          // No user data at all - default to Barry (guest case)
           avatarName = 'Barry';
         }
         

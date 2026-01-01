@@ -8010,7 +8010,17 @@ function GameBoard() {
                     padding: '4px',
                     boxShadow: gameOver.winner === 1 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
                   }}>
-                    {renderAvatar(playerNumber === 1 ? (user ? false : true) : (opponent?.isGuest || false), false, null, 80, playerNumber === 1 ? userProfile : opponentProfile, playerNumber === 1 ? user : null)}
+                    {renderAvatar(
+                      // Player 1 is guest if: current user is player 1 and not logged in, OR opponent is player 1 and is guest
+                      (playerNumber === 1 && !user) || (playerNumber !== 1 && opponent?.isGuest),
+                      false, 
+                      null, 
+                      80, 
+                      // Player 1 profile: if I'm player 1, use my profile; if I'm player 2, use opponent profile
+                      playerNumber === 1 ? userProfile : opponentProfile, 
+                      // Player 1 userData: if I'm player 1, use my user; if I'm player 2, use null (opponent)
+                      playerNumber === 1 ? user : null
+                    )}
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>
                     {playerNumber === 1 ? (userProfile?.username || (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`)) : (opponentName || 'Opponent')}
@@ -8044,7 +8054,17 @@ function GameBoard() {
                     padding: '4px',
                     boxShadow: gameOver.winner === 2 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
                   }}>
-                    {renderAvatar(playerNumber === 2 ? (user ? false : true) : (opponent?.isGuest || false), false, null, 80, playerNumber === 2 ? userProfile : opponentProfile, playerNumber === 2 ? user : null)}
+                    {renderAvatar(
+                      // Player 2 is guest if: current user is player 2 and not logged in, OR opponent is player 2 and is guest
+                      (playerNumber === 2 && !user) || (playerNumber !== 2 && opponent?.isGuest),
+                      false, 
+                      null, 
+                      80, 
+                      // Player 2 profile: if I'm player 2, use my profile; if I'm player 1, use opponent profile
+                      playerNumber === 2 ? userProfile : opponentProfile, 
+                      // Player 2 userData: if I'm player 2, use my user; if I'm player 1, use null (opponent)
+                      playerNumber === 2 ? user : null
+                    )}
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>
                     {playerNumber === 2 ? (userProfile?.username || (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`)) : (opponentName || 'Opponent')}

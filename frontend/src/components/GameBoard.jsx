@@ -278,6 +278,7 @@ function GameBoard() {
   const [matchId, setMatchId] = useState(null);
   const [playerNumber, setPlayerNumber] = useState(null); // 1 or 2
   const [opponent, setOpponent] = useState(null); // { userId, isGuest }
+  const [opponentProfile, setOpponentProfile] = useState(null); // Opponent's user profile data
   const transitioningToGameRef = useRef(false);
   
   // Track window width for responsive design
@@ -1091,6 +1092,30 @@ function GameBoard() {
           setIsOnlineGame(true);
           setMatchmakingType(matchData.matchmakingType);
           setScreen('onlineGame');
+          
+          // Fetch opponent's profile if they're a registered user
+          if (!matchData.opponent?.isGuest && matchData.opponent?.userId && supabase) {
+            (async () => {
+              try {
+                const { data: profile, error } = await supabase
+                  .from('users')
+                  .select('*')
+                  .eq('id', matchData.opponent.userId)
+                  .maybeSingle();
+                
+                if (!error && profile) {
+                  console.log('Fetched opponent profile from localStorage restore:', profile);
+                  setOpponentProfile(profile);
+                } else if (error && error.code !== 'PGRST116') {
+                  console.error('Error fetching opponent profile:', error);
+                }
+              } catch (err) {
+                console.error('Error fetching opponent profile:', err);
+              }
+            })();
+          } else {
+            setOpponentProfile(null);
+          }
         } else {
           // Match is too old, clear it
           localStorage.removeItem('activeMatch');
@@ -6558,7 +6583,7 @@ function GameBoard() {
       }, 2000);
     });
     
-      socket.on('matchmaking:match-found', (data) => {
+      socket.on('matchmaking:match-found', async (data) => {
         console.log('Match found:', data);
         setMatchmakingStatus('Match found! Starting game...');
         
@@ -6570,6 +6595,28 @@ function GameBoard() {
         setPlayerNumber(data.playerNumber);
         setOpponent(data.opponent);
         setIsOnlineGame(true);
+        
+        // Fetch opponent's profile if they're a registered user
+        if (!data.opponent?.isGuest && data.opponent?.userId && supabase) {
+          try {
+            const { data: profile, error } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', data.opponent.userId)
+              .maybeSingle();
+            
+            if (!error && profile) {
+              console.log('Fetched opponent profile:', profile);
+              setOpponentProfile(profile);
+            } else if (error && error.code !== 'PGRST116') {
+              console.error('Error fetching opponent profile:', error);
+            }
+          } catch (err) {
+            console.error('Error fetching opponent profile:', err);
+          }
+        } else {
+          setOpponentProfile(null);
+        }
         
         // Store match state in localStorage for reconnection on refresh
         localStorage.setItem('activeMatch', JSON.stringify({
@@ -6817,6 +6864,7 @@ function GameBoard() {
         setMatchId(null);
         setPlayerNumber(null);
         setOpponent(null);
+        setOpponentProfile(null);
         setScreen('home');
       });
     }
@@ -7271,9 +7319,10 @@ function GameBoard() {
   
   // Online Game Screen
   const renderOnlineGame = () => {
+    // Get opponent's display name - use username from profile if available, otherwise use userId or guest name
     const opponentName = opponent?.isGuest 
       ? `Guest ${opponent.userId?.split('_')[1]?.substring(0, 6) || 'Player'}` 
-      : opponent?.userId || 'Opponent';
+      : (opponentProfile?.username || opponent?.userId || 'Opponent');
     
     const boardContainerWidth = boardW + boardX * 2; // Board width + padding
     const isWideScreen = windowWidth > 1200;
@@ -7305,7 +7354,7 @@ function GameBoard() {
           }}>
             {/* Opponent info (left side) */}
             <div style={{ flex: 1 }}>
-              {renderOpponentInfo(opponent?.isGuest || false, false, opponentName, null, null, null, playerNumber === 1 ? 2 : 1)}
+              {renderOpponentInfo(opponent?.isGuest || false, false, opponentName, opponentProfile?.country, opponentProfile?.elo_rating, null, playerNumber === 1 ? 2 : 1)}
             </div>
             {/* Title and logo (right side) */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, minWidth: 200, flexWrap: 'wrap' }}>
@@ -7491,7 +7540,7 @@ function GameBoard() {
             justifyContent: 'flex-start', 
             marginTop: 16
           }}>
-            {renderPlayerInfo(playerNumber, !user, userProfile?.username || `Guest ${playerNumber}`, userProfile?.country, userProfile?.elo_rating, true)}
+            {renderPlayerInfo(playerNumber, !user, userProfile?.username || (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`), userProfile?.country, userProfile?.elo_rating, true)}
           </div>
           
           {/* Chat box below player info when narrow */}
@@ -7817,10 +7866,10 @@ function GameBoard() {
                     padding: '4px',
                     boxShadow: gameOver.winner === 1 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
                   }}>
-                    {renderAvatar(playerNumber === 1 ? (user ? false : true) : (opponent?.isGuest || false), false, null, 80, playerNumber === 1 ? userProfile : null, playerNumber === 1 ? user : null)}
+                    {renderAvatar(playerNumber === 1 ? (user ? false : true) : (opponent?.isGuest || false), false, null, 80, playerNumber === 1 ? userProfile : opponentProfile, playerNumber === 1 ? user : null)}
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>
-                    {playerNumber === 1 ? (user?.username || `Guest ${playerNumber}`) : (opponentName || 'Opponent')}
+                    {playerNumber === 1 ? (userProfile?.username || (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`)) : (opponentName || 'Opponent')}
                   </div>
                   {/* ELO Rating and Change for ranked matches */}
                   {matchmakingType === 'ranked' && eloChanges && (
@@ -7851,10 +7900,10 @@ function GameBoard() {
                     padding: '4px',
                     boxShadow: gameOver.winner === 2 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
                   }}>
-                    {renderAvatar(playerNumber === 2 ? (user ? false : true) : (opponent?.isGuest || false), false, null, 80, playerNumber === 2 ? userProfile : null, playerNumber === 2 ? user : null)}
+                    {renderAvatar(playerNumber === 2 ? (user ? false : true) : (opponent?.isGuest || false), false, null, 80, playerNumber === 2 ? userProfile : opponentProfile, playerNumber === 2 ? user : null)}
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>
-                    {playerNumber === 2 ? (user?.username || `Guest ${playerNumber}`) : (opponentName || 'Opponent')}
+                    {playerNumber === 2 ? (userProfile?.username || (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`)) : (opponentName || 'Opponent')}
                   </div>
                   {/* ELO Rating and Change for ranked matches */}
                   {matchmakingType === 'ranked' && eloChanges && (
@@ -7927,6 +7976,7 @@ function GameBoard() {
                         setMatchId(null);
                         setPlayerNumber(null);
                         setOpponent(null);
+                        setOpponentProfile(null);
                         // Start matchmaking (same as "Play as Guest")
                         setIsMatchmaking(true);
                         setMatchmakingType('guest');
@@ -7954,6 +8004,7 @@ function GameBoard() {
                       setMatchId(null);
                       setPlayerNumber(null);
                       setOpponent(null);
+                      setOpponentProfile(null);
                       // Start matchmaking (same as "Play as Guest")
                       setIsMatchmaking(true);
                       setMatchmakingType('guest');

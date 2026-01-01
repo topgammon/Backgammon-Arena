@@ -3610,7 +3610,7 @@ function GameBoard() {
                   </filter>
                 </defs>
               </svg>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>Player 1</div>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>{player1Name}</div>
               {firstRolls[0] ? (
                 <Dice 
                   value={firstRolls[0]} 
@@ -3643,7 +3643,7 @@ function GameBoard() {
                   </filter>
                 </defs>
               </svg>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>{isCpuGame ? 'CPU' : 'Player 2'}</div>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>{player2Name}</div>
               {firstRolls[1] ? (
                 <Dice 
                   value={firstRolls[1]} 
@@ -3671,7 +3671,7 @@ function GameBoard() {
                   style={{ ...buttonStyle, minWidth: 160, marginTop: 8 }}
                   onClick={handleFirstRoll}
                 >
-                  {firstRollTurn === 1 ? 'Player 1: Roll' : (isCpuGame ? 'CPU: Roll' : 'Player 2: Roll')}
+                  {firstRollTurn === 1 ? `${player1Name}: Roll` : `${player2Name}: Roll`}
                 </button>
               ) : (
                 // Online game - show button only if it's this player's turn
@@ -3680,7 +3680,7 @@ function GameBoard() {
                     style={{ ...buttonStyle, minWidth: 160, marginTop: 8 }}
                     onClick={handleFirstRoll}
                   >
-                    {firstRollTurn === 1 ? 'Player 1: Roll' : 'Player 2: Roll'}
+                    {firstRollTurn === 1 ? `${player1Name}: Roll` : `${player2Name}: Roll`}
                   </button>
                 ) : (
                   <div style={{ color: '#666', marginTop: 8, fontSize: 16 }}>
@@ -3706,8 +3706,8 @@ function GameBoard() {
               Quit
             </button>
           )}
-          {firstRollResult === 1 && <div style={{ color: '#28a745', fontWeight: 600, fontSize: 20, marginTop: 16 }}>Player 1 goes first!</div>}
-          {firstRollResult === 2 && <div style={{ color: '#007bff', fontWeight: 600, fontSize: 20, marginTop: 16 }}>{isCpuGame ? 'CPU goes first!' : 'Player 2 goes first!'}</div>}
+          {firstRollResult === 1 && <div style={{ color: '#28a745', fontWeight: 600, fontSize: 20, marginTop: 16 }}>{player1Name} goes first!</div>}
+          {firstRollResult === 2 && <div style={{ color: '#007bff', fontWeight: 600, fontSize: 20, marginTop: 16 }}>{player2Name} goes first!</div>}
           {firstRollResult === 'tie' && <div style={{ color: '#dc3545', fontWeight: 600, fontSize: 20, marginTop: 16 }}>Tie! Roll again.</div>}
         </div>
       </div>
@@ -7281,13 +7281,15 @@ function GameBoard() {
     // Chat handler
     const handleChat = (data) => {
       if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
-        // Use opponent's username from profile, or fallback to guest name or player number
-        const opponentDisplayName = opponent?.isGuest 
-          ? `Guest ${opponent.userId?.split('_')[1]?.substring(0, 6) || 'Player'}`
-          : (opponentProfile?.username || `Player ${data.player}`);
+        // Use the username from the message data if provided, otherwise fallback to opponent profile
+        const senderDisplayName = data.username || (
+          opponent?.isGuest 
+            ? `Guest ${opponent.userId?.split('_')[1]?.substring(0, 6) || 'Player'}`
+            : (opponentProfile?.username || `Player ${data.player}`)
+        );
         
         setChatMessages(prev => [...prev, { 
-          from: opponentDisplayName, 
+          from: senderDisplayName, 
           text: data.message 
         }]);
       }
@@ -7475,15 +7477,19 @@ function GameBoard() {
                 onKeyPress={(e) => {
                   if (e.key === 'Enter' && chatInput.trim() && socketRef.current && matchId) {
                     const message = chatInput.trim();
-                    socketRef.current.emit('game:chat', {
-                      matchId,
-                      player: playerNumber,
-                      message
-                    });
-                    // Use current player's username from profile, or fallback to guest name or player number
+                    // Get current player's username for the message
                     const currentPlayerDisplayName = user && userProfile 
                       ? userProfile.username 
                       : (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`);
+                    
+                    socketRef.current.emit('game:chat', {
+                      matchId,
+                      player: playerNumber,
+                      message,
+                      username: currentPlayerDisplayName // Include username in message
+                    });
+                    
+                    // Add to local chat messages
                     setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: message }]);
                     setChatInput('');
                   }
@@ -7517,15 +7523,19 @@ function GameBoard() {
                 onClick={() => {
                   if (chatInput.trim() && socketRef.current && matchId) {
                     const message = chatInput.trim();
-                    socketRef.current.emit('game:chat', {
-                      matchId,
-                      player: playerNumber,
-                      message
-                    });
-                    // Use current player's username from profile, or fallback to guest name or player number
+                    // Get current player's username for the message
                     const currentPlayerDisplayName = user && userProfile 
                       ? userProfile.username 
                       : (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`);
+                    
+                    socketRef.current.emit('game:chat', {
+                      matchId,
+                      player: playerNumber,
+                      message,
+                      username: currentPlayerDisplayName // Include username in message
+                    });
+                    
+                    // Add to local chat messages
                     setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: message }]);
                     setChatInput('');
                   }

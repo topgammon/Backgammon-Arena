@@ -22,8 +22,12 @@ const clearAllSupabaseStorage = async () => {
       }
     }
     
-    // Clear sessionStorage
+    // Clear sessionStorage (but preserve our sign-out flag)
+    const signingOutFlag = sessionStorage.getItem('signing_out');
     sessionStorage.clear();
+    if (signingOutFlag) {
+      sessionStorage.setItem('signing_out', signingOutFlag);
+    }
     
     // Clear IndexedDB databases that contain 'supabase' or 'sb-'
     if ('indexedDB' in window) {
@@ -481,22 +485,39 @@ function GameBoard() {
     // Check for OAuth callback on mount
     handleOAuthCallback();
 
-    // Check if we're coming from a sign-out and clear everything
-    (async () => {
-      const isSigningOut = sessionStorage.getItem('signing_out') === 'true';
-      if (isSigningOut) {
-        // Clear the flag
-        sessionStorage.removeItem('signing_out');
-        // Force clear all Supabase storage
+    // CRITICAL: Check if we're coming from a sign-out SYNCHRONOUSLY before getSession()
+    // This must happen BEFORE Supabase tries to restore the session from storage
+    // Check both sessionStorage and localStorage (backup)
+    const isSigningOut = sessionStorage.getItem('signing_out') === 'true' || localStorage.getItem('_signing_out') === 'true';
+    if (isSigningOut) {
+      // Clear the flags immediately (synchronously)
+      sessionStorage.removeItem('signing_out');
+      localStorage.removeItem('_signing_out');
+      // Clear all Supabase storage SYNCHRONOUSLY first (before async operations)
+      // This prevents Supabase from restoring the session when getSession() is called
+      const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
+      supabaseKeys.forEach(key => localStorage.removeItem(key));
+      // Clear sessionStorage (but keep our flag logic separate)
+      const sessionKeys = Object.keys(sessionStorage);
+      sessionKeys.forEach(key => {
+        if (!key.startsWith('signing_out')) {
+          sessionStorage.removeItem(key);
+        }
+      });
+      // Set user state to null immediately
+      setUser(null);
+      setUserProfile(null);
+      // Then do async cleanup in background
+      (async () => {
         await clearAllSupabaseStorage();
-        // Force sign out from Supabase
         await supabase.auth.signOut({ scope: 'global' });
-        setUser(null);
-        setUserProfile(null);
-        return;
-      }
-    })();
+      })();
+      // CRITICAL: Don't call getSession() if we're signing out - exit early
+      // This prevents Supabase from restoring the session from any remaining storage
+      return;
+    }
 
+    // Only get session if we're NOT signing out
     // Get initial session - but verify it's valid first
     // This runs on every page load to catch orphaned sessions
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -7581,9 +7602,20 @@ function GameBoard() {
         if (supabase) {
           console.log('Signing out...');
           
+          // CRITICAL: Set flag FIRST (before clearing anything)
+          // Use a special key that won't be cleared by sessionStorage.clear()
+          sessionStorage.setItem('signing_out', 'true');
+          // Also set in localStorage as backup (survives sessionStorage.clear())
+          localStorage.setItem('_signing_out', 'true');
+          
           // Clear state immediately
           setUser(null);
           setUserProfile(null);
+          
+          // CRITICAL: Clear Supabase storage SYNCHRONOUSLY before any async operations
+          // This prevents Supabase from restoring the session on page reload
+          const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
+          supabaseKeys.forEach(key => localStorage.removeItem(key));
           
           // Sign out from Supabase with global scope to invalidate all sessions
           const { error } = await supabase.auth.signOut({ scope: 'global' });
@@ -7591,29 +7623,32 @@ function GameBoard() {
             console.error('Sign out error:', error);
           }
           
-          // Set a flag in sessionStorage to indicate we're signing out
-          sessionStorage.setItem('signing_out', 'true');
+          // Wait a bit for signOut to complete
+          await new Promise(resolve => setTimeout(resolve, 200));
           
-          // Wait for signOut to complete
-          await new Promise(resolve => setTimeout(resolve, 300));
-          
-          // Clear all Supabase storage using comprehensive cleanup
+          // Do comprehensive async cleanup
           await clearAllSupabaseStorage();
           
-          // Set the flag again after clearing (in case it was cleared)
+          // Set flags again (in case they were cleared)
           sessionStorage.setItem('signing_out', 'true');
+          localStorage.setItem('_signing_out', 'true');
           
-          // Verify session is cleared before reloading
+          // Verify session is cleared
           const { data: { session } } = await supabase.auth.getSession();
           if (session) {
             console.warn('Session still exists after signOut, forcing clear...');
-            // Try signOut again with more aggressive cleanup
+            // More aggressive cleanup
             await supabase.auth.signOut({ scope: 'global' });
             await new Promise(resolve => setTimeout(resolve, 200));
-            await clearAllSupabaseStorage();
-            // As last resort, clear ALL localStorage (not just Supabase keys)
-            localStorage.clear();
+            // Clear ALL localStorage as last resort
+            const allKeys = Object.keys(localStorage);
+            allKeys.forEach(key => {
+              if (!key.startsWith('_signing_out')) { // Keep our flag
+                localStorage.removeItem(key);
+              }
+            });
             sessionStorage.setItem('signing_out', 'true');
+            localStorage.setItem('_signing_out', 'true');
           }
           
           // Use replace instead of href to prevent back button from restoring state
@@ -7623,9 +7658,10 @@ function GameBoard() {
       } catch (err) {
         console.error('Sign out error:', err);
         // Force clear everything and reload
-        await clearAllSupabaseStorage();
-        localStorage.clear(); // Last resort - clear everything
+        const supabaseKeys = Object.keys(localStorage).filter(key => key.startsWith('sb-'));
+        supabaseKeys.forEach(key => localStorage.removeItem(key));
         sessionStorage.setItem('signing_out', 'true');
+        localStorage.setItem('_signing_out', 'true');
         setUser(null);
         setUserProfile(null);
         window.location.replace(window.location.origin + window.location.pathname + '?t=' + Date.now());

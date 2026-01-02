@@ -4363,6 +4363,46 @@ function GameBoard() {
     }
   }, [screen, passPlayPlayer1Name]);
 
+  // Chat censorship function - filters inappropriate words
+  const filterChatMessage = (message) => {
+    if (!message) return message;
+    
+    // List of words/phrases to filter (case-insensitive, using word boundaries)
+    const badWords = [
+      // Profanity - common variations
+      /\bf+u+c+k+\b/gi,
+      /\bs+h+i+t+\b/gi,
+      /\bb+i+t+c+h+\b/gi,
+      /\ba+s+s+h+o+l+e+\b/gi,
+      /\bd+a+m+n+\b/gi,
+      /\bp+i+s+s+\b/gi,
+      /\bc+r+a+p+\b/gi,
+      // Slurs and offensive terms
+      /\bn+i+g+g+e+r+\b/gi,
+      /\br+e+t+a+r+d+\b/gi,
+      /\bf+a+g+\b/gi,
+      /\bf+a+g+g+o+t+\b/gi,
+      // Other inappropriate terms (context-dependent, but filtering common offensive uses)
+      /\bk+i+l+l+\s+y+o+u+r+s+e+l+f+\b/gi,
+      /\bk+i+l+l+\s+m+y+s+e+l+f+\b/gi,
+    ];
+    
+    let filtered = message;
+    badWords.forEach(pattern => {
+      filtered = filtered.replace(pattern, (match) => {
+        // Replace with asterisks
+        return '*'.repeat(match.length);
+      });
+    });
+    
+    // Also filter common attempts to bypass filters (leetspeak, etc.)
+    filtered = filtered.replace(/[f4]+[u@]+[c\(]+[k<]+/gi, '****');
+    filtered = filtered.replace(/[s5]+[h#]+[i1!]+[t+]+/gi, '****');
+    filtered = filtered.replace(/[b8]+[i1!]+[t+]+[c\(]+[h#]+/gi, '*****');
+    
+    return filtered;
+  };
+
   // Refresh user profile when returning to home screen to ensure avatar is current
   useEffect(() => {
     if (screen === 'home' && user && supabase) {
@@ -7400,9 +7440,12 @@ function GameBoard() {
             : `Player ${data.player}`);
         }
         
+        // Filter the message before displaying
+        const filteredMessage = filterChatMessage(data.message);
+        
         setChatMessages(prev => [...prev, { 
           from: senderDisplayName, 
-          text: data.message 
+          text: filteredMessage 
         }]);
       }
     };
@@ -7525,10 +7568,10 @@ function GameBoard() {
               minHeight: 100
             }}>
               {chatMessages.length === 0 ? (
-                <div style={{ color: '#999', fontSize: 12, fontStyle: 'italic' }}>No messages yet...</div>
+                <div style={{ color: '#999', fontSize: 14, fontStyle: 'italic' }}>No messages yet...</div>
               ) : (
                 chatMessages.map((msg, idx) => (
-                  <div key={idx} style={{ marginBottom: 4, fontSize: 13, wordBreak: 'break-word' }}>
+                  <div key={idx} style={{ marginBottom: 6, fontSize: 16, wordBreak: 'break-word' }}>
                     <span style={{ fontWeight: 600, color: '#333' }}>{msg.from}:</span> {msg.text}
                   </div>
                 ))
@@ -7588,7 +7631,9 @@ function GameBoard() {
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyPress={(e) => {
                   if (e.key === 'Enter' && chatInput.trim() && socketRef.current && matchId) {
-                    const message = chatInput.trim();
+                    const rawMessage = chatInput.trim();
+                    // Filter the message before sending
+                    const filteredMessage = filterChatMessage(rawMessage);
                     // Get current player's username for the message
                     const currentPlayerDisplayName = user && userProfile 
                       ? userProfile.username 
@@ -7597,12 +7642,12 @@ function GameBoard() {
                     socketRef.current.emit('game:chat', {
                       matchId,
                       player: playerNumber,
-                      message,
+                      message: filteredMessage,
                       username: currentPlayerDisplayName // Include username in message
                     });
                     
-                    // Add to local chat messages
-                    setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: message }]);
+                    // Add to local chat messages (use filtered message)
+                    setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: filteredMessage }]);
                     setChatInput('');
                   }
                 }}
@@ -7634,7 +7679,9 @@ function GameBoard() {
               <button
                 onClick={() => {
                   if (chatInput.trim() && socketRef.current && matchId) {
-                    const message = chatInput.trim();
+                    const rawMessage = chatInput.trim();
+                    // Filter the message before sending
+                    const filteredMessage = filterChatMessage(rawMessage);
                     // Get current player's username for the message
                     const currentPlayerDisplayName = user && userProfile 
                       ? userProfile.username 
@@ -7643,12 +7690,12 @@ function GameBoard() {
                     socketRef.current.emit('game:chat', {
                       matchId,
                       player: playerNumber,
-                      message,
+                      message: filteredMessage,
                       username: currentPlayerDisplayName // Include username in message
                     });
                     
-                    // Add to local chat messages
-                    setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: message }]);
+                    // Add to local chat messages (use filtered message)
+                    setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: filteredMessage }]);
                     setChatInput('');
                   }
                 }}
@@ -7732,10 +7779,10 @@ function GameBoard() {
                 maxHeight: 120
               }}>
                 {chatMessages.length === 0 ? (
-                  <div style={{ color: '#999', fontSize: 12, fontStyle: 'italic' }}>No messages yet...</div>
+                  <div style={{ color: '#999', fontSize: 14, fontStyle: 'italic' }}>No messages yet...</div>
                 ) : (
                   chatMessages.map((msg, idx) => (
-                    <div key={idx} style={{ marginBottom: 4, fontSize: 13, wordBreak: 'break-word' }}>
+                    <div key={idx} style={{ marginBottom: 6, fontSize: 16, wordBreak: 'break-word' }}>
                       <span style={{ fontWeight: 600, color: '#333' }}>{msg.from}:</span> {msg.text}
                     </div>
                   ))
@@ -7795,7 +7842,9 @@ function GameBoard() {
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyPress={(e) => {
                     if (e.key === 'Enter' && chatInput.trim() && socketRef.current && matchId) {
-                      const message = chatInput.trim();
+                      const rawMessage = chatInput.trim();
+                      // Filter the message before sending
+                      const filteredMessage = filterChatMessage(rawMessage);
                       // Get current player's username for the message
                       const currentPlayerDisplayName = user && userProfile 
                         ? userProfile.username 
@@ -7804,12 +7853,12 @@ function GameBoard() {
                       socketRef.current.emit('game:chat', {
                         matchId,
                         player: playerNumber,
-                        message,
+                        message: filteredMessage,
                         username: currentPlayerDisplayName // Include username in message
                       });
                       
-                      // Add to local chat messages
-                      setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: message }]);
+                      // Add to local chat messages (use filtered message)
+                      setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: filteredMessage }]);
                       setChatInput('');
                     }
                   }}
@@ -7841,7 +7890,9 @@ function GameBoard() {
                 <button
                   onClick={() => {
                     if (chatInput.trim() && socketRef.current && matchId) {
-                      const message = chatInput.trim();
+                      const rawMessage = chatInput.trim();
+                      // Filter the message before sending
+                      const filteredMessage = filterChatMessage(rawMessage);
                       // Get current player's username for the message
                       const currentPlayerDisplayName = user && userProfile 
                         ? userProfile.username 
@@ -7850,12 +7901,12 @@ function GameBoard() {
                       socketRef.current.emit('game:chat', {
                         matchId,
                         player: playerNumber,
-                        message,
+                        message: filteredMessage,
                         username: currentPlayerDisplayName // Include username in message
                       });
                       
-                      // Add to local chat messages
-                      setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: message }]);
+                      // Add to local chat messages (use filtered message)
+                      setChatMessages(prev => [...prev, { from: currentPlayerDisplayName, text: filteredMessage }]);
                       setChatInput('');
                     }
                   }}

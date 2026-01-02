@@ -7280,8 +7280,12 @@ function GameBoard() {
             // Update local state immediately for UI responsiveness
             setUserProfile(prev => prev ? { ...prev, elo_rating: data.eloChanges.player1.newELO } : null);
             // Also refresh from database to ensure we have the latest data
+            // Add a small delay to ensure backend has finished updating
             if (supabase && user) {
-              fetchUserProfileSafely(user.id, true);
+              setTimeout(() => {
+                console.log('🔄 Refreshing profile after ELO update...');
+                fetchUserProfileSafely(user.id, true);
+              }, 1000);
             }
           } else if (data.eloChanges.player2 && data.eloChanges.player2.userId === user?.id) {
             // Update local state immediately for UI responsiveness
@@ -7290,8 +7294,9 @@ function GameBoard() {
             // Add a small delay to ensure backend has finished updating
             if (supabase && user) {
               setTimeout(() => {
+                console.log('🔄 Refreshing profile after ELO update...');
                 fetchUserProfileSafely(user.id, true);
-              }, 500);
+              }, 1000);
             }
           }
         } else {

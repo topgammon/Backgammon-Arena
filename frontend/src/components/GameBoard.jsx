@@ -226,6 +226,8 @@ function GameBoard() {
   const firstRollIntervalRef = useRef(null);
   const firstRollTimerRef = useRef(null);
   const rematchTimeoutRef = useRef(null);
+  const chatMessagesRef = useRef(null); // Ref for wide screen chat container
+  const chatMessagesNarrowRef = useRef(null); // Ref for narrow screen chat container
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSignupForm, setShowSignupForm] = useState(false);
   const [user, setUser] = useState(null);
@@ -4367,24 +4369,59 @@ function GameBoard() {
   const filterChatMessage = (message) => {
     if (!message) return message;
     
-    // List of words/phrases to filter (case-insensitive, using word boundaries)
+    // Extensive list of words/phrases to filter (case-insensitive)
     const badWords = [
-      // Profanity - common variations
+      // Profanity - explicit sexual terms
+      /\bc+u+n+t+\b/gi,
+      /\bs+l+u+t+\b/gi,
+      /\bd+i+c+k+\b/gi,
+      /\bp+e+n+i+s+\b/gi,
+      /\bp+u+s+s+y+\b/gi,
+      /\bv+a+g+i+n+a+\b/gi,
+      /\bc+l+i+t+\b/gi,
+      /\bt+i+t+s+\b/gi,
+      /\bt+i+t+t+i+e+s+\b/gi,
+      /\bb+o+o+b+s+\b/gi,
+      /\bn+i+p+p+l+e+s+\b/gi,
+      /\ba+n+a+l+\b/gi,
+      /\bs+e+x+\b/gi,
+      // Profanity - general
       /\bf+u+c+k+\b/gi,
+      /\bf+u+c+k+e+r+\b/gi,
+      /\bf+u+c+k+i+n+g+\b/gi,
+      /\bf+u+c+k+e+d+\b/gi,
       /\bs+h+i+t+\b/gi,
+      /\bs+h+i+t+t+y+\b/gi,
+      /\bs+h+i+t+h+e+a+d+\b/gi,
       /\bb+i+t+c+h+\b/gi,
+      /\bb+i+t+c+h+e+s+\b/gi,
       /\ba+s+s+h+o+l+e+\b/gi,
+      /\ba+s+s+h+o+l+e+s+\b/gi,
+      /\ba+s+s+\b/gi,
       /\bd+a+m+n+\b/gi,
+      /\bd+a+m+n+e+d+\b/gi,
       /\bp+i+s+s+\b/gi,
+      /\bp+i+s+s+e+d+\b/gi,
+      /\bp+i+s+s+i+n+g+\b/gi,
       /\bc+r+a+p+\b/gi,
+      /\bh+e+l+l+\b/gi,
       // Slurs and offensive terms
       /\bn+i+g+g+e+r+\b/gi,
+      /\bn+i+g+g+a+\b/gi,
       /\br+e+t+a+r+d+\b/gi,
+      /\br+e+t+a+r+d+e+d+\b/gi,
       /\bf+a+g+\b/gi,
       /\bf+a+g+g+o+t+\b/gi,
-      // Other inappropriate terms (context-dependent, but filtering common offensive uses)
+      /\bf+a+g+g+o+t+s+\b/gi,
+      /\bw+h+o+r+e+\b/gi,
+      /\bw+h+o+r+e+s+\b/gi,
+      /\bs+l+u+t+t+y+\b/gi,
+      /\bc+u+n+t+y+\b/gi,
+      // Other inappropriate terms
       /\bk+i+l+l+\s+y+o+u+r+s+e+l+f+\b/gi,
       /\bk+i+l+l+\s+m+y+s+e+l+f+\b/gi,
+      /\bs+u+i+c+i+d+e+\b/gi,
+      /\bk+y+s+\b/gi,
     ];
     
     let filtered = message;
@@ -4395,13 +4432,28 @@ function GameBoard() {
       });
     });
     
-    // Also filter common attempts to bypass filters (leetspeak, etc.)
+    // Also filter common attempts to bypass filters (leetspeak, character substitution, etc.)
     filtered = filtered.replace(/[f4]+[u@]+[c\(]+[k<]+/gi, '****');
     filtered = filtered.replace(/[s5]+[h#]+[i1!]+[t+]+/gi, '****');
     filtered = filtered.replace(/[b8]+[i1!]+[t+]+[c\(]+[h#]+/gi, '*****');
+    filtered = filtered.replace(/[c\(]+[u@]+[n]+[t+]+/gi, '****');
+    filtered = filtered.replace(/[s5]+[l1]+[u@]+[t+]+/gi, '****');
+    filtered = filtered.replace(/[d]+[i1!]+[c\(]+[k<]+/gi, '****');
+    filtered = filtered.replace(/[p]+[u@]+[s5]+[s5]+[y]+/gi, '*****');
+    filtered = filtered.replace(/[p]+[e3]+[n]+[i1!]+[s5]+/gi, '*****');
     
     return filtered;
   };
+
+  // Auto-scroll chat to bottom when new messages arrive
+  useEffect(() => {
+    if (chatMessagesRef.current) {
+      chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+    }
+    if (chatMessagesNarrowRef.current) {
+      chatMessagesNarrowRef.current.scrollTop = chatMessagesNarrowRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
 
   // Refresh user profile when returning to home screen to ensure avatar is current
   useEffect(() => {
@@ -7561,12 +7613,14 @@ function GameBoard() {
             }}>
               Chat
             </div>
-            <div style={{
-              flex: 1,
-              overflowY: 'auto',
-              padding: '8px 12px',
-              minHeight: 100
-            }}>
+            <div 
+              ref={chatMessagesRef}
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '8px 12px',
+                minHeight: 100
+              }}>
               {chatMessages.length === 0 ? (
                 <div style={{ color: '#999', fontSize: 14, fontStyle: 'italic' }}>No messages yet...</div>
               ) : (
@@ -7771,13 +7825,15 @@ function GameBoard() {
                   😊
                 </button>
               </div>
-              <div style={{
-                flex: 1,
-                overflowY: 'auto',
-                padding: '8px 12px',
-                minHeight: 100,
-                maxHeight: 120
-              }}>
+              <div 
+                ref={chatMessagesNarrowRef}
+                style={{ 
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '8px 12px',
+                  minHeight: 100,
+                  maxHeight: 120
+                }}>
                 {chatMessages.length === 0 ? (
                   <div style={{ color: '#999', fontSize: 14, fontStyle: 'italic' }}>No messages yet...</div>
                 ) : (

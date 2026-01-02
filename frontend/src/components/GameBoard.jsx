@@ -5866,23 +5866,19 @@ function GameBoard() {
       </div>
       <div style={{ 
         display: 'flex', 
-        flexDirection: isMobile ? 'column' : 'row', 
+        flexDirection: 'column',
         justifyContent: 'center', 
         alignItems: 'stretch', 
-        gap: isMobile ? 20 : 40, 
+        gap: 24, 
         margin: '0 auto 24px', 
         maxWidth: 1100, 
-        flexWrap: 'wrap',
         padding: isMobile ? '0 16px' : '0'
       }}>
         <div style={{ 
           ...sectionStyle, 
-          maxWidth: isMobile ? '100%' : homepageBoxWidth, 
+          maxWidth: isMobile ? '100%' : 1100, 
           minWidth: isMobile ? '100%' : 320, 
-          flex: 1, 
-          display: 'flex', 
-          flexDirection: 'column', 
-          minHeight: '100%',
+          width: '100%',
           padding: isMobile ? '20px 16px' : sectionStyle.padding
         }}>
           <ul style={{ fontSize: 20, color: '#000', textAlign: 'left', listStyle: 'disc inside', margin: 0, padding: 0, lineHeight: 1.7, fontWeight: 700, fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif' }}>
@@ -5891,7 +5887,15 @@ function GameBoard() {
             ))}
           </ul>
         </div>
-        <div style={{ ...sectionStyle, maxWidth: homepageBoxWidth, minWidth: 320, flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+        <div style={{ 
+          ...sectionStyle, 
+          maxWidth: isMobile ? '100%' : 1100, 
+          minWidth: isMobile ? '100%' : 320, 
+          width: '100%',
+          display: 'flex', 
+          flexDirection: 'column', 
+          minHeight: '100%' 
+        }}>
           <h2 style={{ 
             color: '#000', 
             fontSize: '24px',

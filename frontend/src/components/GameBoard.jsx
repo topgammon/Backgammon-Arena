@@ -6906,10 +6906,10 @@ function GameBoard() {
         setIsCpuGame(false);
         
         // Transition to online game screen
+        // IMPORTANT: Don't clear matchmakingType - we need it to show ELO changes on game over
         setTimeout(() => {
           setIsMatchmaking(false);
           setMatchmakingStatus('');
-          setMatchmakingType(null);
           setScreen('onlineGame');
         }, 500);
       });
@@ -7265,11 +7265,15 @@ function GameBoard() {
     // Listen for game over
     const handleGameOver = async (data) => {
       if (data.matchId === currentMatchId) {
+        console.log('🎮 Game over received:', data);
+        console.log('🎮 Current matchmakingType:', matchmakingType);
+        console.log('🎮 ELO changes in data:', data.eloChanges);
         setGameOver(data.gameOver);
         // Clear active match from localStorage when game ends
         localStorage.removeItem('activeMatch');
         // Store ELO changes if provided (for ranked matches)
         if (data.eloChanges) {
+          console.log('📊 ELO changes received:', data.eloChanges);
           setEloChanges(data.eloChanges);
           // Update user profile if this player's ELO changed - refresh from database to get latest
           if (data.eloChanges.player1 && data.eloChanges.player1.userId === user?.id) {

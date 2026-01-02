@@ -8452,9 +8452,11 @@ function GameBoard() {
                       setPlayerNumber(null);
                       setOpponent(null);
                       setOpponentProfile(null);
-                      // Start matchmaking (same as "Play as Guest")
+                      // Start matchmaking - use ranked for signed-in users, guest for non-signed-in
+                      // This matches the behavior of the "Play Game" button on the home page
+                      const matchmakingTypeToUse = user ? 'ranked' : 'guest';
                       setIsMatchmaking(true);
-                      setMatchmakingType('guest');
+                      setMatchmakingType(matchmakingTypeToUse);
                       setScreen('matchmaking');
                       setMatchmakingStatus('Connecting...');
                     }}>New Game</button>

@@ -9428,57 +9428,50 @@ function GameBoard() {
                 width: '100%'
               }}>
                 <table style={{
-                  width: '100%',
                   borderCollapse: 'collapse',
-                  tableLayout: 'fixed'
+                  margin: '0 auto'
                 }}>
-                  <colgroup>
-                    <col style={{ width: '20%' }} />
-                    <col style={{ width: '30%' }} />
-                    <col style={{ width: '25%' }} />
-                    <col style={{ width: '25%' }} />
-                  </colgroup>
                   <thead>
                     <tr style={{
                       background: '#f5f5f5',
                       borderBottom: '2px solid #ddd'
                     }}>
                       <th style={{
-                        padding: '10px 4px',
+                        padding: '10px 12px',
                         textAlign: 'center',
                         fontSize: '14px',
                         fontWeight: 'bold',
                         color: '#333',
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                        width: '20%'
+                        whiteSpace: 'nowrap'
                       }}>Date</th>
                       <th style={{
-                        padding: '10px 4px',
+                        padding: '10px 12px',
                         textAlign: 'left',
                         fontSize: '14px',
                         fontWeight: 'bold',
                         color: '#333',
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
                         verticalAlign: 'top',
-                        width: '30%'
+                        whiteSpace: 'nowrap'
                       }}>Opponent</th>
                       <th style={{
-                        padding: '10px 4px',
+                        padding: '10px 12px',
                         textAlign: 'center',
                         fontSize: '14px',
                         fontWeight: 'bold',
                         color: '#333',
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                        width: '25%'
+                        whiteSpace: 'nowrap'
                       }}>Result</th>
                       <th style={{
-                        padding: '10px 4px',
+                        padding: '10px 12px',
                         textAlign: 'center',
                         fontSize: '14px',
                         fontWeight: 'bold',
                         color: '#333',
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                        width: '25%'
+                        whiteSpace: 'nowrap'
                       }}>Change</th>
                     </tr>
                   </thead>
@@ -9519,14 +9512,11 @@ function GameBoard() {
                           borderBottom: '1px solid #eee'
                         }}>
                           <td style={{
-                            padding: '10px 4px',
+                            padding: '10px 12px',
                             fontSize: '14px',
                             color: '#666',
                             fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                            textAlign: 'center',
-                            width: '20%',
-                            wordWrap: 'break-word',
-                            overflow: 'hidden'
+                            textAlign: 'center'
                           }}>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
                               <span>{monthDay}</span>
@@ -9534,18 +9524,15 @@ function GameBoard() {
                             </div>
                           </td>
                           <td style={{
-                            padding: '10px 4px',
+                            padding: '10px 12px',
                             fontSize: '14px',
                             color: '#333',
                             fontWeight: '500',
                             fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                            textAlign: 'left',
-                            width: '30%',
-                            wordWrap: 'break-word',
-                            overflow: 'hidden'
+                            textAlign: 'left'
                           }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{opponent?.username || 'Unknown'}</span>
+                              <span>{opponent?.username || 'Unknown'}</span>
                               <span style={{ 
                                 fontSize: '12px', 
                                 color: '#666',
@@ -9556,13 +9543,10 @@ function GameBoard() {
                             </div>
                           </td>
                           <td style={{
-                            padding: '10px 4px',
+                            padding: '10px 12px',
                             fontSize: '14px',
                             fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                            textAlign: 'center',
-                            width: '25%',
-                            wordWrap: 'break-word',
-                            overflow: 'hidden'
+                            textAlign: 'center'
                           }}>
                             <div style={{
                               display: 'flex',
@@ -9586,15 +9570,12 @@ function GameBoard() {
                             </div>
                           </td>
                           <td style={{
-                            padding: '10px 4px',
+                            padding: '10px 12px',
                             fontSize: '14px',
                             fontWeight: 'bold',
                             color: eloChange > 0 ? '#28a745' : eloChange < 0 ? '#dc3545' : '#666',
                             fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                            textAlign: 'center',
-                            width: '25%',
-                            wordWrap: 'break-word',
-                            overflow: 'hidden'
+                            textAlign: 'center'
                           }}>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
                               <span>{eloChange > 0 ? '+' : ''}{eloChange}</span>

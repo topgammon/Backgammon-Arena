@@ -5978,6 +5978,19 @@ function GameBoard() {
             </div>
           </div>
         </div>
+        <div style={{ 
+          ...sectionStyle, 
+          maxWidth: isMobile ? '100%' : 1100, 
+          minWidth: isMobile ? '100%' : 320, 
+          width: '100%',
+          padding: isMobile ? '20px 16px' : sectionStyle.padding
+        }}>
+          <ul style={{ fontSize: 20, color: '#000', textAlign: 'left', listStyle: 'disc inside', margin: 0, padding: 0, lineHeight: 1.7, fontWeight: 700, fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif' }}>
+            {homepageFeatures.map((f, i) => (
+              <li key={i} style={{ marginBottom: 8 }}>{f}</li>
+            ))}
+          </ul>
+        </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'stretch', gap: 40, margin: '0 auto 24px', maxWidth: 1100, flexWrap: 'wrap' }}>
         <div style={{ ...sectionStyle, maxWidth: homepageBoxWidth, minWidth: 320, flex: 1 }}>{howToPlay}</div>

@@ -287,6 +287,7 @@ function GameBoard() {
   const [gameHistory, setGameHistory] = useState([]); // Game history for profile page
   const [eloTimePeriod, setEloTimePeriod] = useState('all'); // Time period for ELO graph: '1w', '1m', '3m', '6m', '1y', 'all'
   const [profileTab, setProfileTab] = useState('stats'); // Profile page tab: 'stats', 'achievements', 'friends'
+  const [highestRatingLeaderboard, setHighestRatingLeaderboard] = useState([]); // Top 10 users by highest rating
   const transitioningToGameRef = useRef(false);
   
   // Track window width for responsive design

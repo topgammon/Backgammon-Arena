@@ -9170,7 +9170,7 @@ function GameBoard() {
                     }}>
                       <th style={{
                         padding: '12px',
-                        textAlign: 'left',
+                        textAlign: 'center',
                         fontSize: '14px',
                         fontWeight: 'bold',
                         color: '#333',
@@ -9186,7 +9186,7 @@ function GameBoard() {
                       }}>Opponent</th>
                       <th style={{
                         padding: '12px',
-                        textAlign: 'left',
+                        textAlign: 'center',
                         fontSize: '14px',
                         fontWeight: 'bold',
                         color: '#333',
@@ -9194,12 +9194,12 @@ function GameBoard() {
                       }}>Result</th>
                       <th style={{
                         padding: '12px',
-                        textAlign: 'left',
+                        textAlign: 'center',
                         fontSize: '14px',
                         fontWeight: 'bold',
                         color: '#333',
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-                      }}>ELO Change</th>
+                      }}>Change</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -9226,13 +9226,13 @@ function GameBoard() {
                       else if (game.status === 'timeout') reason = 'Timeout';
                       else if (game.status === 'disconnected') reason = 'Disconnection';
                       
-                      // Format date (date only, no time)
+                      // Format date (month and day on top, year below)
                       const gameDate = new Date(game.completed_at);
-                      const formattedDate = gameDate.toLocaleDateString('en-US', {
+                      const monthDay = gameDate.toLocaleDateString('en-US', {
                         month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
+                        day: 'numeric'
                       });
+                      const year = gameDate.getFullYear().toString();
                       
                       return (
                         <tr key={game.id || index} style={{
@@ -9242,8 +9242,14 @@ function GameBoard() {
                             padding: '12px',
                             fontSize: '14px',
                             color: '#666',
-                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-                          }}>{formattedDate}</td>
+                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                            textAlign: 'center'
+                          }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                              <span>{monthDay}</span>
+                              <span style={{ fontSize: '12px', color: '#999' }}>{year}</span>
+                            </div>
+                          </td>
                           <td style={{
                             padding: '12px',
                             fontSize: '14px',
@@ -9293,9 +9299,13 @@ function GameBoard() {
                             fontSize: '14px',
                             fontWeight: 'bold',
                             color: eloChange > 0 ? '#28a745' : eloChange < 0 ? '#dc3545' : '#666',
-                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                            textAlign: 'center'
                           }}>
-                            {eloChange > 0 ? '+' : ''}{eloChange} ({playerEloAfter})
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                              <span>{eloChange > 0 ? '+' : ''}{eloChange}</span>
+                              <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>{playerEloAfter}</span>
+                            </div>
                           </td>
                         </tr>
                       );

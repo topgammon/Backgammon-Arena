@@ -4670,7 +4670,7 @@ function GameBoard() {
   };
 
   // Opponent info component (for above board)
-  const renderOpponentInfo = (isGuest = false, isCpu = false, username = null, country = null, rating = null, cpuDifficulty = null, opponentPlayerNum = 2) => {
+  const renderOpponentInfo = (isGuest = false, isCpu = false, username = null, country = null, rating = null, cpuDifficulty = null, opponentPlayerNum = 2, opponentProfileData = null) => {
     let displayName, displayCountry, displayRating, cpuName, difficultyName;
     
     if (isCpu && cpuDifficulty) {
@@ -4688,6 +4688,13 @@ function GameBoard() {
       displayRating = rating || '1000';
     }
     
+    // Determine which profile to use for avatar
+    // For online games: use opponentProfileData if provided, otherwise treat as guest
+    // For CPU games: use CPU avatar
+    // For pass-and-play: use guest avatar
+    const avatarProfileData = isCpu ? null : (isGuest ? null : opponentProfileData);
+    const avatarUserData = null; // Opponent's user data is not available, only profile data
+    
     return (
       <div style={{
         display: 'flex',
@@ -4699,7 +4706,7 @@ function GameBoard() {
         border: '2px solid #dee2e6',
         width: 'fit-content'
       }}>
-        {renderAvatar(isGuest, isCpu, cpuDifficulty, 50, userProfile, user)}
+        {renderAvatar(isGuest, isCpu, cpuDifficulty, 50, avatarProfileData, avatarUserData)}
         <div style={{ textAlign: 'left' }}>
           {isCpu && cpuDifficulty ? (
             <>
@@ -7466,7 +7473,7 @@ function GameBoard() {
           }}>
             {/* Opponent info (left side) */}
             <div style={{ flex: 1 }}>
-              {renderOpponentInfo(opponent?.isGuest || false, false, opponentName, opponentProfile?.country, opponentProfile?.elo_rating, null, playerNumber === 1 ? 2 : 1)}
+              {renderOpponentInfo(opponent?.isGuest || false, false, opponentName, opponentProfile?.country, opponentProfile?.elo_rating, null, playerNumber === 1 ? 2 : 1, opponentProfile)}
             </div>
             {/* Title and logo (right side) */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, minWidth: 200, flexWrap: 'wrap' }}>

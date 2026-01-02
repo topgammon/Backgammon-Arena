@@ -9762,6 +9762,46 @@ function GameBoard() {
               </div>
             )}
           </div>
+            </>
+          )}
+
+          {/* Achievements Tab Content */}
+          {profileTab === 'achievements' && (
+            <div style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '40px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              textAlign: 'center'
+            }}>
+              <div style={{
+                fontSize: '24px',
+                color: '#666',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+              }}>
+                Coming Soon
+              </div>
+            </div>
+          )}
+
+          {/* Friends Tab Content */}
+          {profileTab === 'friends' && (
+            <div style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '40px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              textAlign: 'center'
+            }}>
+              <div style={{
+                fontSize: '24px',
+                color: '#666',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+              }}>
+                Coming Soon
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Avatar Selector Modal */}

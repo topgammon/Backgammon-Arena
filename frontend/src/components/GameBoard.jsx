@@ -284,6 +284,7 @@ function GameBoard() {
   const [opponentProfile, setOpponentProfile] = useState(null); // Opponent's user profile data
   const [gameHistory, setGameHistory] = useState([]); // Game history for profile page
   const [eloTimePeriod, setEloTimePeriod] = useState('all'); // Time period for ELO graph: '1w', '1m', '3m', '6m', '1y', 'all'
+  const [profileTab, setProfileTab] = useState('stats'); // Profile page tab: 'stats', 'achievements', 'friends'
   const transitioningToGameRef = useRef(false);
   
   // Track window width for responsive design
@@ -9085,7 +9086,73 @@ function GameBoard() {
             </div>
           </div>
 
-          {/* Stats Section - 3 Columns */}
+          {/* Profile Tabs */}
+          <div style={{
+            display: 'flex',
+            gap: '8px',
+            marginBottom: '24px',
+            borderBottom: '2px solid #e0e0e0'
+          }}>
+            <button
+              onClick={() => setProfileTab('stats')}
+              style={{
+                padding: '12px 24px',
+                background: 'transparent',
+                color: profileTab === 'stats' ? '#ff751f' : '#666',
+                border: 'none',
+                borderBottom: profileTab === 'stats' ? '3px solid #ff751f' : '3px solid transparent',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: profileTab === 'stats' ? 'bold' : 'normal',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                transition: 'all 0.2s',
+                marginBottom: '-2px'
+              }}
+            >
+              Stats
+            </button>
+            <button
+              onClick={() => setProfileTab('achievements')}
+              style={{
+                padding: '12px 24px',
+                background: 'transparent',
+                color: profileTab === 'achievements' ? '#ff751f' : '#666',
+                border: 'none',
+                borderBottom: profileTab === 'achievements' ? '3px solid #ff751f' : '3px solid transparent',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: profileTab === 'achievements' ? 'bold' : 'normal',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                transition: 'all 0.2s',
+                marginBottom: '-2px'
+              }}
+            >
+              Achievements
+            </button>
+            <button
+              onClick={() => setProfileTab('friends')}
+              style={{
+                padding: '12px 24px',
+                background: 'transparent',
+                color: profileTab === 'friends' ? '#ff751f' : '#666',
+                border: 'none',
+                borderBottom: profileTab === 'friends' ? '3px solid #ff751f' : '3px solid transparent',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: profileTab === 'friends' ? 'bold' : 'normal',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                transition: 'all 0.2s',
+                marginBottom: '-2px'
+              }}
+            >
+              Friends
+            </button>
+          </div>
+
+          {/* Stats Tab Content */}
+          {profileTab === 'stats' && (
+            <>
+              {/* Stats Section - 3 Columns */}
           {(() => {
             // Calculate additional stats from gameHistory
             let bestWinStreak = 0;
@@ -9383,7 +9450,7 @@ function GameBoard() {
                   paddingBottom: '12px',
                   fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
                 }}>
-                  ELO Rating Over Time
+                  Rating Over Time
                 </h2>
 
                 {/* Time Period Tabs */}

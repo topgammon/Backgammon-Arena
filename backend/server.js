@@ -806,14 +806,19 @@ io.on('connection', (socket) => {
       : match.player1.socketId;
     
     // Calculate ELO changes for ranked matches
+    // ELO is calculated for ALL game over types (win, resign, timeout, disconnect, double decline)
+    // as long as it's a ranked match with registered players
     let eloChanges = null;
     if (match.isRanked && !match.player1.isGuest && !match.player2.isGuest) {
       const player1ELO = match.player1ELO || 1000;
       const player2ELO = match.player2ELO || 1000;
       
       // Determine result: 1 = win, 0 = loss
+      // This works for all game over types (win, resign, timeout, disconnect, double decline)
       const player1Result = gameOver.winner === 1 ? 1 : 0;
       const player2Result = gameOver.winner === 2 ? 1 : 0;
+      
+      console.log(`📊 Calculating ELO for game over type: ${gameOver.type}, Winner: Player ${gameOver.winner}`);
       
       // Calculate ELO changes
       const player1Change = calculateELOChange(player1ELO, player2ELO, player1Result);

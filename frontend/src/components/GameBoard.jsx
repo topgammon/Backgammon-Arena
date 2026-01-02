@@ -2527,13 +2527,7 @@ function GameBoard() {
   
   const doResign = () => {
     setShowConfirmResign(false);
-    // Send resignation to server immediately for online games
-    if (isOnlineGame && socketRef.current && matchId) {
-      socketRef.current.emit('game:over', {
-        matchId,
-        gameOver: { type: 'resign', winner: currentPlayer === 1 ? 2 : 1, loser: currentPlayer }
-      });
-    }
+    // Trigger game over (this will send to server for online games)
     triggerGameOver('resign', currentPlayer === 1 ? 2 : 1, currentPlayer);
   };
 

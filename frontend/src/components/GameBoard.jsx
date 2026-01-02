@@ -1258,12 +1258,19 @@ function GameBoard() {
                     const hasValid = hasAnyValidMoves();
                     
                     // If player hasn't rolled yet: timeout forfeit
+                    // For online games, use playerNumber to determine who timed out
+                    // For offline games, use currentPlayer
+                    const timedOutPlayer = isOnlineGame && currentPlayer === playerNumber ? playerNumber : currentPlayer;
+                    const timeoutWinner = timedOutPlayer === 1 ? 2 : 1;
+                    
                     if (!currentHasRolled) {
-                      triggerGameOver('timeout', currentPlayer === 1 ? 2 : 1, currentPlayer);
+                      console.log(`⏰ Timeout: Player ${timedOutPlayer} timed out (no roll), Player ${timeoutWinner} wins`);
+                      triggerGameOver('timeout', timeoutWinner, timedOutPlayer);
                     }
                     // If player has rolled AND has valid moves AND dice not all used: timeout forfeit
                     else if (currentHasRolled && hasValid && !allUsed) {
-                      triggerGameOver('timeout', currentPlayer === 1 ? 2 : 1, currentPlayer);
+                      console.log(`⏰ Timeout: Player ${timedOutPlayer} timed out (has moves), Player ${timeoutWinner} wins`);
+                      triggerGameOver('timeout', timeoutWinner, timedOutPlayer);
                     }
                     // If player has rolled AND (all dice used OR no valid moves): auto-end turn
                     else {
@@ -2528,8 +2535,17 @@ function GameBoard() {
   
   const doResign = () => {
     setShowConfirmResign(false);
+    // Determine which player is resigning
+    // For online games, use playerNumber (which player this client is)
+    // For offline games (CPU, pass-and-play), use currentPlayer (whose turn it is)
+    const resigningPlayer = isOnlineGame ? playerNumber : currentPlayer;
+    const winningPlayer = resigningPlayer === 1 ? 2 : 1;
+    
+    console.log(`🏳️ Resignation: Player ${resigningPlayer} resigns, Player ${winningPlayer} wins`);
+    console.log(`   isOnlineGame: ${isOnlineGame}, playerNumber: ${playerNumber}, currentPlayer: ${currentPlayer}`);
+    
     // Trigger game over (this will send to server for online games)
-    triggerGameOver('resign', currentPlayer === 1 ? 2 : 1, currentPlayer);
+    triggerGameOver('resign', winningPlayer, resigningPlayer);
   };
 
   const offerDouble = () => {

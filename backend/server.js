@@ -850,10 +850,36 @@ io.on('connection', (socket) => {
     match.gameOverWinner = gameOver.winner;
     match.gameOverLoser = gameOver.loser;
     
+    // Validate winner and loser
+    if (!gameOver.winner || !gameOver.loser) {
+      console.error(`❌ Invalid game over data: missing winner or loser`, gameOver);
+      return;
+    }
+    
+    if (gameOver.winner !== 1 && gameOver.winner !== 2) {
+      console.error(`❌ Invalid winner value: ${gameOver.winner}. Must be 1 or 2.`);
+      return;
+    }
+    
+    if (gameOver.loser !== 1 && gameOver.loser !== 2) {
+      console.error(`❌ Invalid loser value: ${gameOver.loser}. Must be 1 or 2.`);
+      return;
+    }
+    
+    if (gameOver.winner === gameOver.loser) {
+      console.error(`❌ Invalid game over: winner and loser cannot be the same player (${gameOver.winner})`);
+      return;
+    }
+    
+    // Determine which player sent this event (for logging)
+    const senderIsPlayer1 = match.player1.socketId === socket.id;
+    const senderPlayerNumber = senderIsPlayer1 ? 1 : 2;
+    
     console.log(`🏁 Game over event received for match ${matchId}:`, {
       type: gameOver.type,
       winner: gameOver.winner,
       loser: gameOver.loser,
+      senderPlayer: senderPlayerNumber,
       isRanked: match.isRanked,
       player1Guest: match.player1.isGuest,
       player2Guest: match.player2.isGuest

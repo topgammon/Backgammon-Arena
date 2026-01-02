@@ -9135,6 +9135,7 @@ function GameBoard() {
                 gap: '20px',
                 marginBottom: '32px'
               }}>
+                {/* Row 1: Rating, Highest Rating, Highest Rated Win */}
                 <div style={{
                   background: '#fff',
                   borderRadius: '12px',
@@ -9146,6 +9147,30 @@ function GameBoard() {
                     {userProfile?.elo_rating || 1000}
                   </div>
                 </div>
+                <div style={{
+                  background: '#fff',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Highest Rating</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ff751f' }}>
+                    {highestRating}
+                  </div>
+                </div>
+                <div style={{
+                  background: '#fff',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Highest Rated Win</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>
+                    {highestRatedWin || 'N/A'}
+                  </div>
+                </div>
+                
+                {/* Row 2: Games Played, Wins, Losses */}
                 <div style={{
                   background: '#fff',
                   borderRadius: '12px',
@@ -9179,6 +9204,8 @@ function GameBoard() {
                     {userProfile?.losses || 0}
                   </div>
                 </div>
+                
+                {/* Row 3: Best Win Streak, Global Rank, Percentile */}
                 <div style={{
                   background: '#fff',
                   borderRadius: '12px',
@@ -9188,28 +9215,6 @@ function GameBoard() {
                   <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Best Win Streak</div>
                   <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>
                     {bestWinStreak || 0}
-                  </div>
-                </div>
-                <div style={{
-                  background: '#fff',
-                  borderRadius: '12px',
-                  padding: '24px',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                }}>
-                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Highest Rating</div>
-                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ff751f' }}>
-                    {highestRating}
-                  </div>
-                </div>
-                <div style={{
-                  background: '#fff',
-                  borderRadius: '12px',
-                  padding: '24px',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                }}>
-                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Highest Rated Win</div>
-                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>
-                    {highestRatedWin || 'N/A'}
                   </div>
                 </div>
                 <div style={{

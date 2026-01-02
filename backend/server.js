@@ -14,6 +14,13 @@ console.log('🔧 Starting Backend Server...');
 console.log('📦 Node version:', process.version);
 console.log('📁 Working directory:', process.cwd());
 console.log('🔐 Environment:', process.env.NODE_ENV || 'development');
+console.log('🔑 Supabase initialized:', supabase ? '✅ YES' : '❌ NO');
+if (supabase) {
+  console.log('   Using service role key:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+} else {
+  console.error('   ⚠️  CRITICAL: Supabase client is null! ELO updates will fail!');
+  console.error('   Check that SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set in environment variables.');
+}
 
 const PYTHON_AI_SERVICE_URL = process.env.PYTHON_AI_SERVICE_URL || 'http://localhost:5000';
 
@@ -945,11 +952,10 @@ io.on('connection', (socket) => {
           console.error('Error updating ELO in database:', err);
         }
       } else {
-        console.log(`⚠️ ELO calculation skipped for match ${matchId}:`, {
-          isRanked: match.isRanked,
-          player1Guest: match.player1.isGuest,
-          player2Guest: match.player2.isGuest
-        });
+        console.error(`❌ CRITICAL: ELO calculation skipped - Supabase client is null!`);
+        console.error(`   Match ${matchId} - isRanked: ${match.isRanked}, player1Guest: ${match.player1.isGuest}, player2Guest: ${match.player2.isGuest}`);
+        console.error(`   ELO changes calculated but NOT saved to database:`, eloChanges);
+        console.error(`   Check backend environment variables: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set!`);
       }
     } else {
       console.log(`⚠️ ELO calculation skipped - not a ranked match or has guest players:`, {

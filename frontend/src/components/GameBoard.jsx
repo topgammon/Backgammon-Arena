@@ -9416,13 +9416,14 @@ function GameBoard() {
               return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
             }).join(' ');
 
-            // Generate grid lines and labels
+            // Generate grid lines and labels in increments of 5
             const gridLines = [];
-            const yTicks = 5;
-            for (let i = 0; i <= yTicks; i++) {
-              const elo = eloMin + (eloMax - eloMin) * (i / yTicks);
+            // Round min/max to nearest multiple of 5 for cleaner display
+            const roundedMin = Math.floor(eloMin / 5) * 5;
+            const roundedMax = Math.ceil(eloMax / 5) * 5;
+            for (let elo = roundedMin; elo <= roundedMax; elo += 5) {
               const y = toY(elo);
-              gridLines.push({ y, elo: Math.round(elo) });
+              gridLines.push({ y, elo });
             }
 
             // X-axis labels (dates)

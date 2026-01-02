@@ -288,6 +288,7 @@ function GameBoard() {
   const [eloTimePeriod, setEloTimePeriod] = useState('all'); // Time period for ELO graph: '1w', '1m', '3m', '6m', '1y', 'all'
   const [profileTab, setProfileTab] = useState('stats'); // Profile page tab: 'stats', 'achievements', 'friends'
   const [highestRatingLeaderboard, setHighestRatingLeaderboard] = useState([]); // Top 10 users by highest rating
+  const [mostWinsLeaderboard, setMostWinsLeaderboard] = useState([]); // Top 10 users by most wins
   const transitioningToGameRef = useRef(false);
   
   // Track window width for responsive design
@@ -1231,6 +1232,39 @@ function GameBoard() {
     // Fetch leaderboard when on home screen
     if (screen === 'home') {
       fetchHighestRatingLeaderboard();
+    }
+  }, [screen, supabase]);
+
+  // Fetch Most Wins Leaderboard
+  useEffect(() => {
+    const fetchMostWinsLeaderboard = async () => {
+      if (!supabase) return;
+
+      try {
+        // Fetch top 10 users by wins
+        const { data: users, error } = await supabase
+          .from('users')
+          .select('id, username, wins, avatar, country, google_avatar_url')
+          .not('wins', 'is', null)
+          .order('wins', { ascending: false })
+          .limit(10);
+
+        if (error) {
+          console.error('Error fetching most wins leaderboard:', error);
+          setMostWinsLeaderboard([]);
+          return;
+        }
+
+        setMostWinsLeaderboard(users || []);
+      } catch (err) {
+        console.error('Error fetching most wins leaderboard:', err);
+        setMostWinsLeaderboard([]);
+      }
+    };
+
+    // Fetch leaderboard when on home screen
+    if (screen === 'home') {
+      fetchMostWinsLeaderboard();
     }
   }, [screen, supabase]);
 
@@ -5946,7 +5980,41 @@ function GameBoard() {
               </tr>
             </thead>
             <tbody>
-              {/* Data rows will go here */}
+              {mostWinsLeaderboard.length === 0 ? (
+                <tr>
+                  <td colSpan="2" style={{ textAlign: 'center', padding: '12px', color: '#666', fontSize: '14px' }}>
+                    Loading...
+                  </td>
+                </tr>
+              ) : (
+                mostWinsLeaderboard.map((player, index) => {
+                  const playerAvatar = renderAvatar(false, false, null, 32, player, null);
+                  const playerFlag = getCountryFlag(player.country || 'US', true, true);
+                  
+                  return (
+                    <tr key={player.id} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ textAlign: 'left', padding: '8px 4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ width: '32px', height: '32px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {playerAvatar}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span style={{ fontSize: '14px', fontWeight: '500', color: '#333' }}>
+                              {player.username || 'Unknown'}
+                            </span>
+                            <span style={{ fontSize: '12px', fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif' }}>
+                              {playerFlag || ''}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'right', padding: '8px 4px', fontSize: '14px', fontWeight: 'bold', color: '#ff751f' }}>
+                        {player.wins || 0}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

@@ -1201,6 +1201,39 @@ function GameBoard() {
     fetchGameHistory();
   }, [screen, user?.id, supabase]);
 
+  // Fetch Highest Rating Leaderboard
+  useEffect(() => {
+    const fetchHighestRatingLeaderboard = async () => {
+      if (!supabase) return;
+
+      try {
+        // Fetch top 10 users by elo_rating (current highest rating)
+        const { data: users, error } = await supabase
+          .from('users')
+          .select('id, username, elo_rating, avatar, country, google_avatar_url')
+          .not('elo_rating', 'is', null)
+          .order('elo_rating', { ascending: false })
+          .limit(10);
+
+        if (error) {
+          console.error('Error fetching highest rating leaderboard:', error);
+          setHighestRatingLeaderboard([]);
+          return;
+        }
+
+        setHighestRatingLeaderboard(users || []);
+      } catch (err) {
+        console.error('Error fetching highest rating leaderboard:', err);
+        setHighestRatingLeaderboard([]);
+      }
+    };
+
+    // Fetch leaderboard when on home screen
+    if (screen === 'home') {
+      fetchHighestRatingLeaderboard();
+    }
+  }, [screen, supabase]);
+
   // Sound effects - non-blocking, triggered by game actions
   const playSound = (soundName) => {
     if (muted) return;
@@ -5882,12 +5915,51 @@ function GameBoard() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15 }}>
                 <thead>
                   <tr style={{ color: '#888', fontWeight: 600 }}>
+                    <th style={{ textAlign: 'left', padding: '4px 0', width: '20px' }}></th>
                     <th style={{ textAlign: 'left', padding: '4px 0' }}>Player</th>
                     <th style={{ textAlign: 'right', padding: '4px 0' }}>Rating</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {/* Data rows will go here */}
+                  {highestRatingLeaderboard.length === 0 ? (
+                    <tr>
+                      <td colSpan="3" style={{ textAlign: 'center', padding: '12px', color: '#666', fontSize: '14px' }}>
+                        Loading...
+                      </td>
+                    </tr>
+                  ) : (
+                    highestRatingLeaderboard.map((player, index) => {
+                      const rank = index + 1;
+                      const playerAvatar = renderAvatar(player.avatar || 'Barry', player.google_avatar_url, player, null);
+                      const playerFlag = getCountryFlag(player.country || 'US', true, true);
+                      
+                      return (
+                        <tr key={player.id} style={{ borderBottom: '1px solid #eee' }}>
+                          <td style={{ textAlign: 'left', padding: '8px 4px', fontSize: '14px', fontWeight: 'bold', color: '#666' }}>
+                            {rank}
+                          </td>
+                          <td style={{ textAlign: 'left', padding: '8px 4px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ width: '32px', height: '32px', flexShrink: 0 }}>
+                                {playerAvatar}
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <span style={{ fontSize: '14px', fontWeight: '500', color: '#333' }}>
+                                  {player.username || 'Unknown'}
+                                </span>
+                                <span style={{ fontSize: '12px', fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif' }}>
+                                  {playerFlag || ''}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'right', padding: '8px 4px', fontSize: '14px', fontWeight: 'bold', color: '#ff751f' }}>
+                            {player.elo_rating || 1000}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>

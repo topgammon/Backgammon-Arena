@@ -9085,58 +9085,158 @@ function GameBoard() {
             </div>
           </div>
 
-          {/* Stats Section - 2 Columns */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: '20px',
-            marginBottom: '32px'
-          }}>
-            <div style={{
-              background: '#fff',
-              borderRadius: '12px',
-              padding: '24px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}>
-              <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>ELO Rating</div>
-              <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ff751f' }}>
-                {userProfile?.elo_rating || 1000}
+          {/* Stats Section - 3 Columns */}
+          {(() => {
+            // Calculate additional stats from gameHistory
+            let bestWinStreak = 0;
+            let currentStreak = 0;
+            let highestRating = userProfile?.elo_rating || 1000;
+            let highestRatedWin = 0;
+            
+            if (gameHistory.length > 0) {
+              // Sort games by completion date (oldest to newest)
+              const sortedGames = [...gameHistory].sort((a, b) => 
+                new Date(a.completed_at) - new Date(b.completed_at)
+              );
+              
+              // Calculate win streak and highest rating
+              sortedGames.forEach((game) => {
+                const isWin = game.winner_id === user?.id;
+                const playerEloAfter = game.player1_id === user?.id ? 
+                  ((game.player1_elo_before || 1000) + (game.player1_elo_change || 0)) :
+                  ((game.player2_elo_before || 1000) + (game.player2_elo_change || 0));
+                
+                if (isWin) {
+                  currentStreak++;
+                  bestWinStreak = Math.max(bestWinStreak, currentStreak);
+                  
+                  // Check for highest rated win
+                  const opponentElo = game.player1_id === user?.id ? 
+                    (game.player2_elo_before || game.player2?.elo_rating || 0) :
+                    (game.player1_elo_before || game.player1?.elo_rating || 0);
+                  if (opponentElo > highestRatedWin) {
+                    highestRatedWin = opponentElo;
+                  }
+                } else {
+                  currentStreak = 0;
+                }
+                
+                // Track highest rating
+                if (playerEloAfter > highestRating) {
+                  highestRating = playerEloAfter;
+                }
+              });
+            }
+            
+            return (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '20px',
+                marginBottom: '32px'
+              }}>
+                <div style={{
+                  background: '#fff',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Rating</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ff751f' }}>
+                    {userProfile?.elo_rating || 1000}
+                  </div>
+                </div>
+                <div style={{
+                  background: '#fff',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Games Played</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#6c757d' }}>
+                    {userProfile?.games_played || 0}
+                  </div>
+                </div>
+                <div style={{
+                  background: '#fff',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Wins</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>
+                    {userProfile?.wins || 0}
+                  </div>
+                </div>
+                <div style={{
+                  background: '#fff',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Losses</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#dc3545' }}>
+                    {userProfile?.losses || 0}
+                  </div>
+                </div>
+                <div style={{
+                  background: '#fff',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Best Win Streak</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>
+                    {bestWinStreak || 0}
+                  </div>
+                </div>
+                <div style={{
+                  background: '#fff',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Highest Rating</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ff751f' }}>
+                    {highestRating}
+                  </div>
+                </div>
+                <div style={{
+                  background: '#fff',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Highest Rated Win</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>
+                    {highestRatedWin || 'N/A'}
+                  </div>
+                </div>
+                <div style={{
+                  background: '#fff',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Global Rank</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#6c757d' }}>
+                    N/A
+                  </div>
+                </div>
+                <div style={{
+                  background: '#fff',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Percentile</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#6c757d' }}>
+                    N/A
+                  </div>
+                </div>
               </div>
-            </div>
-            <div style={{
-              background: '#fff',
-              borderRadius: '12px',
-              padding: '24px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}>
-              <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Games Played</div>
-              <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#6c757d' }}>
-                {userProfile?.games_played || 0}
-              </div>
-            </div>
-            <div style={{
-              background: '#fff',
-              borderRadius: '12px',
-              padding: '24px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}>
-              <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Wins</div>
-              <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>
-                {userProfile?.wins || 0}
-              </div>
-            </div>
-            <div style={{
-              background: '#fff',
-              borderRadius: '12px',
-              padding: '24px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}>
-              <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Losses</div>
-              <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#dc3545' }}>
-                {userProfile?.losses || 0}
-              </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* ELO Graph Section */}
           {gameHistory.length > 0 && (() => {

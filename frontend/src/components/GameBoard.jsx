@@ -9502,6 +9502,15 @@ function GameBoard() {
                 {/* SVG Graph */}
                 <div style={{ overflowX: 'auto', width: '100%' }}>
                   <svg width={graphWidth} height={graphHeight} style={{ display: 'block' }}>
+                    {/* Area fill below the line */}
+                    {areaPath && (
+                      <path
+                        d={areaPath}
+                        fill="#ff751f"
+                        fillOpacity="0.2"
+                      />
+                    )}
+                    
                     {/* Grid lines */}
                     {gridLines.map((line, i) => (
                       <g key={i}>

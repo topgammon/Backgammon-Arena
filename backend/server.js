@@ -101,12 +101,29 @@ app.post('/api/evaluate', async (req, res) => {
 const guestQueue = []; // Simple queue for guest matchmaking
 const rankedQueue = []; // Array of { socketId, userId, elo, timestamp } for ranked matchmaking
 
-// ELO calculation function (standard chess.com formula)
-function calculateELOChange(playerELO, opponentELO, result) {
+// ELO calculation function (chess.com-style with stakes multiplier)
+// This formula accounts for rating differences through expected score calculation
+// Higher-rated players gain fewer points for wins and lose more for losses
+// Game stakes (doubling cube) multiply the ELO change
+function calculateELOChange(playerELO, opponentELO, result, stakes = 1) {
   // result: 1 = win, 0.5 = draw, 0 = loss
+  // stakes: multiplier from doubling cube (1, 2, 4, 8, 16, etc.)
   const K = 32; // K-factor (standard for chess.com)
-  const expectedScore = 1 / (1 + Math.pow(10, (opponentELO - playerELO) / 400));
-  const eloChange = Math.round(K * (result - expectedScore));
+  
+  // Calculate expected score based on rating difference
+  // If player is higher rated, expected score > 0.5 (more likely to win)
+  // If player is lower rated, expected score < 0.5 (less likely to win)
+  const ratingDiff = opponentELO - playerELO;
+  const expectedScore = 1 / (1 + Math.pow(10, ratingDiff / 400));
+  
+  // Calculate base ELO change
+  // If player wins (result=1) and expectedScore=0.6, they gain: 32 * (1 - 0.6) = 12.8 points
+  // If player loses (result=0) and expectedScore=0.6, they lose: 32 * (0 - 0.6) = -19.2 points
+  const baseEloChange = K * (result - expectedScore);
+  
+  // Multiply by stakes to reflect the "wager" - higher stakes = bigger ELO swings
+  const eloChange = Math.round(baseEloChange * stakes);
+  
   return eloChange;
 }
 
@@ -379,7 +396,8 @@ io.on('connection', (socket) => {
         createdAt: Date.now(),
         isRanked: true,
         player1ELO: player1.elo,
-        player2ELO: player2.elo
+        player2ELO: player2.elo,
+        gameStakes: 1 // Start at 1x (no double yet)
       });
       
       // Notify both players
@@ -599,6 +617,10 @@ io.on('connection', (socket) => {
         gameStakes,
         doubleOffer: { from: player === 1 ? 2 : 1, to: player }
       });
+      // Update match stakes when double is accepted
+      if (match) {
+        match.gameStakes = gameStakes;
+      }
       console.log(`✅ Player ${player} accepted double in match ${matchId}, new stakes: ${gameStakes}`);
     } else {
       // Broadcast double decline (game over) to both players
@@ -866,13 +888,21 @@ io.on('connection', (socket) => {
         return;
       }
       
+      // Get game stakes (doubling cube multiplier) - default to 1 if not set
+      const gameStakes = match.gameStakes || 1;
+      
       console.log(`📊 Calculating ELO for game over type: ${gameOver.type}, Winner: Player ${gameOver.winner}`);
       console.log(`   Player 1 result: ${player1Result} (${player1Result === 1 ? 'WIN' : 'LOSS'}), Player 2 result: ${player2Result} (${player2Result === 1 ? 'WIN' : 'LOSS'})`);
       console.log(`   Current ELO - Player 1: ${player1ELO}, Player 2: ${player2ELO}`);
+      console.log(`   Game stakes (doubling cube): ${gameStakes}x`);
       
-      // Calculate ELO changes
-      const player1Change = calculateELOChange(player1ELO, player2ELO, player1Result);
-      const player2Change = calculateELOChange(player2ELO, player1ELO, player2Result);
+      // Calculate ELO changes with stakes multiplier
+      // The formula already accounts for rating differences through expected score:
+      // - Higher-rated player has higher expected score → gains fewer points for win, loses more for loss
+      // - Lower-rated player has lower expected score → gains more points for win, loses fewer for loss
+      // Stakes multiply the change to reflect the "wager" size
+      const player1Change = calculateELOChange(player1ELO, player2ELO, player1Result, gameStakes);
+      const player2Change = calculateELOChange(player2ELO, player1ELO, player2Result, gameStakes);
       
       console.log(`   Calculated changes - Player 1: ${player1Change > 0 ? '+' : ''}${player1Change}, Player 2: ${player2Change > 0 ? '+' : ''}${player2Change}`);
       

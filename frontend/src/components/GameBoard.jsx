@@ -9444,7 +9444,7 @@ function GameBoard() {
                       borderBottom: '2px solid #ddd'
                     }}>
                       <th style={{
-                        padding: '10px 8px',
+                        padding: '10px 4px',
                         textAlign: 'center',
                         fontSize: '14px',
                         fontWeight: 'bold',
@@ -9453,7 +9453,7 @@ function GameBoard() {
                         width: '20%'
                       }}>Date</th>
                       <th style={{
-                        padding: '10px 8px',
+                        padding: '10px 4px',
                         textAlign: 'left',
                         fontSize: '14px',
                         fontWeight: 'bold',
@@ -9463,7 +9463,7 @@ function GameBoard() {
                         width: '30%'
                       }}>Opponent</th>
                       <th style={{
-                        padding: '10px 8px',
+                        padding: '10px 4px',
                         textAlign: 'center',
                         fontSize: '14px',
                         fontWeight: 'bold',
@@ -9472,7 +9472,7 @@ function GameBoard() {
                         width: '25%'
                       }}>Result</th>
                       <th style={{
-                        padding: '10px 8px',
+                        padding: '10px 4px',
                         textAlign: 'center',
                         fontSize: '14px',
                         fontWeight: 'bold',
@@ -9519,7 +9519,7 @@ function GameBoard() {
                           borderBottom: '1px solid #eee'
                         }}>
                           <td style={{
-                            padding: '10px 8px',
+                            padding: '10px 4px',
                             fontSize: '14px',
                             color: '#666',
                             fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
@@ -9534,7 +9534,7 @@ function GameBoard() {
                             </div>
                           </td>
                           <td style={{
-                            padding: '10px 8px',
+                            padding: '10px 4px',
                             fontSize: '14px',
                             color: '#333',
                             fontWeight: '500',
@@ -9556,7 +9556,7 @@ function GameBoard() {
                             </div>
                           </td>
                           <td style={{
-                            padding: '10px 8px',
+                            padding: '10px 4px',
                             fontSize: '14px',
                             fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
                             textAlign: 'center',
@@ -9586,7 +9586,7 @@ function GameBoard() {
                             </div>
                           </td>
                           <td style={{
-                            padding: '10px 8px',
+                            padding: '10px 4px',
                             fontSize: '14px',
                             fontWeight: 'bold',
                             color: eloChange > 0 ? '#28a745' : eloChange < 0 ? '#dc3545' : '#666',

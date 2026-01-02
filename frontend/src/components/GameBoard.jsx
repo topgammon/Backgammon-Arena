@@ -5862,37 +5862,15 @@ function GameBoard() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column',
-        justifyContent: 'center', 
-        alignItems: 'stretch', 
-        gap: 24, 
-        margin: '0 auto 24px', 
-        maxWidth: 1100, 
-        padding: isMobile ? '0 16px' : '0'
-      }}>
-        <div style={{ 
-          ...sectionStyle, 
-          maxWidth: isMobile ? '100%' : 1100, 
-          minWidth: isMobile ? '100%' : 320, 
-          width: '100%',
-          display: 'flex', 
-          flexDirection: 'column', 
-          minHeight: '100%' 
-        }}>
-          <h2 style={{ 
-            color: '#000', 
-            fontSize: '24px',
-            fontWeight: 'bold',
-            marginBottom: '20px',
-            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+          
+          {/* Leaderboards Section */}
+          <div style={{ 
+            width: '100%', 
+            marginTop: '32px',
+            paddingTop: '32px',
+            borderTop: '2px solid #e0e0e0'
           }}>
-            Leaderboards
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 24, justifyContent: 'center', marginTop: 16, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', flexDirection: 'row', gap: 24, justifyContent: 'center', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 180, maxWidth: 240, background: '#fff', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', padding: 12, margin: '0 4px' }}>
               <h3 style={{ 
                 margin: '0 0 8px 0', 
@@ -5921,7 +5899,13 @@ function GameBoard() {
                   ) : (
                     highestRatingLeaderboard.map((player, index) => {
                       const rank = index + 1;
-                      const playerAvatar = renderAvatar(false, false, null, 32, player, null);
+                      // Ensure player object has required fields for avatar rendering
+                      const playerProfileData = {
+                        avatar: player.avatar || 'Barry',
+                        google_avatar_url: player.google_avatar_url || null,
+                        username: player.username || 'Unknown'
+                      };
+                      const playerAvatar = renderAvatar(false, false, null, 32, playerProfileData, null);
                       const playerFlag = getCountryFlag(player.country || 'US', true, true);
                       
                       return (
@@ -5931,7 +5915,7 @@ function GameBoard() {
                           </td>
                           <td style={{ textAlign: 'left', padding: '8px 4px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <div style={{ width: '32px', height: '32px', flexShrink: 0 }}>
+                              <div style={{ width: '32px', height: '32px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 {playerAvatar}
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>

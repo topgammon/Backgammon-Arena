@@ -5899,13 +5899,8 @@ function GameBoard() {
                   ) : (
                     highestRatingLeaderboard.map((player, index) => {
                       const rank = index + 1;
-                      // Ensure player object has required fields for avatar rendering
-                      const playerProfileData = {
-                        avatar: player.avatar || 'Barry',
-                        google_avatar_url: player.google_avatar_url || null,
-                        username: player.username || 'Unknown'
-                      };
-                      const playerAvatar = renderAvatar(false, false, null, 32, playerProfileData, null);
+                      // Pass the player object directly - it already has avatar, google_avatar_url, and username from the query
+                      const playerAvatar = renderAvatar(false, false, null, 32, player, null);
                       const playerFlag = getCountryFlag(player.country || 'US', true, true);
                       
                       return (

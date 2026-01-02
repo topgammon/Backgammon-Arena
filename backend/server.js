@@ -835,13 +835,19 @@ io.on('connection', (socket) => {
       const player2Result = gameOver.winner === 2 ? 1 : 0;
       
       console.log(`📊 Calculating ELO for game over type: ${gameOver.type}, Winner: Player ${gameOver.winner}`);
+      console.log(`   Player 1 result: ${player1Result} (${player1Result === 1 ? 'WIN' : 'LOSS'}), Player 2 result: ${player2Result} (${player2Result === 1 ? 'WIN' : 'LOSS'})`);
+      console.log(`   Current ELO - Player 1: ${player1ELO}, Player 2: ${player2ELO}`);
       
       // Calculate ELO changes
       const player1Change = calculateELOChange(player1ELO, player2ELO, player1Result);
       const player2Change = calculateELOChange(player2ELO, player1ELO, player2Result);
       
+      console.log(`   Calculated changes - Player 1: ${player1Change > 0 ? '+' : ''}${player1Change}, Player 2: ${player2Change > 0 ? '+' : ''}${player2Change}`);
+      
       const newPlayer1ELO = player1ELO + player1Change;
       const newPlayer2ELO = player2ELO + player2Change;
+      
+      console.log(`   New ELO - Player 1: ${player1ELO} → ${newPlayer1ELO}, Player 2: ${player2ELO} → ${newPlayer2ELO}`);
       
       eloChanges = {
         player1: {

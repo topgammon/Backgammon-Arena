@@ -9524,7 +9524,8 @@ function GameBoard() {
                           <td style={{
                             padding: '12px',
                             fontSize: '14px',
-                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                            textAlign: 'center'
                           }}>
                             <div style={{
                               display: 'flex',

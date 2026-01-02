@@ -8312,7 +8312,7 @@ function GameBoard() {
                   </div>
                   {/* ELO Rating and Change for ranked matches */}
                   {matchmakingType === 'ranked' && eloChanges && eloChanges.player1 && (
-                    <div style={{ fontSize: 14, color: '#666', marginTop: 4 }}>
+                    <div style={{ fontSize: 14, color: '#666', marginTop: 4, textAlign: 'center' }}>
                       <div>⭐ {eloChanges.player1.oldELO}</div>
                       <div style={{ 
                         color: eloChanges.player1.change > 0 ? '#28a745' : eloChanges.player1.change < 0 ? '#dc3545' : '#666',
@@ -8321,6 +8321,14 @@ function GameBoard() {
                         marginTop: 2
                       }}>
                         {eloChanges.player1.change > 0 ? '+' : ''}{eloChanges.player1.change}
+                      </div>
+                      <div style={{ 
+                        fontSize: 16,
+                        fontWeight: 'bold',
+                        color: '#333',
+                        marginTop: 4
+                      }}>
+                        {eloChanges.player1.newELO}
                       </div>
                     </div>
                   )}
@@ -8354,7 +8362,7 @@ function GameBoard() {
                   </div>
                   {/* ELO Rating and Change for ranked matches */}
                   {matchmakingType === 'ranked' && eloChanges && eloChanges.player2 && (
-                    <div style={{ fontSize: 14, color: '#666', marginTop: 4 }}>
+                    <div style={{ fontSize: 14, color: '#666', marginTop: 4, textAlign: 'center' }}>
                       <div>⭐ {eloChanges.player2.oldELO}</div>
                       <div style={{ 
                         color: eloChanges.player2.change > 0 ? '#28a745' : eloChanges.player2.change < 0 ? '#dc3545' : '#666',
@@ -8363,6 +8371,14 @@ function GameBoard() {
                         marginTop: 2
                       }}>
                         {eloChanges.player2.change > 0 ? '+' : ''}{eloChanges.player2.change}
+                      </div>
+                      <div style={{ 
+                        fontSize: 16,
+                        fontWeight: 'bold',
+                        color: '#333',
+                        marginTop: 4
+                      }}>
+                        {eloChanges.player2.newELO}
                       </div>
                     </div>
                   )}

@@ -5921,7 +5921,7 @@ function GameBoard() {
                   ) : (
                     highestRatingLeaderboard.map((player, index) => {
                       const rank = index + 1;
-                      const playerAvatar = renderAvatar(player.avatar || 'Barry', player.google_avatar_url, player, null);
+                      const playerAvatar = renderAvatar(false, false, null, 32, player, null);
                       const playerFlag = getCountryFlag(player.country || 'US', true, true);
                       
                       return (

@@ -9435,7 +9435,8 @@ function GameBoard() {
                         fontSize: '14px',
                         fontWeight: 'bold',
                         color: '#333',
-                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                        verticalAlign: 'top'
                       }}>Opponent</th>
                       <th style={{
                         padding: '12px',

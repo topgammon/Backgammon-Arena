@@ -9429,7 +9429,7 @@ function GameBoard() {
               }}>
                 <table style={{
                   borderCollapse: 'collapse',
-                  margin: '0 auto'
+                  margin: 0
                 }}>
                   <thead>
                     <tr style={{

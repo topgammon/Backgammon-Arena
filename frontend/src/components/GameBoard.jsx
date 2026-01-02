@@ -9509,9 +9509,10 @@ function GameBoard() {
                             fontSize: '14px',
                             color: '#333',
                             fontWeight: '500',
-                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                            textAlign: 'left'
                           }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
                               <span>{opponent?.username || 'Unknown'}</span>
                               <span style={{ 
                                 fontSize: '12px', 

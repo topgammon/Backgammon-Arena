@@ -9430,15 +9430,21 @@ function GameBoard() {
                 <table style={{
                   width: '100%',
                   borderCollapse: 'collapse',
-                  minWidth: '600px'
+                  tableLayout: 'fixed'
                 }}>
+                  <colgroup>
+                    <col style={{ width: '15%' }} />
+                    <col style={{ width: '35%' }} />
+                    <col style={{ width: '25%' }} />
+                    <col style={{ width: '25%' }} />
+                  </colgroup>
                   <thead>
                     <tr style={{
                       background: '#f5f5f5',
                       borderBottom: '2px solid #ddd'
                     }}>
                       <th style={{
-                        padding: '8px',
+                        padding: '8px 6px',
                         textAlign: 'center',
                         fontSize: '14px',
                         fontWeight: 'bold',
@@ -9446,7 +9452,7 @@ function GameBoard() {
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
                       }}>Date</th>
                       <th style={{
-                        padding: '8px',
+                        padding: '8px 6px',
                         textAlign: 'left',
                         fontSize: '14px',
                         fontWeight: 'bold',
@@ -9455,7 +9461,7 @@ function GameBoard() {
                         verticalAlign: 'top'
                       }}>Opponent</th>
                       <th style={{
-                        padding: '8px',
+                        padding: '8px 6px',
                         textAlign: 'center',
                         fontSize: '14px',
                         fontWeight: 'bold',
@@ -9463,7 +9469,7 @@ function GameBoard() {
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
                       }}>Result</th>
                       <th style={{
-                        padding: '8px',
+                        padding: '8px 6px',
                         textAlign: 'center',
                         fontSize: '14px',
                         fontWeight: 'bold',
@@ -9509,7 +9515,7 @@ function GameBoard() {
                           borderBottom: '1px solid #eee'
                         }}>
                           <td style={{
-                            padding: '8px',
+                            padding: '8px 6px',
                             fontSize: '14px',
                             color: '#666',
                             fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
@@ -9521,7 +9527,7 @@ function GameBoard() {
                             </div>
                           </td>
                           <td style={{
-                            padding: '8px',
+                            padding: '8px 6px',
                             fontSize: '14px',
                             color: '#333',
                             fontWeight: '500',
@@ -9540,7 +9546,7 @@ function GameBoard() {
                             </div>
                           </td>
                           <td style={{
-                            padding: '8px',
+                            padding: '8px 6px',
                             fontSize: '14px',
                             fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
                             textAlign: 'center'
@@ -9567,7 +9573,7 @@ function GameBoard() {
                             </div>
                           </td>
                           <td style={{
-                            padding: '8px',
+                            padding: '8px 6px',
                             fontSize: '14px',
                             fontWeight: 'bold',
                             color: eloChange > 0 ? '#28a745' : eloChange < 0 ? '#dc3545' : '#666',
@@ -9587,20 +9593,6 @@ function GameBoard() {
               </div>
             )}
           </div>
-
-          {/* Sign Out Button */}
-          <button
-            onClick={handleSignOut}
-            style={{
-              ...buttonStyle,
-              background: '#dc3545',
-              color: '#fff',
-              width: '100%',
-              maxWidth: '300px'
-            }}
-          >
-            Sign Out
-          </button>
         </div>
 
         {/* Avatar Selector Modal */}

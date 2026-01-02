@@ -4365,12 +4365,9 @@ function GameBoard() {
     }
   }, [screen, passPlayPlayer1Name]);
 
-  // Chat censorship function - filters inappropriate words
-  const filterChatMessage = (message) => {
-    if (!message) return message;
-    
-    // Extensive list of words/phrases to filter (case-insensitive)
-    const badWords = [
+  // Get list of banned word patterns (shared between chat filter and username validation)
+  const getBannedWordPatterns = () => {
+    return [
       // Profanity - explicit sexual terms
       /\bc+u+n+t+\b/gi,
       /\bs+l+u+t+\b/gi,
@@ -4423,6 +4420,13 @@ function GameBoard() {
       /\bs+u+i+c+i+d+e+\b/gi,
       /\bk+y+s+\b/gi,
     ];
+  };
+
+  // Chat censorship function - filters inappropriate words
+  const filterChatMessage = (message) => {
+    if (!message) return message;
+    
+    const badWords = getBannedWordPatterns();
     
     let filtered = message;
     badWords.forEach(pattern => {
@@ -4443,6 +4447,47 @@ function GameBoard() {
     filtered = filtered.replace(/[p]+[e3]+[n]+[i1!]+[s5]+/gi, '*****');
     
     return filtered;
+  };
+
+  // Check if username contains banned words (for username validation)
+  const containsBannedWords = (username) => {
+    if (!username) return false;
+    
+    const usernameLower = username.toLowerCase();
+    const badWordPatterns = getBannedWordPatterns();
+    
+    // Check if any banned word appears in the username (as substring, not just whole word)
+    for (const pattern of badWordPatterns) {
+      // Remove word boundaries for username checking (check if word appears anywhere in username)
+      const patternStr = pattern.toString();
+      // Remove the \b word boundaries and flags, keep just the pattern
+      const patternWithoutBoundaries = patternStr.replace(/\\b/g, '').replace(/\/[gim]*$/g, '');
+      // Create a new regex without word boundaries to check if it appears anywhere
+      const substringPattern = new RegExp(patternWithoutBoundaries.replace(/^\/|\/[gim]*$/g, ''), 'gi');
+      if (substringPattern.test(usernameLower)) {
+        return true;
+      }
+    }
+    
+    // Also check for leetspeak bypass attempts
+    const leetspeakPatterns = [
+      /[f4]+[u@]+[c\(]+[k<]+/gi,
+      /[s5]+[h#]+[i1!]+[t+]+/gi,
+      /[b8]+[i1!]+[t+]+[c\(]+[h#]+/gi,
+      /[c\(]+[u@]+[n]+[t+]+/gi,
+      /[s5]+[l1]+[u@]+[t+]+/gi,
+      /[d]+[i1!]+[c\(]+[k<]+/gi,
+      /[p]+[u@]+[s5]+[s5]+[y]+/gi,
+      /[p]+[e3]+[n]+[i1!]+[s5]+/gi,
+    ];
+    
+    for (const pattern of leetspeakPatterns) {
+      if (pattern.test(usernameLower)) {
+        return true;
+      }
+    }
+    
+    return false;
   };
 
   // Auto-scroll chat to bottom when new messages arrive
@@ -5226,6 +5271,12 @@ function GameBoard() {
       return;
     }
 
+    // First check if username contains banned words
+    if (containsBannedWords(username)) {
+      setUsernameAvailable(false);
+      return;
+    }
+
     setCheckingUsername(true);
     try {
       const { data, error } = await supabase
@@ -5327,6 +5378,13 @@ function GameBoard() {
 
       if (signupFormData.username.length < 3) {
         setSignupError('Username must be at least 3 characters');
+        setSignupLoading(false);
+        return;
+      }
+
+      // Check if username contains banned words
+      if (containsBannedWords(signupFormData.username)) {
+        setSignupError('Username contains inappropriate language. Please choose another.');
         setSignupLoading(false);
         return;
       }

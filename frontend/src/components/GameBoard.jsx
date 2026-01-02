@@ -9269,8 +9269,9 @@ function GameBoard() {
                           }}>
                             <div style={{
                               display: 'flex',
+                              flexDirection: 'column',
                               alignItems: 'center',
-                              gap: '8px'
+                              gap: '4px'
                             }}>
                               <span style={{
                                 fontSize: '18px',
@@ -9278,12 +9279,6 @@ function GameBoard() {
                                 color: isWin ? '#28a745' : '#dc3545'
                               }}>
                                 {isWin ? '✓' : '✗'}
-                              </span>
-                              <span style={{
-                                color: isWin ? '#28a745' : '#dc3545',
-                                fontWeight: '500'
-                              }}>
-                                {isWin ? 'Win' : 'Loss'}
                               </span>
                               <span style={{
                                 color: '#666',

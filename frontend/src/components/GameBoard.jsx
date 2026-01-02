@@ -5862,101 +5862,95 @@ function GameBoard() {
               </div>
             </div>
           </div>
-          
-          {/* Leaderboards Section */}
-          <div style={{ 
-            width: '100%', 
-            marginTop: '32px',
-            paddingTop: '32px',
-            borderTop: '2px solid #e0e0e0'
-          }}>
-            <div style={{ display: 'flex', flexDirection: 'row', gap: 24, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: 180, maxWidth: 240, background: '#fff', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', padding: 12, margin: '0 4px' }}>
-                <h3 style={{ 
-                  margin: '0 0 8px 0', 
-                  fontSize: 18, 
-                  color: '#000',
-                  fontWeight: 'bold',
-                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-                }}>
-                  Highest Rating
-                </h3>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15 }}>
-                  <thead>
-                    <tr style={{ color: '#888', fontWeight: 600 }}>
-                      <th style={{ textAlign: 'left', padding: '4px 0', width: '20px' }}></th>
-                      <th style={{ textAlign: 'left', padding: '4px 0' }}>Player</th>
-                      <th style={{ textAlign: 'right', padding: '4px 0' }}>Rating</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {highestRatingLeaderboard.length === 0 ? (
-                      <tr>
-                        <td colSpan="3" style={{ textAlign: 'center', padding: '12px', color: '#666', fontSize: '14px' }}>
-                          Loading...
-                        </td>
-                      </tr>
-                    ) : (
-                      highestRatingLeaderboard.map((player, index) => {
-                        const rank = index + 1;
-                        const playerAvatar = renderAvatar(false, false, null, 32, player, null);
-                        const playerFlag = getCountryFlag(player.country || 'US', true, true);
-                        
-                        return (
-                          <tr key={player.id} style={{ borderBottom: '1px solid #eee' }}>
-                            <td style={{ textAlign: 'left', padding: '8px 4px', fontSize: '14px', fontWeight: 'bold', color: '#666' }}>
-                              {rank}
-                            </td>
-                            <td style={{ textAlign: 'left', padding: '8px 4px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div style={{ width: '32px', height: '32px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  {playerAvatar}
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                  <span style={{ fontSize: '14px', fontWeight: '500', color: '#333' }}>
-                                    {player.username || 'Unknown'}
-                                  </span>
-                                  <span style={{ fontSize: '12px', fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif' }}>
-                                    {playerFlag || ''}
-                                  </span>
-                                </div>
-                              </div>
-                            </td>
-                            <td style={{ textAlign: 'right', padding: '8px 4px', fontSize: '14px', fontWeight: 'bold', color: '#ff751f' }}>
-                              {player.elo_rating || 1000}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <div style={{ flex: 1, minWidth: 180, maxWidth: 240, background: '#fff', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', padding: 12, margin: '0 4px' }}>
-                <h3 style={{ 
-                  margin: '0 0 8px 0', 
-                  fontSize: 18, 
-                  color: '#000',
-                  fontWeight: 'bold',
-                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-                }}>
-                  Most Wins All Time
-                </h3>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15 }}>
-                  <thead>
-                    <tr style={{ color: '#888', fontWeight: 600 }}>
-                      <th style={{ textAlign: 'left', padding: '4px 0' }}>Player</th>
-                      <th style={{ textAlign: 'right', padding: '4px 0' }}>Wins</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* Data rows will go here */}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
         </div>
+      </div>
+      
+      {/* Leaderboards Section */}
+      <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'stretch', gap: 40, margin: '0 auto 24px', maxWidth: 1100, flexWrap: 'wrap' }}>
+        <div style={{ ...sectionStyle, maxWidth: homepageBoxWidth, minWidth: 320, flex: 1 }}>
+          <h3 style={{ 
+            margin: '0 0 8px 0', 
+            fontSize: 18, 
+            color: '#000',
+            fontWeight: 'bold',
+            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+          }}>
+            Highest Rating
+          </h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15 }}>
+            <thead>
+              <tr style={{ color: '#888', fontWeight: 600 }}>
+                <th style={{ textAlign: 'left', padding: '4px 0', width: '20px' }}></th>
+                <th style={{ textAlign: 'left', padding: '4px 0' }}>Player</th>
+                <th style={{ textAlign: 'right', padding: '4px 0' }}>Rating</th>
+              </tr>
+            </thead>
+            <tbody>
+              {highestRatingLeaderboard.length === 0 ? (
+                <tr>
+                  <td colSpan="3" style={{ textAlign: 'center', padding: '12px', color: '#666', fontSize: '14px' }}>
+                    Loading...
+                  </td>
+                </tr>
+              ) : (
+                highestRatingLeaderboard.map((player, index) => {
+                  const rank = index + 1;
+                  const playerAvatar = renderAvatar(false, false, null, 32, player, null);
+                  const playerFlag = getCountryFlag(player.country || 'US', true, true);
+                  
+                  return (
+                    <tr key={player.id} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ textAlign: 'left', padding: '8px 4px', fontSize: '14px', fontWeight: 'bold', color: '#666' }}>
+                        {rank}
+                      </td>
+                      <td style={{ textAlign: 'left', padding: '8px 4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ width: '32px', height: '32px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {playerAvatar}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span style={{ fontSize: '14px', fontWeight: '500', color: '#333' }}>
+                              {player.username || 'Unknown'}
+                            </span>
+                            <span style={{ fontSize: '12px', fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif' }}>
+                              {playerFlag || ''}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'right', padding: '8px 4px', fontSize: '14px', fontWeight: 'bold', color: '#ff751f' }}>
+                        {player.elo_rating || 1000}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ ...sectionStyle, maxWidth: homepageBoxWidth, minWidth: 320, flex: 1 }}>
+          <h3 style={{ 
+            margin: '0 0 8px 0', 
+            fontSize: 18, 
+            color: '#000',
+            fontWeight: 'bold',
+            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+          }}>
+            Most Wins All Time
+          </h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15 }}>
+            <thead>
+              <tr style={{ color: '#888', fontWeight: 600 }}>
+                <th style={{ textAlign: 'left', padding: '4px 0' }}>Player</th>
+                <th style={{ textAlign: 'right', padding: '4px 0' }}>Wins</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Data rows will go here */}
+            </tbody>
+          </table>
+        </div>
+      </div>
         <div style={{ 
           ...sectionStyle, 
           maxWidth: isMobile ? '100%' : 1100, 

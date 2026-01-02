@@ -9062,6 +9062,22 @@ function GameBoard() {
                       >
                         Edit
                       </button>
+                      <button
+                        onClick={handleSignOut}
+                        style={{
+                          marginLeft: '8px',
+                          padding: '4px 12px',
+                          background: '#dc3545',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                        }}
+                      >
+                        Sign Out
+                      </button>
                     </>
                   )}
                 </span>
@@ -9422,7 +9438,7 @@ function GameBoard() {
                       borderBottom: '2px solid #ddd'
                     }}>
                       <th style={{
-                        padding: '12px',
+                        padding: '8px',
                         textAlign: 'center',
                         fontSize: '14px',
                         fontWeight: 'bold',
@@ -9430,7 +9446,7 @@ function GameBoard() {
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
                       }}>Date</th>
                       <th style={{
-                        padding: '12px',
+                        padding: '8px',
                         textAlign: 'left',
                         fontSize: '14px',
                         fontWeight: 'bold',
@@ -9439,7 +9455,7 @@ function GameBoard() {
                         verticalAlign: 'top'
                       }}>Opponent</th>
                       <th style={{
-                        padding: '12px',
+                        padding: '8px',
                         textAlign: 'center',
                         fontSize: '14px',
                         fontWeight: 'bold',
@@ -9447,7 +9463,7 @@ function GameBoard() {
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
                       }}>Result</th>
                       <th style={{
-                        padding: '12px',
+                        padding: '8px',
                         textAlign: 'center',
                         fontSize: '14px',
                         fontWeight: 'bold',
@@ -9493,7 +9509,7 @@ function GameBoard() {
                           borderBottom: '1px solid #eee'
                         }}>
                           <td style={{
-                            padding: '12px',
+                            padding: '8px',
                             fontSize: '14px',
                             color: '#666',
                             fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
@@ -9505,7 +9521,7 @@ function GameBoard() {
                             </div>
                           </td>
                           <td style={{
-                            padding: '12px',
+                            padding: '8px',
                             fontSize: '14px',
                             color: '#333',
                             fontWeight: '500',
@@ -9524,7 +9540,7 @@ function GameBoard() {
                             </div>
                           </td>
                           <td style={{
-                            padding: '12px',
+                            padding: '8px',
                             fontSize: '14px',
                             fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
                             textAlign: 'center'
@@ -9551,7 +9567,7 @@ function GameBoard() {
                             </div>
                           </td>
                           <td style={{
-                            padding: '12px',
+                            padding: '8px',
                             fontSize: '14px',
                             fontWeight: 'bold',
                             color: eloChange > 0 ? '#28a745' : eloChange < 0 ? '#dc3545' : '#666',

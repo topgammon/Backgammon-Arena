@@ -7269,7 +7269,7 @@ function GameBoard() {
     };
     
     // Listen for game over
-    const handleGameOver = (data) => {
+    const handleGameOver = async (data) => {
       if (data.matchId === currentMatchId) {
         setGameOver(data.gameOver);
         // Clear active match from localStorage when game ends
@@ -7277,11 +7277,21 @@ function GameBoard() {
         // Store ELO changes if provided (for ranked matches)
         if (data.eloChanges) {
           setEloChanges(data.eloChanges);
-          // Update user profile if this player's ELO changed
+          // Update user profile if this player's ELO changed - refresh from database to get latest
           if (data.eloChanges.player1 && data.eloChanges.player1.userId === user?.id) {
+            // Update local state immediately for UI responsiveness
             setUserProfile(prev => prev ? { ...prev, elo_rating: data.eloChanges.player1.newELO } : null);
+            // Also refresh from database to ensure we have the latest data
+            if (supabase && user) {
+              fetchUserProfileSafely(user.id, true);
+            }
           } else if (data.eloChanges.player2 && data.eloChanges.player2.userId === user?.id) {
+            // Update local state immediately for UI responsiveness
             setUserProfile(prev => prev ? { ...prev, elo_rating: data.eloChanges.player2.newELO } : null);
+            // Also refresh from database to ensure we have the latest data
+            if (supabase && user) {
+              fetchUserProfileSafely(user.id, true);
+            }
           }
         }
       }
@@ -8198,19 +8208,17 @@ function GameBoard() {
                     {playerNumber === 1 ? (userProfile?.username || (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`)) : (opponentName || 'Opponent')}
                   </div>
                   {/* ELO Rating and Change for ranked matches */}
-                  {matchmakingType === 'ranked' && eloChanges && (
+                  {matchmakingType === 'ranked' && eloChanges && eloChanges.player1 && (
                     <div style={{ fontSize: 14, color: '#666', marginTop: 4 }}>
-                      <div>⭐ {playerNumber === 1 ? (eloChanges.player1?.oldELO || userProfile?.elo_rating || 1000) : (eloChanges.player2?.oldELO || opponent?.elo || 1000)}</div>
-                      {((playerNumber === 1 && eloChanges.player1) || (playerNumber === 2 && eloChanges.player2)) && (
-                        <div style={{ 
-                          color: (playerNumber === 1 ? eloChanges.player1 : eloChanges.player2).change > 0 ? '#28a745' : (playerNumber === 1 ? eloChanges.player1 : eloChanges.player2).change < 0 ? '#dc3545' : '#666',
-                          fontWeight: 'bold',
-                          fontSize: 16,
-                          marginTop: 2
-                        }}>
-                          {(playerNumber === 1 ? eloChanges.player1 : eloChanges.player2).change > 0 ? '+' : ''}{(playerNumber === 1 ? eloChanges.player1 : eloChanges.player2).change}
-                        </div>
-                      )}
+                      <div>⭐ {eloChanges.player1.oldELO}</div>
+                      <div style={{ 
+                        color: eloChanges.player1.change > 0 ? '#28a745' : eloChanges.player1.change < 0 ? '#dc3545' : '#666',
+                        fontWeight: 'bold',
+                        fontSize: 16,
+                        marginTop: 2
+                      }}>
+                        {eloChanges.player1.change > 0 ? '+' : ''}{eloChanges.player1.change}
+                      </div>
                     </div>
                   )}
                   {gameOver.winner === 1 && (
@@ -8242,19 +8250,17 @@ function GameBoard() {
                     {playerNumber === 2 ? (userProfile?.username || (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`)) : (opponentName || 'Opponent')}
                   </div>
                   {/* ELO Rating and Change for ranked matches */}
-                  {matchmakingType === 'ranked' && eloChanges && (
+                  {matchmakingType === 'ranked' && eloChanges && eloChanges.player2 && (
                     <div style={{ fontSize: 14, color: '#666', marginTop: 4 }}>
-                      <div>⭐ {playerNumber === 2 ? (eloChanges.player2?.oldELO || userProfile?.elo_rating || 1000) : (eloChanges.player1?.oldELO || opponent?.elo || 1000)}</div>
-                      {((playerNumber === 2 && eloChanges.player2) || (playerNumber === 1 && eloChanges.player1)) && (
-                        <div style={{ 
-                          color: (playerNumber === 2 ? eloChanges.player2 : eloChanges.player1).change > 0 ? '#28a745' : (playerNumber === 2 ? eloChanges.player2 : eloChanges.player1).change < 0 ? '#dc3545' : '#666',
-                          fontWeight: 'bold',
-                          fontSize: 16,
-                          marginTop: 2
-                        }}>
-                          {(playerNumber === 2 ? eloChanges.player2 : eloChanges.player1).change > 0 ? '+' : ''}{(playerNumber === 2 ? eloChanges.player2 : eloChanges.player1).change}
-                        </div>
-                      )}
+                      <div>⭐ {eloChanges.player2.oldELO}</div>
+                      <div style={{ 
+                        color: eloChanges.player2.change > 0 ? '#28a745' : eloChanges.player2.change < 0 ? '#dc3545' : '#666',
+                        fontWeight: 'bold',
+                        fontSize: 16,
+                        marginTop: 2
+                      }}>
+                        {eloChanges.player2.change > 0 ? '+' : ''}{eloChanges.player2.change}
+                      </div>
                     </div>
                   )}
                   {gameOver.winner === 2 && (

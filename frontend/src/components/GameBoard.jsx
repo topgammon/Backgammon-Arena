@@ -9214,9 +9214,10 @@ function GameBoard() {
                     {gameHistory.map((game, index) => {
                       const isWin = game.winner_id === user?.id;
                       const opponent = game.player1_id === user?.id ? game.player2 : game.player1;
+                      // Use ELO at game start (stored in database), not current ELO
                       const opponentElo = game.player1_id === user?.id ? 
-                        (game.player2?.elo_rating || game.player2_elo_before || 'N/A') : 
-                        (game.player1?.elo_rating || game.player1_elo_before || 'N/A');
+                        (game.player2_elo_before || game.player2?.elo_rating || 'N/A') : 
+                        (game.player1_elo_before || game.player1?.elo_rating || 'N/A');
                       const eloChange = game.player1_id === user?.id ? 
                         (game.player1_elo_change || 0) : 
                         (game.player2_elo_change || 0);

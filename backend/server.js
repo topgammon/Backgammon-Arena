@@ -295,7 +295,8 @@ io.on('connection', (socket) => {
         player1: match.player1,
         player2: match.player2,
         gameState: null,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        gameStakes: 1 // Start at 1x (no double yet) - not used for ELO but tracked for consistency
       });
       
       // Notify both players

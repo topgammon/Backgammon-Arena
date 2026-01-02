@@ -807,6 +807,26 @@ io.on('connection', (socket) => {
       return;
     }
     
+    // CRITICAL: Prevent duplicate processing - if match already processed, skip
+    if (match.gameOverProcessed) {
+      console.log(`⚠️ Game over event already processed for match ${matchId}. Ignoring duplicate event.`);
+      console.log(`   Original game over: type=${match.gameOverType}, winner=${match.gameOverWinner}`);
+      console.log(`   Duplicate event: type=${gameOver.type}, winner=${gameOver.winner}`);
+      // Still send the game over event to the client (in case they missed it), but don't update stats
+      socket.emit('game:over', {
+        matchId,
+        gameOver: { type: match.gameOverType, winner: match.gameOverWinner, loser: match.gameOverLoser },
+        eloChanges: match.eloChanges || null
+      });
+      return;
+    }
+    
+    // Mark match as processed IMMEDIATELY to prevent race conditions
+    match.gameOverProcessed = true;
+    match.gameOverType = gameOver.type;
+    match.gameOverWinner = gameOver.winner;
+    match.gameOverLoser = gameOver.loser;
+    
     console.log(`🏁 Game over event received for match ${matchId}:`, {
       type: gameOver.type,
       winner: gameOver.winner,
@@ -875,6 +895,9 @@ io.on('connection', (socket) => {
           change: player2Change
         }
       };
+      
+      // Store ELO changes in match object for potential resend (if client missed it)
+      match.eloChanges = eloChanges;
       
       // Update ELO in database
       if (supabase) {

@@ -221,6 +221,7 @@ function GameBoard() {
   const [firstRollTimer, setFirstRollTimer] = useState(10); // 10 second timer for break the dice
   const [showConfirmResign, setShowConfirmResign] = useState(false);
   const [gameOver, setGameOver] = useState(null);
+  const gameOverProcessedRef = useRef(false); // Prevent duplicate game over events
   const [timer, setTimer] = useState(45);
   const [rematchRequest, setRematchRequest] = useState(null); // { from: playerNumber, to: playerNumber }
   const firstRollIntervalRef = useRef(null);
@@ -3233,12 +3234,20 @@ function GameBoard() {
   }
 
   function triggerGameOver(type, winner, loser) {
+    // Prevent duplicate game over events
+    if (gameOverProcessedRef.current) {
+      console.log(`⚠️ Duplicate game over event prevented: type=${type}, winner=${winner}, loser=${loser}`);
+      return;
+    }
+    
+    gameOverProcessedRef.current = true;
     setGameOver({ type, winner, loser });
     setShowConfirmResign(false);
     setNoMoveOverlay(false);
     
     // Send game over to server for online games
     if (isOnlineGame && socketRef.current && matchId) {
+      console.log(`📤 Sending game over to server: type=${type}, winner=${winner}, loser=${loser}`);
       socketRef.current.emit('game:over', {
         matchId,
         gameOver: { type, winner, loser }
@@ -3290,6 +3299,7 @@ function GameBoard() {
   }
 
   function handleRematch() {
+    gameOverProcessedRef.current = false; // Reset flag for new game
     setGameOver(null);
     setCheckers(getInitialCheckers());
     setSelected(null);
@@ -6891,6 +6901,7 @@ function GameBoard() {
         setFirstRolls([null, null]);
         setFirstRollTurn(1);
         setFirstRollResult(null);
+        gameOverProcessedRef.current = false; // Reset flag for new match
         setGameOver(null);
         setDoubleOffer(null);
         setCanDouble({ 1: true, 2: true });

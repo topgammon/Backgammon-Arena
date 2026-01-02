@@ -283,6 +283,7 @@ function GameBoard() {
   const [opponent, setOpponent] = useState(null); // { userId, isGuest }
   const [opponentProfile, setOpponentProfile] = useState(null); // Opponent's user profile data
   const [gameHistory, setGameHistory] = useState([]); // Game history for profile page
+  const [eloTimePeriod, setEloTimePeriod] = useState('all'); // Time period for ELO graph: '1w', '1m', '3m', '6m', '1y', 'all'
   const transitioningToGameRef = useRef(false);
   
   // Track window width for responsive design
@@ -1167,7 +1168,7 @@ function GameBoard() {
       }
 
       try {
-        // Fetch last 10 games where user was player1 or player2
+        // Fetch all games where user was player1 or player2 (for graph and history)
         const { data: games, error } = await supabase
           .from('games')
           .select(`
@@ -1178,8 +1179,7 @@ function GameBoard() {
           .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
           .eq('game_type', 'online')
           .not('completed_at', 'is', null)
-          .order('completed_at', { ascending: false })
-          .limit(10);
+          .order('completed_at', { ascending: false });
 
         if (error) {
           console.error('Error fetching game history:', error);
@@ -9122,6 +9122,259 @@ function GameBoard() {
             </div>
           </div>
 
+          {/* ELO Graph Section */}
+          {gameHistory.length > 0 && (() => {
+            // Filter games by time period
+            const now = new Date();
+            const getTimeFilter = (period) => {
+              const cutoff = new Date();
+              switch (period) {
+                case '1w': cutoff.setDate(now.getDate() - 7); break;
+                case '1m': cutoff.setMonth(now.getMonth() - 1); break;
+                case '3m': cutoff.setMonth(now.getMonth() - 3); break;
+                case '6m': cutoff.setMonth(now.getMonth() - 6); break;
+                case '1y': cutoff.setFullYear(now.getFullYear() - 1); break;
+                case 'all': return null;
+                default: return null;
+              }
+              return cutoff;
+            };
+
+            const cutoffDate = getTimeFilter(eloTimePeriod);
+            const filteredGames = cutoffDate 
+              ? gameHistory.filter(game => new Date(game.completed_at) >= cutoffDate)
+              : gameHistory;
+
+            // Calculate ELO progression (oldest to newest for graph)
+            const sortedGames = [...filteredGames].sort((a, b) => 
+              new Date(a.completed_at) - new Date(b.completed_at)
+            );
+
+            // Build ELO data points
+            const eloData = [];
+            let currentElo = 1000; // Starting ELO
+            
+            // If we have games, start from the first game's before ELO
+            if (sortedGames.length > 0) {
+              const firstGame = sortedGames[0];
+              currentElo = firstGame.player1_id === user?.id 
+                ? (firstGame.player1_elo_before || 1000)
+                : (firstGame.player2_elo_before || 1000);
+            }
+
+            // Add initial point
+            if (sortedGames.length > 0) {
+              eloData.push({
+                date: new Date(sortedGames[0].completed_at),
+                elo: currentElo
+              });
+            }
+
+            // Calculate ELO after each game
+            sortedGames.forEach((game) => {
+              const eloChange = game.player1_id === user?.id 
+                ? (game.player1_elo_change || 0)
+                : (game.player2_elo_change || 0);
+              currentElo += eloChange;
+              eloData.push({
+                date: new Date(game.completed_at),
+                elo: currentElo
+              });
+            });
+
+            // If no games in period, show current ELO
+            if (eloData.length === 0) {
+              eloData.push({
+                date: new Date(),
+                elo: userProfile?.elo_rating || 1000
+              });
+            }
+
+            // Graph dimensions
+            const graphWidth = 800;
+            const graphHeight = 300;
+            const padding = { top: 40, right: 40, bottom: 40, left: 60 };
+            const chartWidth = graphWidth - padding.left - padding.right;
+            const chartHeight = graphHeight - padding.top - padding.bottom;
+
+            // Calculate min/max ELO for scaling
+            const eloValues = eloData.map(d => d.elo);
+            const minElo = Math.min(...eloValues);
+            const maxElo = Math.max(...eloValues);
+            const eloRange = maxElo - minElo || 200; // Default range if all same
+            const eloMin = Math.max(0, minElo - eloRange * 0.1);
+            const eloMax = maxElo + eloRange * 0.1;
+
+            // Date range
+            const dates = eloData.map(d => d.date);
+            const minDate = new Date(Math.min(...dates));
+            const maxDate = new Date(Math.max(...dates));
+            const dateRange = maxDate - minDate || 1;
+
+            // Convert to SVG coordinates
+            const toX = (date) => {
+              return padding.left + ((date - minDate) / dateRange) * chartWidth;
+            };
+            const toY = (elo) => {
+              return padding.top + chartHeight - ((elo - eloMin) / (eloMax - eloMin)) * chartHeight;
+            };
+
+            // Generate path for line
+            const pathData = eloData.map((point, i) => {
+              const x = toX(point.date);
+              const y = toY(point.elo);
+              return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+            }).join(' ');
+
+            // Generate grid lines and labels
+            const gridLines = [];
+            const yTicks = 5;
+            for (let i = 0; i <= yTicks; i++) {
+              const elo = eloMin + (eloMax - eloMin) * (i / yTicks);
+              const y = toY(elo);
+              gridLines.push({ y, elo: Math.round(elo) });
+            }
+
+            // X-axis labels (dates)
+            const xTicks = 6;
+            const dateLabels = [];
+            for (let i = 0; i <= xTicks; i++) {
+              const date = new Date(minDate.getTime() + (dateRange * i / xTicks));
+              const x = padding.left + (chartWidth * i / xTicks);
+              dateLabels.push({ x, date });
+            }
+
+            return (
+              <div style={{
+                background: '#fff',
+                borderRadius: '12px',
+                padding: '24px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                marginBottom: '24px'
+              }}>
+                <h2 style={{ 
+                  margin: '0 0 16px 0', 
+                  fontSize: '24px', 
+                  fontWeight: 'bold',
+                  color: '#333',
+                  textAlign: 'left',
+                  borderBottom: '2px solid #ff751f',
+                  paddingBottom: '12px',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                }}>
+                  ELO Rating Over Time
+                </h2>
+
+                {/* Time Period Tabs */}
+                <div style={{
+                  display: 'flex',
+                  gap: '8px',
+                  marginBottom: '20px',
+                  flexWrap: 'wrap'
+                }}>
+                  {[
+                    { key: '1w', label: '1 Week' },
+                    { key: '1m', label: '1 Month' },
+                    { key: '3m', label: '3 Months' },
+                    { key: '6m', label: '6 Months' },
+                    { key: '1y', label: '1 Year' },
+                    { key: 'all', label: 'All Time' }
+                  ].map(tab => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setEloTimePeriod(tab.key)}
+                      style={{
+                        padding: '8px 16px',
+                        background: eloTimePeriod === tab.key ? '#ff751f' : '#f5f5f5',
+                        color: eloTimePeriod === tab.key ? '#fff' : '#333',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: eloTimePeriod === tab.key ? 'bold' : 'normal',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* SVG Graph */}
+                <div style={{ overflowX: 'auto', width: '100%' }}>
+                  <svg width={graphWidth} height={graphHeight} style={{ display: 'block' }}>
+                    {/* Grid lines */}
+                    {gridLines.map((line, i) => (
+                      <g key={i}>
+                        <line
+                          x1={padding.left}
+                          y1={line.y}
+                          x2={padding.left + chartWidth}
+                          y2={line.y}
+                          stroke="#e0e0e0"
+                          strokeWidth="1"
+                        />
+                        <text
+                          x={padding.left - 10}
+                          y={line.y + 4}
+                          textAnchor="end"
+                          fontSize="12"
+                          fill="#666"
+                          fontFamily="Montserrat, Segoe UI, Verdana, Geneva, sans-serif"
+                        >
+                          {line.elo}
+                        </text>
+                      </g>
+                    ))}
+
+                    {/* X-axis labels */}
+                    {dateLabels.map((label, i) => (
+                      <text
+                        key={i}
+                        x={label.x}
+                        y={graphHeight - padding.bottom + 20}
+                        textAnchor="middle"
+                        fontSize="11"
+                        fill="#666"
+                        fontFamily="Montserrat, Segoe UI, Verdana, Geneva, sans-serif"
+                      >
+                        {label.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </text>
+                    ))}
+
+                    {/* Line path */}
+                    <path
+                      d={pathData}
+                      fill="none"
+                      stroke="#ff751f"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+
+                    {/* Data points */}
+                    {eloData.map((point, i) => {
+                      const x = toX(point.date);
+                      const y = toY(point.elo);
+                      return (
+                        <circle
+                          key={i}
+                          cx={x}
+                          cy={y}
+                          r="4"
+                          fill="#ff751f"
+                          stroke="#fff"
+                          strokeWidth="2"
+                        />
+                      );
+                    })}
+                  </svg>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Game History Section */}
           <div style={{
             background: '#fff',
@@ -9203,7 +9456,7 @@ function GameBoard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {gameHistory.map((game, index) => {
+                    {gameHistory.slice(0, 10).map((game, index) => {
                       const isWin = game.winner_id === user?.id;
                       const opponent = game.player1_id === user?.id ? game.player2 : game.player1;
                       // Use ELO at game start (stored in database), not current ELO

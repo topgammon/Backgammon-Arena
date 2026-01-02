@@ -854,16 +854,20 @@ io.on('connection', (socket) => {
       // Update ELO in database
       if (supabase) {
         try {
+          console.log(`🔄 Updating ELO in database for match ${matchId}...`);
+          console.log(`   Player 1: ${match.player1.userId}, ELO: ${player1ELO} → ${newPlayer1ELO} (${player1Change > 0 ? '+' : ''}${player1Change})`);
+          console.log(`   Player 2: ${match.player2.userId}, ELO: ${player2ELO} → ${newPlayer2ELO} (${player2Change > 0 ? '+' : ''}${player2Change})`);
+          
           // Get current stats for player 1
           const { data: player1Data, error: fetchError1 } = await supabase
             .from('users')
-            .select('wins, losses, games_played')
+            .select('wins, losses, games_played, elo_rating')
             .eq('id', match.player1.userId)
             .single();
           
           if (!fetchError1 && player1Data) {
             // Update player 1
-            const { error: error1 } = await supabase
+            const { data: updatedPlayer1, error: error1 } = await supabase
               .from('users')
               .update({ 
                 elo_rating: newPlayer1ELO,
@@ -871,23 +875,40 @@ io.on('connection', (socket) => {
                 losses: (player1Data.losses || 0) + (player1Result === 0 ? 1 : 0),
                 games_played: (player1Data.games_played || 0) + 1
               })
-              .eq('id', match.player1.userId);
+              .eq('id', match.player1.userId)
+              .select();
             
             if (error1) {
-              console.error('Error updating player 1 ELO:', error1);
+              console.error('❌ Error updating player 1 ELO:', error1);
+            } else {
+              // Verify the update succeeded
+              const { data: verify1, error: verifyError1 } = await supabase
+                .from('users')
+                .select('elo_rating, wins, losses, games_played')
+                .eq('id', match.player1.userId)
+                .single();
+              
+              if (verifyError1) {
+                console.error('❌ Error verifying player 1 update:', verifyError1);
+              } else {
+                console.log(`✅ Player 1 ELO updated: ${player1ELO} → ${newPlayer1ELO} (${player1Change > 0 ? '+' : ''}${player1Change})`);
+                console.log(`   Verified in DB: ELO=${verify1.elo_rating}, Wins=${verify1.wins}, Losses=${verify1.losses}, Games=${verify1.games_played}`);
+              }
             }
+          } else if (fetchError1) {
+            console.error('❌ Error fetching player 1 data:', fetchError1);
           }
           
           // Get current stats for player 2
           const { data: player2Data, error: fetchError2 } = await supabase
             .from('users')
-            .select('wins, losses, games_played')
+            .select('wins, losses, games_played, elo_rating')
             .eq('id', match.player2.userId)
             .single();
           
           if (!fetchError2 && player2Data) {
             // Update player 2
-            const { error: error2 } = await supabase
+            const { data: updatedPlayer2, error: error2 } = await supabase
               .from('users')
               .update({ 
                 elo_rating: newPlayer2ELO,
@@ -895,11 +916,28 @@ io.on('connection', (socket) => {
                 losses: (player2Data.losses || 0) + (player2Result === 0 ? 1 : 0),
                 games_played: (player2Data.games_played || 0) + 1
               })
-              .eq('id', match.player2.userId);
+              .eq('id', match.player2.userId)
+              .select();
             
             if (error2) {
-              console.error('Error updating player 2 ELO:', error2);
+              console.error('❌ Error updating player 2 ELO:', error2);
+            } else {
+              // Verify the update succeeded
+              const { data: verify2, error: verifyError2 } = await supabase
+                .from('users')
+                .select('elo_rating, wins, losses, games_played')
+                .eq('id', match.player2.userId)
+                .single();
+              
+              if (verifyError2) {
+                console.error('❌ Error verifying player 2 update:', verifyError2);
+              } else {
+                console.log(`✅ Player 2 ELO updated: ${player2ELO} → ${newPlayer2ELO} (${player2Change > 0 ? '+' : ''}${player2Change})`);
+                console.log(`   Verified in DB: ELO=${verify2.elo_rating}, Wins=${verify2.wins}, Losses=${verify2.losses}, Games=${verify2.games_played}`);
+              }
             }
+          } else if (fetchError2) {
+            console.error('❌ Error fetching player 2 data:', fetchError2);
           }
           
           console.log(`📊 ELO updated for ranked match ${matchId}:`, eloChanges);

@@ -7287,11 +7287,18 @@ function GameBoard() {
             // Update local state immediately for UI responsiveness
             setUserProfile(prev => prev ? { ...prev, elo_rating: data.eloChanges.player2.newELO } : null);
             // Also refresh from database to ensure we have the latest data
+            // Add a small delay to ensure backend has finished updating
             if (supabase && user) {
-              fetchUserProfileSafely(user.id, true);
+              setTimeout(() => {
+                fetchUserProfileSafely(user.id, true);
+              }, 500);
             }
           }
+        } else {
+          console.log('⚠️ No ELO changes in game over data');
         }
+      } else {
+        console.log('⚠️ Game over event for different match:', data.matchId, 'current:', currentMatchId);
       }
     };
     

@@ -800,6 +800,15 @@ io.on('connection', (socket) => {
       return;
     }
     
+    console.log(`🏁 Game over event received for match ${matchId}:`, {
+      type: gameOver.type,
+      winner: gameOver.winner,
+      loser: gameOver.loser,
+      isRanked: match.isRanked,
+      player1Guest: match.player1.isGuest,
+      player2Guest: match.player2.isGuest
+    });
+    
     // Find opponent socket
     const opponentSocketId = match.player1.socketId === socket.id 
       ? match.player2.socketId 
@@ -897,7 +906,19 @@ io.on('connection', (socket) => {
         } catch (err) {
           console.error('Error updating ELO in database:', err);
         }
+      } else {
+        console.log(`⚠️ ELO calculation skipped for match ${matchId}:`, {
+          isRanked: match.isRanked,
+          player1Guest: match.player1.isGuest,
+          player2Guest: match.player2.isGuest
+        });
       }
+    } else {
+      console.log(`⚠️ ELO calculation skipped - not a ranked match or has guest players:`, {
+        isRanked: match.isRanked,
+        player1Guest: match.player1.isGuest,
+        player2Guest: match.player2.isGuest
+      });
     }
     
     // Broadcast game over to opponent with ELO changes

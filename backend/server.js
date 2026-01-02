@@ -831,8 +831,20 @@ io.on('connection', (socket) => {
       
       // Determine result: 1 = win, 0 = loss
       // This works for all game over types (win, resign, timeout, disconnect, double decline)
+      // Ensure winner is valid (1 or 2)
+      if (gameOver.winner !== 1 && gameOver.winner !== 2) {
+        console.error(`❌ Invalid winner value: ${gameOver.winner}. Expected 1 or 2. Skipping ELO update.`);
+        return;
+      }
+      
       const player1Result = gameOver.winner === 1 ? 1 : 0;
       const player2Result = gameOver.winner === 2 ? 1 : 0;
+      
+      // Sanity check: exactly one player should win
+      if (player1Result === player2Result) {
+        console.error(`❌ Invalid game result: both players have result ${player1Result}. Winner: ${gameOver.winner}. Skipping ELO update.`);
+        return;
+      }
       
       console.log(`📊 Calculating ELO for game over type: ${gameOver.type}, Winner: Player ${gameOver.winner}`);
       console.log(`   Player 1 result: ${player1Result} (${player1Result === 1 ? 'WIN' : 'LOSS'}), Player 2 result: ${player2Result} (${player2Result === 1 ? 'WIN' : 'LOSS'})`);

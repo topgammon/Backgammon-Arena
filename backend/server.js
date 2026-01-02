@@ -773,7 +773,7 @@ io.on('connection', (socket) => {
     console.log(`🔄 Rematch requested in match ${matchId}, Player ${from} -> Player ${to}`);
   });
   
-  socket.on('game:rematch-accept', (data) => {
+  socket.on('game:rematch-accept', async (data) => {
     const { matchId, from, to } = data;
     const match = activeMatches.get(matchId);
     
@@ -782,20 +782,66 @@ io.on('connection', (socket) => {
       return;
     }
     
+    // CRITICAL: Reset match state for rematch
+    // Clear game over flags so new game can be processed
+    match.gameOverProcessed = false;
+    match.gameOverType = null;
+    match.gameOverWinner = null;
+    match.gameOverLoser = null;
+    match.eloChanges = null;
+    
+    // Reset game stakes to 1x for new game
+    match.gameStakes = 1;
+    
+    // For ranked matches, fetch updated ELO ratings from database
+    if (match.isRanked && !match.player1.isGuest && !match.player2.isGuest && supabase) {
+      try {
+        // Fetch updated ELO for player 1
+        const { data: player1Data, error: error1 } = await supabase
+          .from('users')
+          .select('elo_rating')
+          .eq('id', match.player1.userId)
+          .single();
+        
+        if (!error1 && player1Data) {
+          match.player1ELO = player1Data.elo_rating || 1000;
+        }
+        
+        // Fetch updated ELO for player 2
+        const { data: player2Data, error: error2 } = await supabase
+          .from('users')
+          .select('elo_rating')
+          .eq('id', match.player2.userId)
+          .single();
+        
+        if (!error2 && player2Data) {
+          match.player2ELO = player2Data.elo_rating || 1000;
+        }
+        
+        console.log(`🔄 Rematch: Updated ELOs - Player 1: ${match.player1ELO}, Player 2: ${match.player2ELO}`);
+      } catch (err) {
+        console.error('Error fetching updated ELOs for rematch:', err);
+      }
+    }
+    
     // Find opponent socket
     const opponentSocketId = match.player1.socketId === socket.id 
       ? match.player2.socketId 
       : match.player1.socketId;
     
-    // Send rematch accept to both players
-    io.to(opponentSocketId).emit('game:rematch-accept', {
-      matchId, from, to
-    });
-    io.to(socket.id).emit('game:rematch-accept', {
-      matchId, from, to
-    });
+    // Send rematch accept to both players with updated ELOs
+    const rematchData = {
+      matchId, 
+      from, 
+      to,
+      player1ELO: match.player1ELO,
+      player2ELO: match.player2ELO
+    };
     
-    console.log(`✅ Rematch accepted in match ${matchId}`);
+    io.to(opponentSocketId).emit('game:rematch-accept', rematchData);
+    io.to(socket.id).emit('game:rematch-accept', rematchData);
+    
+    console.log(`✅ Rematch accepted in match ${matchId} - game state reset`);
   });
   
   socket.on('game:rematch-decline', (data) => {

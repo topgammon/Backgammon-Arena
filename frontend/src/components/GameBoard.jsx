@@ -7525,16 +7525,23 @@ function GameBoard() {
       }
     };
     
-    const handleRematchAccept = (data) => {
+    const handleRematchAccept = async (data) => {
       if (data.matchId === currentMatchId) {
+        console.log('🔄 Rematch accepted, resetting game state...');
+        
+        // CRITICAL: Reset game over processed flag
+        gameOverProcessedRef.current = false;
+        
         // Clear timeout if it exists
         if (rematchTimeoutRef.current) {
           clearTimeout(rematchTimeoutRef.current);
           rematchTimeoutRef.current = null;
         }
-        // Reset game state for rematch
+        
+        // Reset ALL game state for rematch
         setGameOver(null);
         setRematchRequest(null);
+        setEloChanges(null);
         setCheckers(getInitialCheckers());
         setSelected(null);
         setLegalMoves([]);
@@ -7545,21 +7552,80 @@ function GameBoard() {
         setBar({ 1: [], 2: [] });
         setBorneOff({ 1: 0, 2: 0 });
         setMessage('');
-        setTimer(45);
-        setUndoStack([]);
-        setMoveMade(false);
-        setAwaitingEndTurn(false);
-        setDoubleOffer(null);
-        setDoubleTimer(12);
-        setCanDouble({ 1: true, 2: true });
-        setLastDoubleOfferer(null);
-        setDoubleOfferedThisTurn({ 1: false, 2: false });
-        setGameStakes(1);
-        setNoMoveOverlay(false);
-        setShowConfirmResign(false);
         setFirstRollPhase(true);
         setFirstRolls([null, null]);
         setFirstRollTurn(1);
+        setFirstRollResult(null);
+        setFirstRollTimer(10);
+        setTimer(45);
+        setDoubleOffer(null);
+        setGameStakes(1);
+        setCanDouble({ 1: true, 2: true });
+        setDoubleOfferedThisTurn({ 1: false, 2: false });
+        setLastDoubleOfferer(null);
+        setUndoStack([]);
+        setMoveMade(false);
+        setAwaitingEndTurn(false);
+        setNoMoveOverlay(false);
+        setShowConfirmResign(false);
+        if (timerRef.current) clearInterval(timerRef.current);
+        
+        // Fetch updated profiles (ELO) for both players if ranked match
+        if (matchmakingType === 'ranked' && supabase) {
+          // Use ELOs from backend if provided (most reliable)
+          if (data.player1ELO !== undefined && data.player2ELO !== undefined) {
+            console.log('📊 Using ELOs from backend:', { player1: data.player1ELO, player2: data.player2ELO });
+            // Update profiles with backend ELOs
+            if (user?.id && opponent?.userId) {
+              // Determine which player we are
+              const isPlayer1 = playerNumber === 1;
+              const ourELO = isPlayer1 ? data.player1ELO : data.player2ELO;
+              const opponentELO = isPlayer1 ? data.player2ELO : data.player1ELO;
+              
+              setUserProfile(prev => prev ? { ...prev, elo_rating: ourELO } : null);
+              setOpponentProfile(prev => prev ? { ...prev, elo_rating: opponentELO } : null);
+            }
+          } else {
+            // Fallback: fetch from database if backend didn't provide ELOs
+            // Fetch current user's updated profile
+            if (user?.id) {
+              try {
+                const { data: profile, error } = await supabase
+                  .from('users')
+                  .select('elo_rating, username')
+                  .eq('id', user.id)
+                  .single();
+                
+                if (!error && profile) {
+                  setUserProfile(prev => prev ? { ...prev, elo_rating: profile.elo_rating } : null);
+                  console.log('✅ Updated own ELO:', profile.elo_rating);
+                }
+              } catch (err) {
+                console.error('Error fetching updated own profile:', err);
+              }
+            }
+            
+            // Fetch opponent's updated profile
+            if (opponent?.userId && !opponent.isGuest) {
+              try {
+                const { data: profile, error } = await supabase
+                  .from('users')
+                  .select('elo_rating, username')
+                  .eq('id', opponent.userId)
+                  .single();
+                
+                if (!error && profile) {
+                  setOpponentProfile(prev => prev ? { ...prev, elo_rating: profile.elo_rating } : null);
+                  console.log('✅ Updated opponent ELO:', profile.elo_rating);
+                }
+              } catch (err) {
+                console.error('Error fetching updated opponent profile:', err);
+              }
+            }
+          }
+        }
+        
+        console.log('✅ Rematch state fully reset');
         setFirstRollResult(null);
         if (timerRef.current) clearInterval(timerRef.current);
       }

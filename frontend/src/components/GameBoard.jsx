@@ -9415,6 +9415,13 @@ function GameBoard() {
               const y = toY(point.elo);
               return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
             }).join(' ');
+            
+            // Generate area path (line + bottom edge for fill)
+            const areaPath = eloData.length > 0 ? 
+              pathData + 
+              ` L ${toX(eloData[eloData.length - 1].date)} ${padding.top + chartHeight}` +
+              ` L ${toX(eloData[0].date)} ${padding.top + chartHeight} Z` :
+              '';
 
             // Generate grid lines and labels in increments of 5
             const gridLines = [];

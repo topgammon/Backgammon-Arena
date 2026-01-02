@@ -9191,14 +9191,6 @@ function GameBoard() {
                         fontWeight: 'bold',
                         color: '#333',
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-                      }}>Opponent ELO</th>
-                      <th style={{
-                        padding: '12px',
-                        textAlign: 'left',
-                        fontSize: '14px',
-                        fontWeight: 'bold',
-                        color: '#333',
-                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
                       }}>Result</th>
                       <th style={{
                         padding: '12px',
@@ -9222,20 +9214,24 @@ function GameBoard() {
                         (game.player1_elo_change || 0) : 
                         (game.player2_elo_change || 0);
                       
+                      // Calculate player's ELO after the game
+                      const playerEloBefore = game.player1_id === user?.id ? 
+                        (game.player1_elo_before || 1000) : 
+                        (game.player2_elo_before || 1000);
+                      const playerEloAfter = playerEloBefore + eloChange;
+                      
                       // Map status to reason
                       let reason = 'Completion';
                       if (game.status === 'resigned') reason = 'Resignation';
                       else if (game.status === 'timeout') reason = 'Timeout';
                       else if (game.status === 'disconnected') reason = 'Disconnection';
                       
-                      // Format date
+                      // Format date (date only, no time)
                       const gameDate = new Date(game.completed_at);
                       const formattedDate = gameDate.toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
+                        year: 'numeric'
                       });
                       
                       return (
@@ -9254,13 +9250,18 @@ function GameBoard() {
                             color: '#333',
                             fontWeight: '500',
                             fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-                          }}>{opponent?.username || 'Unknown'}</td>
-                          <td style={{
-                            padding: '12px',
-                            fontSize: '14px',
-                            color: '#666',
-                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-                          }}>{opponentElo}</td>
+                          }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <span>{opponent?.username || 'Unknown'}</span>
+                              <span style={{ 
+                                fontSize: '12px', 
+                                color: '#666',
+                                fontWeight: 'normal'
+                              }}>
+                                ELO: {opponentElo}
+                              </span>
+                            </div>
+                          </td>
                           <td style={{
                             padding: '12px',
                             fontSize: '14px',
@@ -9299,7 +9300,7 @@ function GameBoard() {
                             color: eloChange > 0 ? '#28a745' : eloChange < 0 ? '#dc3545' : '#666',
                             fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
                           }}>
-                            {eloChange > 0 ? '+' : ''}{eloChange}
+                            {eloChange > 0 ? '+' : ''}{eloChange} ({playerEloAfter})
                           </td>
                         </tr>
                       );

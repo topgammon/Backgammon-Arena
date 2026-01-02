@@ -1002,6 +1002,49 @@ io.on('connection', (socket) => {
       // Store ELO changes in match object for potential resend (if client missed it)
       match.eloChanges = eloChanges;
       
+      // Save game to database for ranked matches (for game history)
+      if (supabase && match.isRanked && !match.player1.isGuest && !match.player2.isGuest) {
+        try {
+          // Map game over type to status
+          let gameStatus = 'completed';
+          if (gameOver.type === 'resign' || gameOver.type === 'resignation') {
+            gameStatus = 'resigned';
+          } else if (gameOver.type === 'timeout') {
+            gameStatus = 'timeout';
+          } else if (gameOver.type === 'disconnect') {
+            gameStatus = 'disconnected';
+          }
+          
+          // Determine winner_id
+          const winnerId = gameOver.winner === 1 ? match.player1.userId : match.player2.userId;
+          
+          // Save game record with ELO changes
+          const { error: gameError } = await supabase
+            .from('games')
+            .insert({
+              player1_id: match.player1.userId,
+              player2_id: match.player2.userId,
+              game_type: 'online',
+              status: gameStatus,
+              winner_id: winnerId,
+              elo_stake: gameStakes,
+              completed_at: new Date().toISOString(),
+              player1_elo_change: player1Change,
+              player2_elo_change: player2Change,
+              player1_elo_before: player1ELO,
+              player2_elo_before: player2ELO
+            });
+          
+          if (gameError) {
+            console.error('Error saving game to database:', gameError);
+          } else {
+            console.log(`✅ Game saved to database for match ${matchId}`);
+          }
+        } catch (err) {
+          console.error('Error saving game to database:', err);
+        }
+      }
+      
       // Update ELO in database
       if (supabase) {
         try {

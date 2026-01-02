@@ -282,6 +282,7 @@ function GameBoard() {
   const [playerNumber, setPlayerNumber] = useState(null); // 1 or 2
   const [opponent, setOpponent] = useState(null); // { userId, isGuest }
   const [opponentProfile, setOpponentProfile] = useState(null); // Opponent's user profile data
+  const [gameHistory, setGameHistory] = useState([]); // Game history for profile page
   const transitioningToGameRef = useRef(false);
   
   // Track window width for responsive design
@@ -1156,6 +1157,45 @@ function GameBoard() {
 
     fetchUserProfile();
   }, [user, supabase]); // Removed userProfile from deps to prevent loops, but will always fetch fresh data
+
+  // Fetch game history when on profile page
+  useEffect(() => {
+    const fetchGameHistory = async () => {
+      if (!supabase || !user?.id || screen !== 'profile') {
+        setGameHistory([]);
+        return;
+      }
+
+      try {
+        // Fetch last 10 games where user was player1 or player2
+        const { data: games, error } = await supabase
+          .from('games')
+          .select(`
+            *,
+            player1:users!games_player1_id_fkey(username, elo_rating),
+            player2:users!games_player2_id_fkey(username, elo_rating)
+          `)
+          .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
+          .eq('game_type', 'online')
+          .not('completed_at', 'is', null)
+          .order('completed_at', { ascending: false })
+          .limit(10);
+
+        if (error) {
+          console.error('Error fetching game history:', error);
+          setGameHistory([]);
+          return;
+        }
+
+        setGameHistory(games || []);
+      } catch (err) {
+        console.error('Error fetching game history:', err);
+        setGameHistory([]);
+      }
+    };
+
+    fetchGameHistory();
+  }, [screen, user?.id, supabase]);
 
   // Sound effects - non-blocking, triggered by game actions
   const playSound = (soundName) => {
@@ -9082,7 +9122,7 @@ function GameBoard() {
             </div>
           </div>
 
-          {/* Placeholder for future content */}
+          {/* Game History Section */}
           <div style={{
             background: '#fff',
             borderRadius: '12px',
@@ -9091,16 +9131,182 @@ function GameBoard() {
             marginBottom: '24px'
           }}>
             <h2 style={{ 
-              margin: '0 0 16px 0', 
-              fontSize: '20px', 
-              color: '#000',
+              margin: '0 0 24px 0', 
+              fontSize: '24px', 
+              fontWeight: 'bold',
+              color: '#333',
+              textAlign: 'left',
+              borderBottom: '2px solid #ff751f',
+              paddingBottom: '12px',
               fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
             }}>
               Game History
             </h2>
-            <p style={{ color: '#666', fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif' }}>
-              Your game history will appear here
-            </p>
+            
+            {gameHistory.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '40px',
+                color: '#666',
+                fontSize: '16px',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+              }}>
+                No ranked games played yet
+              </div>
+            ) : (
+              <div style={{
+                overflowX: 'auto',
+                width: '100%'
+              }}>
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  minWidth: '600px'
+                }}>
+                  <thead>
+                    <tr style={{
+                      background: '#f5f5f5',
+                      borderBottom: '2px solid #ddd'
+                    }}>
+                      <th style={{
+                        padding: '12px',
+                        textAlign: 'left',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        color: '#333',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                      }}>Date</th>
+                      <th style={{
+                        padding: '12px',
+                        textAlign: 'left',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        color: '#333',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                      }}>Opponent</th>
+                      <th style={{
+                        padding: '12px',
+                        textAlign: 'left',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        color: '#333',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                      }}>Opponent ELO</th>
+                      <th style={{
+                        padding: '12px',
+                        textAlign: 'left',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        color: '#333',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                      }}>Result</th>
+                      <th style={{
+                        padding: '12px',
+                        textAlign: 'left',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        color: '#333',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                      }}>ELO Change</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gameHistory.map((game, index) => {
+                      const isWin = game.winner_id === user?.id;
+                      const opponent = game.player1_id === user?.id ? game.player2 : game.player1;
+                      const opponentElo = game.player1_id === user?.id ? 
+                        (game.player2?.elo_rating || game.player2_elo_before || 'N/A') : 
+                        (game.player1?.elo_rating || game.player1_elo_before || 'N/A');
+                      const eloChange = game.player1_id === user?.id ? 
+                        (game.player1_elo_change || 0) : 
+                        (game.player2_elo_change || 0);
+                      
+                      // Map status to reason
+                      let reason = 'Completion';
+                      if (game.status === 'resigned') reason = 'Resignation';
+                      else if (game.status === 'timeout') reason = 'Timeout';
+                      else if (game.status === 'disconnected') reason = 'Disconnection';
+                      
+                      // Format date
+                      const gameDate = new Date(game.completed_at);
+                      const formattedDate = gameDate.toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      });
+                      
+                      return (
+                        <tr key={game.id || index} style={{
+                          borderBottom: '1px solid #eee'
+                        }}>
+                          <td style={{
+                            padding: '12px',
+                            fontSize: '14px',
+                            color: '#666',
+                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                          }}>{formattedDate}</td>
+                          <td style={{
+                            padding: '12px',
+                            fontSize: '14px',
+                            color: '#333',
+                            fontWeight: '500',
+                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                          }}>{opponent?.username || 'Unknown'}</td>
+                          <td style={{
+                            padding: '12px',
+                            fontSize: '14px',
+                            color: '#666',
+                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                          }}>{opponentElo}</td>
+                          <td style={{
+                            padding: '12px',
+                            fontSize: '14px',
+                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                          }}>
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px'
+                            }}>
+                              <span style={{
+                                fontSize: '18px',
+                                fontWeight: 'bold',
+                                color: isWin ? '#28a745' : '#dc3545'
+                              }}>
+                                {isWin ? '✓' : '✗'}
+                              </span>
+                              <span style={{
+                                color: isWin ? '#28a745' : '#dc3545',
+                                fontWeight: '500'
+                              }}>
+                                {isWin ? 'Win' : 'Loss'}
+                              </span>
+                              <span style={{
+                                color: '#666',
+                                fontSize: '12px'
+                              }}>
+                                by {reason}
+                              </span>
+                            </div>
+                          </td>
+                          <td style={{
+                            padding: '12px',
+                            fontSize: '14px',
+                            fontWeight: 'bold',
+                            color: eloChange > 0 ? '#28a745' : eloChange < 0 ? '#dc3545' : '#666',
+                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                          }}>
+                            {eloChange > 0 ? '+' : ''}{eloChange}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* Sign Out Button */}

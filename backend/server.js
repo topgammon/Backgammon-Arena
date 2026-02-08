@@ -962,20 +962,31 @@ io.on('connection', (socket) => {
       }
       
       // Get game stakes (doubling cube multiplier) - default to 1 if not set
-      const gameStakes = match.gameStakes || 1;
+      // Ensure it's at least 1 to avoid multiplying by 0
+      const gameStakes = Math.max(1, match.gameStakes || 1);
+      
+      // Get win type multiplier (gammon/backgammon) - default to 1 for standard win
+      // winType can be: 'standard' (1x), 'gammon' (2x), 'backgammon' (3x)
+      const winMultiplier = gameOver.multiplier || 1;
+      
+      // Total multiplier = win type multiplier * doubling cube multiplier
+      // Example: Gammon (2x) with doubling cube at 4x = 8x total
+      const totalMultiplier = winMultiplier * gameStakes;
       
       console.log(`📊 Calculating ELO for game over type: ${gameOver.type}, Winner: Player ${gameOver.winner}`);
       console.log(`   Player 1 result: ${player1Result} (${player1Result === 1 ? 'WIN' : 'LOSS'}), Player 2 result: ${player2Result} (${player2Result === 1 ? 'WIN' : 'LOSS'})`);
       console.log(`   Current ELO - Player 1: ${player1ELO}, Player 2: ${player2ELO}`);
+      console.log(`   Win type: ${gameOver.winType || 'standard'} (${winMultiplier}x)`);
       console.log(`   Game stakes (doubling cube): ${gameStakes}x`);
+      console.log(`   Total multiplier: ${totalMultiplier}x`);
       
-      // Calculate ELO changes with stakes multiplier
+      // Calculate ELO changes with total multiplier (win type * doubling cube)
       // The formula already accounts for rating differences through expected score:
       // - Higher-rated player has higher expected score → gains fewer points for win, loses more for loss
       // - Lower-rated player has lower expected score → gains more points for win, loses fewer for loss
-      // Stakes multiply the change to reflect the "wager" size
-      const player1Change = calculateELOChange(player1ELO, player2ELO, player1Result, gameStakes);
-      const player2Change = calculateELOChange(player2ELO, player1ELO, player2Result, gameStakes);
+      // Total multiplier (win type * stakes) multiplies the change to reflect the "wager" size
+      const player1Change = calculateELOChange(player1ELO, player2ELO, player1Result, totalMultiplier);
+      const player2Change = calculateELOChange(player2ELO, player1ELO, player2Result, totalMultiplier);
       
       console.log(`   Calculated changes - Player 1: ${player1Change > 0 ? '+' : ''}${player1Change}, Player 2: ${player2Change > 0 ? '+' : ''}${player2Change}`);
       
@@ -1028,6 +1039,8 @@ io.on('connection', (socket) => {
               status: gameStatus,
               winner_id: winnerId,
               elo_stake: gameStakes,
+              win_type: gameOver.winType || 'standard',
+              win_multiplier: winMultiplier,
               completed_at: new Date().toISOString(),
               player1_elo_change: player1Change,
               player2_elo_change: player2Change,
@@ -1155,15 +1168,25 @@ io.on('connection', (socket) => {
     // Broadcast game over to opponent with ELO changes
     io.to(opponentSocketId).emit('game:over', {
       matchId,
-      gameOver,
-      eloChanges
+      gameOver: {
+        ...gameOver,
+        winType: gameOver.winType || null,
+        multiplier: gameOver.multiplier || 1
+      },
+      eloChanges,
+      gameStakes: match.gameStakes || 1
     });
     
     // Also send to sender with ELO changes
     socket.emit('game:over', {
       matchId,
-      gameOver,
-      eloChanges
+      gameOver: {
+        ...gameOver,
+        winType: gameOver.winType || null,
+        multiplier: gameOver.multiplier || 1
+      },
+      eloChanges,
+      gameStakes: match.gameStakes || 1
     });
     
     console.log(`🏁 Game over in match ${matchId}: ${gameOver.type}, Winner: Player ${gameOver.winner}`);

@@ -3360,6 +3360,35 @@ function GameBoard() {
     return Array.from(moves);
   }
 
+  // Helper function to detect gammon and backgammon
+  function detectWinType(winner, loser) {
+    // Check if loser has borne off any checkers
+    const loserBorneOff = borneOff[loser] || 0;
+    
+    if (loserBorneOff > 0) {
+      // Standard win - opponent has borne off at least one checker
+      return { winType: 'standard', multiplier: 1 };
+    }
+    
+    // Gammon check: opponent hasn't borne off any checkers
+    // Backgammon check: opponent hasn't borne off any checkers AND still has checkers in winner's home board or on the bar
+    
+    // Check if loser has checkers in winner's home board or on the bar
+    const winnerHomeBoard = winner === 1 ? [18, 19, 20, 21, 22, 23] : [0, 1, 2, 3, 4, 5];
+    const loserCheckersInWinnerHome = checkers.filter(c => 
+      c.player === loser && winnerHomeBoard.includes(c.point)
+    ).length;
+    const loserCheckersOnBar = (bar[loser] || []).length;
+    
+    if (loserCheckersInWinnerHome > 0 || loserCheckersOnBar > 0) {
+      // Backgammon: opponent has checkers in winner's home or on the bar
+      return { winType: 'backgammon', multiplier: 3 };
+    } else {
+      // Gammon: opponent hasn't borne off any checkers but all checkers are out of winner's home
+      return { winType: 'gammon', multiplier: 2 };
+    }
+  }
+
   function triggerGameOver(type, winner, loser) {
     // Prevent duplicate game over events
     if (gameOverProcessedRef.current) {
@@ -3368,16 +3397,27 @@ function GameBoard() {
     }
     
     gameOverProcessedRef.current = true;
-    setGameOver({ type, winner, loser });
+    
+    // Detect win type (gammon/backgammon) for wins and resignations
+    let winType = null;
+    let multiplier = 1;
+    
+    if (type === 'win' || type === 'resign') {
+      const winInfo = detectWinType(winner, loser);
+      winType = winInfo.winType;
+      multiplier = winInfo.multiplier;
+    }
+    
+    setGameOver({ type, winner, loser, winType, multiplier });
     setShowConfirmResign(false);
     setNoMoveOverlay(false);
     
     // Send game over to server for online games
     if (isOnlineGame && socketRef.current && matchId) {
-      console.log(`📤 Sending game over to server: type=${type}, winner=${winner}, loser=${loser}`);
+      console.log(`📤 Sending game over to server: type=${type}, winner=${winner}, loser=${loser}, winType=${winType}, multiplier=${multiplier}`);
       socketRef.current.emit('game:over', {
         matchId,
-        gameOver: { type, winner, loser }
+        gameOver: { type, winner, loser, winType, multiplier }
       });
     }
   }
@@ -5133,6 +5173,54 @@ function GameBoard() {
             </div>
             {/* Game over message */}
             <div style={{ marginBottom: 24, fontSize: 18, color: '#666', fontWeight: 'normal' }}>{getGameOverMessage(gameOver)}</div>
+            
+            {/* Scoring breakdown for wins and resignations */}
+            {(gameOver.type === 'win' || gameOver.type === 'resign') && gameOver.winType && (
+              <div style={{ 
+                marginBottom: 24, 
+                padding: '16px', 
+                background: '#f8f9fa', 
+                borderRadius: '8px',
+                fontSize: 14,
+                color: '#333',
+                textAlign: 'left'
+              }}>
+                <div style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 16 }}>Scoring Breakdown:</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Base ELO Wager:</span>
+                    <span style={{ fontWeight: 'bold' }}>1x</span>
+                  </div>
+                  {gameOver.winType !== 'standard' && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ textTransform: 'capitalize' }}>{gameOver.winType}:</span>
+                      <span style={{ fontWeight: 'bold' }}>{gameOver.multiplier}x</span>
+                    </div>
+                  )}
+                  {gameStakes > 1 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Doubling Cube:</span>
+                      <span style={{ fontWeight: 'bold' }}>{gameStakes}x</span>
+                    </div>
+                  )}
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    marginTop: 8, 
+                    paddingTop: 8, 
+                    borderTop: '1px solid #ddd',
+                    fontWeight: 'bold',
+                    fontSize: 16
+                  }}>
+                    <span>Total Multiplier:</span>
+                    <span style={{ color: '#28a745' }}>
+                      {(gameOver.multiplier || 1) * Math.max(1, gameStakes || 1)}x
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div style={{ display: 'flex', gap: 22, marginTop: 8 }}>
               <button style={{ ...buttonStyle, background: '#28a745', color: '#fff', fontSize: 22 }} onClick={handleRematch}>Rematch</button>
               <button style={{ ...buttonStyle, background: '#bbb', color: '#222', minWidth: 0, width: 110, fontSize: 22 }} onClick={handleQuit}>Quit</button>
@@ -6960,6 +7048,53 @@ function GameBoard() {
               </div>
               {/* Game over message */}
               <div style={{ fontSize: 18, marginBottom: 24, color: '#666', fontWeight: 'normal' }}>{getGameOverMessage(gameOver)}</div>
+              
+              {/* Scoring breakdown for wins and resignations */}
+              {(gameOver.type === 'win' || gameOver.type === 'resign') && gameOver.winType && (
+                <div style={{ 
+                  marginBottom: 24, 
+                  padding: '16px', 
+                  background: '#f8f9fa', 
+                  borderRadius: '8px',
+                  fontSize: 14,
+                  color: '#333',
+                  textAlign: 'left'
+                }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 16 }}>Scoring Breakdown:</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Base ELO Wager:</span>
+                      <span style={{ fontWeight: 'bold' }}>1x</span>
+                    </div>
+                    {gameOver.winType !== 'standard' && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ textTransform: 'capitalize' }}>{gameOver.winType}:</span>
+                        <span style={{ fontWeight: 'bold' }}>{gameOver.multiplier}x</span>
+                      </div>
+                    )}
+                    {gameStakes > 1 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Doubling Cube:</span>
+                        <span style={{ fontWeight: 'bold' }}>{gameStakes}x</span>
+                      </div>
+                    )}
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      marginTop: 8, 
+                      paddingTop: 8, 
+                      borderTop: '1px solid #ddd',
+                      fontWeight: 'bold',
+                      fontSize: 16
+                    }}>
+                      <span>Total Multiplier:</span>
+                      <span style={{ color: '#28a745' }}>
+                        {(gameOver.multiplier || 1) * (gameStakes > 1 ? gameStakes : 1)}x
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                 <button style={buttonStyle} onClick={handleRematch}>Rematch</button>
                 <button style={{ ...buttonStyle, background: '#6c757d' }} onClick={handleQuit}>Quit</button>
@@ -7456,7 +7591,16 @@ function GameBoard() {
         console.log('🎮 Game over received:', data);
         console.log('🎮 Current matchmakingType:', matchmakingType);
         console.log('🎮 ELO changes in data:', data.eloChanges);
-        setGameOver(data.gameOver);
+        // Preserve winType and multiplier from server
+        setGameOver({
+          ...data.gameOver,
+          winType: data.gameOver?.winType || null,
+          multiplier: data.gameOver?.multiplier || 1
+        });
+        // Update game stakes if provided
+        if (data.gameStakes) {
+          setGameStakes(data.gameStakes);
+        }
         // Clear active match from localStorage when game ends
         localStorage.removeItem('activeMatch');
         // Store ELO changes if provided (for ranked matches)

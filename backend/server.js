@@ -925,6 +925,8 @@ io.on('connection', (socket) => {
       type: gameOver.type,
       winner: gameOver.winner,
       loser: gameOver.loser,
+      winType: gameOver.winType || 'not provided',
+      multiplier: gameOver.multiplier || 'not provided',
       senderPlayer: senderPlayerNumber,
       isRanked: match.isRanked,
       player1Guest: match.player1.isGuest,

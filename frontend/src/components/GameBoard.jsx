@@ -3365,8 +3365,12 @@ function GameBoard() {
     // Check if loser has borne off any checkers
     const loserBorneOff = borneOff[loser] || 0;
     
+    console.log(`🔍 Detecting win type: winner=${winner}, loser=${loser}`);
+    console.log(`   Loser borne off: ${loserBorneOff}`);
+    
     if (loserBorneOff > 0) {
       // Standard win - opponent has borne off at least one checker
+      console.log(`   Result: Standard win (1x)`);
       return { winType: 'standard', multiplier: 1 };
     }
     
@@ -3380,11 +3384,17 @@ function GameBoard() {
     ).length;
     const loserCheckersOnBar = (bar[loser] || []).length;
     
+    console.log(`   Loser checkers in winner's home (${winnerHomeBoard.join(',')}): ${loserCheckersInWinnerHome}`);
+    console.log(`   Loser checkers on bar: ${loserCheckersOnBar}`);
+    console.log(`   All loser checkers:`, checkers.filter(c => c.player === loser));
+    
     if (loserCheckersInWinnerHome > 0 || loserCheckersOnBar > 0) {
       // Backgammon: opponent has checkers in winner's home or on the bar
+      console.log(`   Result: Backgammon (3x)`);
       return { winType: 'backgammon', multiplier: 3 };
     } else {
       // Gammon: opponent hasn't borne off any checkers but all checkers are out of winner's home
+      console.log(`   Result: Gammon (2x)`);
       return { winType: 'gammon', multiplier: 2 };
     }
   }

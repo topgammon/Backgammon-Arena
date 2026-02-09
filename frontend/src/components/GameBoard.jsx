@@ -295,6 +295,7 @@ function GameBoard() {
   const [friendRequestsLoading, setFriendRequestsLoading] = useState(false);
   const [friendsLoading, setFriendsLoading] = useState(false);
   const [isFriendWithViewedProfile, setIsFriendWithViewedProfile] = useState(false); // Track if current user is friends with viewed profile
+  const [hasPendingRequestWithViewedProfile, setHasPendingRequestWithViewedProfile] = useState(false); // Track if friend request was sent but not accepted
   const [highestRatingLeaderboard, setHighestRatingLeaderboard] = useState([]); // Top 10 users by highest rating
   const [mostWinsLeaderboard, setMostWinsLeaderboard] = useState([]); // Top 10 users by most wins
   const [globalRank, setGlobalRank] = useState(null); // User's global rank
@@ -1306,12 +1307,13 @@ function GameBoard() {
       if (!supabase || !viewingUserId || viewingUserId === user?.id) {
         setViewingUserProfile(null);
         setIsFriendWithViewedProfile(false);
+        setHasPendingRequestWithViewedProfile(false);
         hasIncrementedViewsRef.current = null; // Reset when viewing own profile or no profile
         return;
       }
 
       try {
-        // Check if already friends with this user
+        // Check if already friends with this user and if there's a pending request
         if (user?.id) {
           const { data: friendshipData, error: friendshipError } = await supabase
             .from('friends')
@@ -1320,8 +1322,24 @@ function GameBoard() {
           
           if (!friendshipError && friendshipData && friendshipData.length > 0) {
             setIsFriendWithViewedProfile(true);
+            setHasPendingRequestWithViewedProfile(false);
           } else {
             setIsFriendWithViewedProfile(false);
+            
+            // Check if there's a pending friend request
+            const { data: requestData, error: requestError } = await supabase
+              .from('friend_requests')
+              .select('*')
+              .or(`and(from_user_id.eq.${user.id},to_user_id.eq.${viewingUserId}),and(from_user_id.eq.${viewingUserId},to_user_id.eq.${user.id})`)
+              .eq('status', 'pending');
+            
+            if (!requestError && requestData && requestData.length > 0) {
+              // Check if the current user sent the request
+              const sentRequest = requestData.find(r => r.from_user_id === user.id);
+              setHasPendingRequestWithViewedProfile(!!sentRequest);
+            } else {
+              setHasPendingRequestWithViewedProfile(false);
+            }
           }
         }
         
@@ -1493,7 +1511,7 @@ $$;
             .from('friend_requests')
             .select(`
               *,
-              from_user:users!friend_requests_from_user_id_fkey(id, username, avatar, elo_rating)
+              from_user:users!friend_requests_from_user_id_fkey(id, username, avatar, elo_rating, google_avatar_url, country)
             `)
             .eq('to_user_id', user.id)
             .eq('status', 'pending');
@@ -1510,8 +1528,8 @@ $$;
             .from('friends')
             .select(`
               *,
-              friend1:users!friends_user1_id_fkey(id, username, avatar, elo_rating),
-              friend2:users!friends_user2_id_fkey(id, username, avatar, elo_rating)
+              friend1:users!friends_user1_id_fkey(id, username, avatar, elo_rating, google_avatar_url, country),
+              friend2:users!friends_user2_id_fkey(id, username, avatar, elo_rating, google_avatar_url, country)
             `)
             .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
           
@@ -10479,6 +10497,26 @@ $$;
                         <span>✓</span>
                         <span>Friends</span>
                       </div>
+                    ) : hasPendingRequestWithViewedProfile ? (
+                      <div
+                        style={{
+                          padding: '8px 16px',
+                          background: '#ffc107',
+                          color: '#000',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          fontWeight: 'bold',
+                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          cursor: 'default'
+                        }}
+                      >
+                        <span>⏳</span>
+                        <span>Request Sent</span>
+                      </div>
                     ) : (
                       <button
                         onClick={async () => {
@@ -10509,17 +10547,23 @@ $$;
                             
                             if (existingFriends && existingFriends.length > 0) {
                               setIsFriendWithViewedProfile(true);
+                              setHasPendingRequestWithViewedProfile(false);
                               return;
                             }
                             
                             if (existingRequests && existingRequests.length > 0) {
                               const pendingRequest = existingRequests.find(r => r.status === 'pending');
                               if (pendingRequest) {
-                                alert('Friend request already sent!');
+                                // Check if current user sent the request
+                                if (pendingRequest.from_user_id === user.id) {
+                                  setHasPendingRequestWithViewedProfile(true);
+                                }
+                                // Don't show alert, just update the UI
+                                return;
                               } else {
                                 alert('Friend request already exists!');
+                                return;
                               }
-                              return;
                             }
                             
                             // Send friend request
@@ -10540,6 +10584,7 @@ $$;
                               }
                             } else {
                               console.log('Friend request sent successfully');
+                              setHasPendingRequestWithViewedProfile(true);
                               alert('Friend request sent!');
                             }
                           } catch (err) {
@@ -11777,8 +11822,8 @@ $$;
                                       .from('friends')
                                       .select(`
                                         *,
-                                        friend1:users!friends_user1_id_fkey(id, username, avatar, elo_rating),
-                                        friend2:users!friends_user2_id_fkey(id, username, avatar, elo_rating)
+              friend1:users!friends_user1_id_fkey(id, username, avatar, elo_rating, google_avatar_url, country),
+              friend2:users!friends_user2_id_fkey(id, username, avatar, elo_rating, google_avatar_url, country)
                                       `)
                                       .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
                                     

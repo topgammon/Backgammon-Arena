@@ -286,6 +286,7 @@ function GameBoard() {
   const [playerNumber, setPlayerNumber] = useState(null); // 1 or 2
   const [opponent, setOpponent] = useState(null); // { userId, isGuest }
   const [opponentProfile, setOpponentProfile] = useState(null); // Opponent's user profile data
+  const [onlineUsers, setOnlineUsers] = useState(new Set()); // Set of online user IDs
   const [gameHistory, setGameHistory] = useState([]); // Game history for profile page
   const [eloTimePeriod, setEloTimePeriod] = useState('all'); // Time period for ELO graph: '1w', '1m', '3m', '6m', '1y', 'all'
   const [profileTab, setProfileTab] = useState('stats'); // Profile page tab: 'stats', 'achievements', 'friends'
@@ -1283,44 +1284,30 @@ function GameBoard() {
                 if (rpcError) {
                   // If RPC doesn't exist, fallback to read-then-update
                   // This ensures we always increment correctly
+                  const { data: currentProfile, error: fetchError } = await supabase
+                    .from('users')
+                    .select('views')
+                    .eq('id', viewingUserId)
+                    .maybeSingle();
                   
-                  if (updateError) {
-                    // If raw SQL doesn't work, fallback to read-then-update
-                    const { data: currentProfile, error: fetchError } = await supabase
+                  if (!fetchError && currentProfile) {
+                    const newViews = (currentProfile.views || 0) + 1;
+                    const { error: updateError } = await supabase
                       .from('users')
-                      .select('views')
-                      .eq('id', viewingUserId)
-                      .maybeSingle();
+                      .update({ views: newViews })
+                      .eq('id', viewingUserId);
                     
-                    if (!fetchError && currentProfile) {
-                      const newViews = (currentProfile.views || 0) + 1;
-                      const { error: updateError2 } = await supabase
-                        .from('users')
-                        .update({ views: newViews })
-                        .eq('id', viewingUserId);
-                      
-                      if (updateError2) {
-                        console.error('Error incrementing views:', updateError2);
-                        if (updateError2.code === 'PGRST204') {
-                          console.warn('Views column does not exist in database. Please run the SQL to add it.');
-                        }
-                      } else {
-                        console.log(`✅ Views incremented for user ${viewingUserId}: ${currentProfile.views || 0} → ${newViews}`);
-                        setViewingUserProfile(prev => prev ? { ...prev, views: newViews } : null);
+                    if (updateError) {
+                      console.error('Error incrementing views:', updateError);
+                      if (updateError.code === 'PGRST204') {
+                        console.warn('Views column does not exist in database. Please run the SQL to add it.');
                       }
+                    } else {
+                      console.log(`✅ Views incremented for user ${viewingUserId}: ${currentProfile.views || 0} → ${newViews}`);
+                      setViewingUserProfile(prev => prev ? { ...prev, views: newViews } : null);
                     }
-                  } else {
-                    // Success with direct SQL increment
-                    console.log(`✅ Views incremented for user ${viewingUserId} (using SQL increment)`);
-                    // Refresh the profile to get updated views count
-                    const { data: updatedProfile } = await supabase
-                      .from('users')
-                      .select('views')
-                      .eq('id', viewingUserId)
-                      .maybeSingle();
-                    if (updatedProfile) {
-                      setViewingUserProfile(prev => prev ? { ...prev, views: updatedProfile.views } : null);
-                    }
+                  } else if (fetchError) {
+                    console.error('Error fetching current views:', fetchError);
                   }
                 } else {
                   // Success with RPC

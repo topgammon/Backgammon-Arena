@@ -294,6 +294,7 @@ function GameBoard() {
   const [friends, setFriends] = useState([]); // List of friends
   const [friendRequestsLoading, setFriendRequestsLoading] = useState(false);
   const [friendsLoading, setFriendsLoading] = useState(false);
+  const [isFriendWithViewedProfile, setIsFriendWithViewedProfile] = useState(false); // Track if current user is friends with viewed profile
   const [highestRatingLeaderboard, setHighestRatingLeaderboard] = useState([]); // Top 10 users by highest rating
   const [mostWinsLeaderboard, setMostWinsLeaderboard] = useState([]); // Top 10 users by most wins
   const [globalRank, setGlobalRank] = useState(null); // User's global rank
@@ -1304,11 +1305,26 @@ function GameBoard() {
     const fetchViewingUserProfile = async () => {
       if (!supabase || !viewingUserId || viewingUserId === user?.id) {
         setViewingUserProfile(null);
+        setIsFriendWithViewedProfile(false);
         hasIncrementedViewsRef.current = null; // Reset when viewing own profile or no profile
         return;
       }
 
       try {
+        // Check if already friends with this user
+        if (user?.id) {
+          const { data: friendshipData, error: friendshipError } = await supabase
+            .from('friends')
+            .select('*')
+            .or(`and(user1_id.eq.${user.id},user2_id.eq.${viewingUserId}),and(user1_id.eq.${viewingUserId},user2_id.eq.${user.id})`);
+          
+          if (!friendshipError && friendshipData && friendshipData.length > 0) {
+            setIsFriendWithViewedProfile(true);
+          } else {
+            setIsFriendWithViewedProfile(false);
+          }
+        }
+        
         // Fetch the profile
         const { data: profile, error } = await supabase
           .from('users')
@@ -10443,94 +10459,116 @@ $$;
                       </span>
                     </div>
                     
-                    <button
-                      onClick={async () => {
-                        if (!supabase || !user?.id || !profileToDisplay?.id) return;
-                        
-                        try {
-                          // Check if already friends or request already sent
-                          const { data: existingRequests, error: checkError } = await supabase
-                            .from('friend_requests')
-                            .select('*')
-                            .or(`and(from_user_id.eq.${user.id},to_user_id.eq.${profileToDisplay.id}),and(from_user_id.eq.${profileToDisplay.id},to_user_id.eq.${user.id})`);
+                    {isFriendWithViewedProfile ? (
+                      <div
+                        style={{
+                          padding: '8px 16px',
+                          background: '#6c757d',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          fontWeight: 'bold',
+                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          cursor: 'default'
+                        }}
+                      >
+                        <span>✓</span>
+                        <span>Friends</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={async () => {
+                          if (!supabase || !user?.id || !profileToDisplay?.id) return;
                           
-                          if (checkError && checkError.code !== 'PGRST116') {
-                            console.error('Error checking friend request:', checkError);
-                            return;
-                          }
-                          
-                          // Check if already friends
-                          const { data: existingFriends, error: friendCheckError } = await supabase
-                            .from('friends')
-                            .select('*')
-                            .or(`and(user1_id.eq.${user.id},user2_id.eq.${profileToDisplay.id}),and(user1_id.eq.${profileToDisplay.id},user2_id.eq.${user.id})`);
-                          
-                          if (friendCheckError && friendCheckError.code !== 'PGRST116') {
-                            console.error('Error checking friends:', friendCheckError);
-                            return;
-                          }
-                          
-                          if (existingFriends && existingFriends.length > 0) {
-                            alert('You are already friends with this user!');
-                            return;
-                          }
-                          
-                          if (existingRequests && existingRequests.length > 0) {
-                            const pendingRequest = existingRequests.find(r => r.status === 'pending');
-                            if (pendingRequest) {
-                              alert('Friend request already sent!');
-                            } else {
-                              alert('Friend request already exists!');
+                          try {
+                            // Check if already friends or request already sent
+                            const { data: existingRequests, error: checkError } = await supabase
+                              .from('friend_requests')
+                              .select('*')
+                              .or(`and(from_user_id.eq.${user.id},to_user_id.eq.${profileToDisplay.id}),and(from_user_id.eq.${profileToDisplay.id},to_user_id.eq.${user.id})`);
+                            
+                            if (checkError && checkError.code !== 'PGRST116') {
+                              console.error('Error checking friend request:', checkError);
+                              return;
                             }
-                            return;
-                          }
-                          
-                          // Send friend request
-                          const { error: insertError } = await supabase
-                            .from('friend_requests')
-                            .insert({
-                              from_user_id: user.id,
-                              to_user_id: profileToDisplay.id,
-                              status: 'pending'
-                            });
-                          
-                          if (insertError) {
-                            console.error('Error sending friend request:', insertError);
-                            if (insertError.code === 'PGRST204') {
-                              alert('Friend requests feature is not set up yet. Please run the SQL to create the tables.');
-                            } else {
-                              alert('Failed to send friend request. Please try again.');
+                            
+                            // Check if already friends
+                            const { data: existingFriends, error: friendCheckError } = await supabase
+                              .from('friends')
+                              .select('*')
+                              .or(`and(user1_id.eq.${user.id},user2_id.eq.${profileToDisplay.id}),and(user1_id.eq.${profileToDisplay.id},user2_id.eq.${user.id})`);
+                            
+                            if (friendCheckError && friendCheckError.code !== 'PGRST116') {
+                              console.error('Error checking friends:', friendCheckError);
+                              return;
                             }
-                          } else {
-                            console.log('Friend request sent successfully');
-                            alert('Friend request sent!');
+                            
+                            if (existingFriends && existingFriends.length > 0) {
+                              setIsFriendWithViewedProfile(true);
+                              return;
+                            }
+                            
+                            if (existingRequests && existingRequests.length > 0) {
+                              const pendingRequest = existingRequests.find(r => r.status === 'pending');
+                              if (pendingRequest) {
+                                alert('Friend request already sent!');
+                              } else {
+                                alert('Friend request already exists!');
+                              }
+                              return;
+                            }
+                            
+                            // Send friend request
+                            const { error: insertError } = await supabase
+                              .from('friend_requests')
+                              .insert({
+                                from_user_id: user.id,
+                                to_user_id: profileToDisplay.id,
+                                status: 'pending'
+                              });
+                            
+                            if (insertError) {
+                              console.error('Error sending friend request:', insertError);
+                              if (insertError.code === 'PGRST204') {
+                                alert('Friend requests feature is not set up yet. Please run the SQL to create the tables.');
+                              } else {
+                                alert('Failed to send friend request. Please try again.');
+                              }
+                            } else {
+                              console.log('Friend request sent successfully');
+                              alert('Friend request sent!');
+                            }
+                          } catch (err) {
+                            console.error('Error sending friend request:', err);
+                            alert('Failed to send friend request. Please try again.');
                           }
-                        } catch (err) {
-                          console.error('Error sending friend request:', err);
-                          alert('Failed to send friend request. Please try again.');
-                        }
-                      }}
-                      style={{
-                        padding: '8px 16px',
-                        background: '#28a745',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '14px',
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                        transition: 'background 0.2s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                      }}
-                      onMouseEnter={(e) => e.target.style.background = '#218838'}
-                      onMouseLeave={(e) => e.target.style.background = '#28a745'}
-                    >
-                      <span>👤</span>
-                      <span>Add Friend</span>
-                    </button>
+                        }}
+                        style={{
+                          padding: '8px 16px',
+                          background: '#28a745',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                          transition: 'background 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                        onMouseEnter={(e) => e.target.style.background = '#218838'}
+                        onMouseLeave={(e) => e.target.style.background = '#28a745'}
+                      >
+                        <span>👤</span>
+                        <span>Add Friend</span>
+                      </button>
+                    )}
                     
                     <button
                       onClick={() => {
@@ -11674,16 +11712,12 @@ $$;
                             <div style={{
                               width: '40px',
                               height: '40px',
-                              borderRadius: '50%',
-                              background: '#ddd',
+                              flexShrink: 0,
                               display: 'flex',
                               alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '18px',
-                              fontWeight: 'bold',
-                              color: '#666'
+                              justifyContent: 'center'
                             }}>
-                              {sender.avatar || 'U'}
+                              {renderAvatar(false, false, null, 40, sender, null)}
                             </div>
                             <div>
                               <div style={{
@@ -11893,16 +11927,12 @@ $$;
                             <div style={{
                               width: '40px',
                               height: '40px',
-                              borderRadius: '50%',
-                              background: '#ddd',
+                              flexShrink: 0,
                               display: 'flex',
                               alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '18px',
-                              fontWeight: 'bold',
-                              color: '#666'
+                              justifyContent: 'center'
                             }}>
-                              {friend.avatar || 'U'}
+                              {renderAvatar(false, false, null, 40, friend, null)}
                             </div>
                             <div>
                               <div style={{

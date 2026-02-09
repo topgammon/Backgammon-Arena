@@ -12298,9 +12298,10 @@ $$;
             <div style={{
               display: 'flex',
               flexDirection: 'column',
-              gap: '24px'
+              gap: '24px',
+              width: '100%'
             }}>
-              {selectedConversation ? (
+              {selectedConversation && selectedConversation.otherUser ? (
                 // Chat View
                 <div style={{
                   background: '#fff',
@@ -12309,7 +12310,12 @@ $$;
                   boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
                   display: 'flex',
                   flexDirection: 'column',
-                  height: '600px'
+                  height: '600px',
+                  minHeight: '600px',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  position: 'relative',
+                  zIndex: 1
                 }}>
                   {/* Chat Header */}
                   <div style={{
@@ -12528,7 +12534,12 @@ $$;
                           <div
                             key={conv.id}
                             onClick={() => {
-                              setSelectedConversation(conv);
+                              if (conv && conv.otherUser) {
+                                setSelectedConversation(conv);
+                              } else {
+                                console.error('Conversation missing otherUser:', conv);
+                                alert('Error: Conversation data is incomplete. Please refresh the page.');
+                              }
                             }}
                             style={{
                               display: 'flex',

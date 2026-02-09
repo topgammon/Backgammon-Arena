@@ -176,6 +176,21 @@ io.on('connection', (socket) => {
     console.error('❌ Socket error:', error);
   });
   
+  // Handle user online status registration (for logged-in users on any page)
+  socket.on('user:register-online', (data) => {
+    const { userId } = data;
+    if (userId) {
+      socket.userId = userId;
+      if (!onlineUsers.has(userId)) {
+        onlineUsers.set(userId, new Set());
+      }
+      onlineUsers.get(userId).add(socket.id);
+      // Broadcast user online status to all clients
+      io.emit('user:online', { userId });
+      console.log(`👤 User ${userId} registered as online (socket: ${socket.id})`);
+    }
+  });
+  
   // Rejoin active match handler (for reconnection after refresh)
   socket.on('game:rejoin', (data) => {
     const { matchId, playerNumber, userId } = data;

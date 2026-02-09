@@ -1242,11 +1242,31 @@ function GameBoard() {
     }
   };
 
-  // Fetch online users list on mount and periodically
+  // Register logged-in user as online and fetch online users list
   useEffect(() => {
+    if (!user?.id) return;
+    
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+    const socket = io(backendUrl);
+    
+    socket.on('connect', () => {
+      // Register user as online when socket connects
+      socket.emit('user:register-online', { userId: user.id });
+      setOnlineUsers(prev => new Set([...prev, user.id]));
+    });
+    
+    socket.on('disconnect', () => {
+      // Remove user from online list when disconnected
+      setOnlineUsers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(user.id);
+        return newSet;
+      });
+    });
+    
+    // Also fetch online users list periodically
     const fetchOnlineUsers = async () => {
       try {
-        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
         const response = await fetch(`${backendUrl}/api/online-users`);
         if (response.ok) {
           const data = await response.json();
@@ -1262,8 +1282,12 @@ function GameBoard() {
     fetchOnlineUsers();
     // Refresh online users list every 10 seconds
     const interval = setInterval(fetchOnlineUsers, 10000);
-    return () => clearInterval(interval);
-  }, []);
+    
+    return () => {
+      socket.disconnect();
+      clearInterval(interval);
+    };
+  }, [user?.id]);
 
   // Fetch viewing user's profile when viewingUserId changes
   useEffect(() => {
@@ -1295,15 +1319,13 @@ function GameBoard() {
           // Increment every time the profile is viewed, even multiple times in the same session
           (async () => {
             try {
-              // Use RPC function for atomic increment, or fallback to direct SQL increment
-              // This ensures the counter never goes down and handles concurrent views properly
-              const { data: rpcData, error: rpcError } = await supabase.rpc('increment_user_views', {
+              // Try RPC function first (if it exists in database)
+              const { error: rpcError } = await supabase.rpc('increment_user_views', {
                 user_id: viewingUserId
               });
               
               if (rpcError) {
                 // If RPC doesn't exist, fallback to read-then-update
-                // This ensures we always increment correctly
                 const { data: currentProfile, error: fetchError } = await supabase
                   .from('users')
                   .select('views')
@@ -1324,23 +1346,25 @@ function GameBoard() {
                     }
                   } else {
                     console.log(`✅ Views incremented for user ${viewingUserId}: ${currentProfile.views || 0} → ${newViews}`);
-                    setViewingUserProfile(prev => prev ? { ...prev, views: newViews } : null);
                   }
                 } else if (fetchError) {
                   console.error('Error fetching current views:', fetchError);
                 }
               } else {
-                // Success with RPC
                 console.log(`✅ Views incremented for user ${viewingUserId} (using RPC)`);
-                // Refresh the profile to get updated views count
-                const { data: updatedProfile } = await supabase
-                  .from('users')
-                  .select('views')
-                  .eq('id', viewingUserId)
-                  .maybeSingle();
-                if (updatedProfile) {
-                  setViewingUserProfile(prev => prev ? { ...prev, views: updatedProfile.views } : null);
-                }
+              }
+              
+              // Always refresh the profile to get the updated views count (ensures consistency)
+              // This ensures both owner and other players see the same count
+              const { data: updatedProfile, error: refreshError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', viewingUserId)
+                .maybeSingle();
+              
+              if (!refreshError && updatedProfile) {
+                setViewingUserProfile(updatedProfile);
+                console.log(`✅ Profile refreshed for user ${viewingUserId}: ${updatedProfile.views || 0} views`);
               }
             } catch (err) {
               console.error('Error incrementing views:', err);
@@ -1357,6 +1381,34 @@ function GameBoard() {
 
     fetchViewingUserProfile();
   }, [viewingUserId, supabase, user?.id]);
+  
+  // Refresh own profile data (including views) when viewing own profile
+  useEffect(() => {
+    if (screen === 'profile' && user?.id && (!viewingUserId || viewingUserId === user.id)) {
+      // Refresh own profile to get latest views count
+      const refreshOwnProfile = async () => {
+        if (!supabase || !user?.id) return;
+        try {
+          const { data: profile, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', user.id)
+            .maybeSingle();
+          
+          if (!error && profile) {
+            setUserProfile(profile);
+          }
+        } catch (err) {
+          console.error('Error refreshing own profile:', err);
+        }
+      };
+      
+      refreshOwnProfile();
+      // Refresh every 5 seconds when viewing own profile
+      const interval = setInterval(refreshOwnProfile, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [screen, user?.id, viewingUserId, supabase]);
 
   // Reset viewingUserId when leaving profile page
   useEffect(() => {

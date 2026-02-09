@@ -6688,7 +6688,7 @@ $$;
                       setMatchmakingType('ranked');
                       setIsMatchmaking(true);
                       setScreen('matchmaking');
-                    }}>Play Game (ranked)</button>
+                    }}>Play Ranked</button>
                   </>
                 ) : (
                   <>
@@ -6704,7 +6704,7 @@ $$;
               <h2 style={{ marginBottom: '4px', color: '#000' }}>Play Offline</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <button style={buttonStyle} onClick={() => setScreen('passplay')}>Pass and Play</button>
-                <button style={buttonStyle} onClick={() => setScreen('cpu-difficulty')}>Vs. CPU</button>
+                <button style={buttonStyle} onClick={() => setScreen('cpu-difficulty')}>Play Bot</button>
               </div>
             </div>
           </div>
@@ -6884,26 +6884,31 @@ $$;
           </table>
         </div>
       </div>
-      <div style={{ 
-        ...sectionStyle, 
-        maxWidth: isMobile ? '100%' : 1100, 
-        minWidth: isMobile ? '100%' : 320, 
-        width: '100%',
-        padding: isMobile ? '20px 16px' : sectionStyle.padding
-      }}>
-        <ul style={{ fontSize: 20, color: '#000', textAlign: 'left', listStyle: 'disc inside', margin: 0, padding: 0, lineHeight: 1.7, fontWeight: 700, fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif' }}>
-          {homepageFeatures.map((f, i) => (
-            <li key={i} style={{ marginBottom: 8 }}>{f}</li>
-          ))}
-        </ul>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'stretch', gap: 40, margin: '0 auto 24px', maxWidth: 1100, flexWrap: 'wrap' }}>
-        <div style={{ ...sectionStyle, maxWidth: homepageBoxWidth, minWidth: 320, flex: 1 }}>{howToPlay}</div>
-        <div style={{ ...sectionStyle, maxWidth: homepageBoxWidth, minWidth: 320, flex: 1 }}>{glossary}</div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'stretch', gap: 40, margin: '0 auto 24px', maxWidth: 1100, flexWrap: 'wrap' }}>
-        <div style={{ ...sectionStyle, maxWidth: homepageBoxWidth, minWidth: 320, flex: 1 }}>{history}</div>
-      </div>
+      {/* Content below leaderboards - only show for non-logged-in users */}
+      {!user && (
+        <>
+          <div style={{ 
+            ...sectionStyle, 
+            maxWidth: isMobile ? '100%' : 1100, 
+            minWidth: isMobile ? '100%' : 320, 
+            width: '100%',
+            padding: isMobile ? '20px 16px' : sectionStyle.padding
+          }}>
+            <ul style={{ fontSize: 20, color: '#000', textAlign: 'left', listStyle: 'disc inside', margin: 0, padding: 0, lineHeight: 1.7, fontWeight: 700, fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif' }}>
+              {homepageFeatures.map((f, i) => (
+                <li key={i} style={{ marginBottom: 8 }}>{f}</li>
+              ))}
+            </ul>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'stretch', gap: 40, margin: '0 auto 24px', maxWidth: 1100, flexWrap: 'wrap' }}>
+            <div style={{ ...sectionStyle, maxWidth: homepageBoxWidth, minWidth: 320, flex: 1 }}>{howToPlay}</div>
+            <div style={{ ...sectionStyle, maxWidth: homepageBoxWidth, minWidth: 320, flex: 1 }}>{glossary}</div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'stretch', gap: 40, margin: '0 auto 24px', maxWidth: 1100, flexWrap: 'wrap' }}>
+            <div style={{ ...sectionStyle, maxWidth: homepageBoxWidth, minWidth: 320, flex: 1 }}>{history}</div>
+          </div>
+        </>
+      )}
       
       {/* Login/Signup Modal */}
       {showLoginModal && (
@@ -7731,7 +7736,7 @@ $$;
           </div>
           {/* Title and logo (right side) */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, minWidth: 200, flexWrap: 'wrap' }}>
-            <h2 style={{ margin: 0, fontSize: 24 }}>Vs. CPU</h2>
+            <h2 style={{ margin: 0, fontSize: 24 }}>Play Bot</h2>
             <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '100px' }} />
           </div>
         </div>
@@ -10854,24 +10859,27 @@ $$;
             >
               Achievements
             </button>
-            <button
-              onClick={() => setProfileTab('friends')}
-              style={{
-                padding: '12px 24px',
-                background: 'transparent',
-                color: profileTab === 'friends' ? '#ff751f' : '#666',
-                border: 'none',
-                borderBottom: profileTab === 'friends' ? '3px solid #ff751f' : '3px solid transparent',
-                cursor: 'pointer',
-                fontSize: '16px',
-                fontWeight: profileTab === 'friends' ? 'bold' : 'normal',
-                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                transition: 'all 0.2s',
-                marginBottom: '-2px'
-              }}
-            >
-              Friends
-            </button>
+            {/* Friends tab - only visible to profile owner */}
+            {isViewingOwnProfile && (
+              <button
+                onClick={() => setProfileTab('friends')}
+                style={{
+                  padding: '12px 24px',
+                  background: 'transparent',
+                  color: profileTab === 'friends' ? '#ff751f' : '#666',
+                  border: 'none',
+                  borderBottom: profileTab === 'friends' ? '3px solid #ff751f' : '3px solid transparent',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: profileTab === 'friends' ? 'bold' : 'normal',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                  transition: 'all 0.2s',
+                  marginBottom: '-2px'
+                }}
+              >
+                Friends
+              </button>
+            )}
             {/* Messages and Settings tabs - only visible to profile owner */}
             {isViewingOwnProfile && (
               <>

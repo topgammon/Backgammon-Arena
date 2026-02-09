@@ -6380,7 +6380,7 @@ function GameBoard() {
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
                         whiteSpace: isMobile ? 'normal' : 'nowrap'
                       }}>
-                        {profileToDisplay?.elo_rating || 1000}
+                        {userProfile?.elo_rating || 1000}
                       </span>
                       <span style={{ 
                         fontSize: '18px', 

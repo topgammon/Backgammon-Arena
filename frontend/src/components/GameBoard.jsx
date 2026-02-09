@@ -12296,19 +12296,299 @@ $$;
           {/* Messages Tab Content - only visible to profile owner */}
           {isViewingOwnProfile && profileTab === 'messages' && (
             <div style={{
-              background: '#fff',
-              borderRadius: '12px',
-              padding: '40px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-              textAlign: 'center'
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '24px'
             }}>
-              <div style={{
-                fontSize: '24px',
-                color: '#666',
-                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-              }}>
-                Coming Soon
-              </div>
+              {selectedConversation ? (
+                // Chat View
+                <div style={{
+                  background: '#fff',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  height: '600px'
+                }}>
+                  {/* Chat Header */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '16px',
+                    paddingBottom: '12px',
+                    borderBottom: '2px solid #e0e0e0'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px'
+                    }}>
+                      <button
+                        onClick={() => {
+                          setSelectedConversation(null);
+                          setConversationMessages([]);
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#6c757d',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                        }}
+                      >
+                        ← Back
+                      </button>
+                      <div style={{
+                        width: '40px',
+                        height: '40px',
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        {renderAvatar(false, false, null, 40, selectedConversation.otherUser, null)}
+                      </div>
+                      <div>
+                        <div style={{
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          color: '#333',
+                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                        }}>
+                          {selectedConversation.otherUser?.username || 'Unknown'}
+                        </div>
+                        <div style={{
+                          fontSize: '12px',
+                          color: '#666',
+                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                        }}>
+                          {selectedConversation.otherUser?.id && onlineUsers.has(selectedConversation.otherUser.id) ? 'Online' : 'Offline'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Messages Container */}
+                  <div style={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    padding: '16px',
+                    background: '#f9f9f9',
+                    borderRadius: '8px',
+                    marginBottom: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px'
+                  }}>
+                    {messagesLoading ? (
+                      <div style={{ textAlign: 'center', color: '#666' }}>Loading messages...</div>
+                    ) : conversationMessages.length === 0 ? (
+                      <div style={{ textAlign: 'center', color: '#666' }}>No messages yet. Start the conversation!</div>
+                    ) : (
+                      conversationMessages.map((msg) => {
+                        const isOwnMessage = msg.sender_id === user.id;
+                        return (
+                          <div
+                            key={msg.id}
+                            style={{
+                              display: 'flex',
+                              justifyContent: isOwnMessage ? 'flex-end' : 'flex-start',
+                              marginBottom: '8px'
+                            }}
+                          >
+                            <div style={{
+                              maxWidth: '70%',
+                              padding: '10px 14px',
+                              background: isOwnMessage ? '#ff751f' : '#e0e0e0',
+                              color: isOwnMessage ? '#fff' : '#333',
+                              borderRadius: '12px',
+                              wordBreak: 'break-word',
+                              fontSize: '14px',
+                              fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                            }}>
+                              {!isOwnMessage && (
+                                <div style={{
+                                  fontSize: '12px',
+                                  fontWeight: 'bold',
+                                  marginBottom: '4px',
+                                  opacity: 0.8
+                                }}>
+                                  {msg.sender?.username || 'Unknown'}
+                                </div>
+                              )}
+                              <div>{msg.content}</div>
+                              <div style={{
+                                fontSize: '10px',
+                                opacity: 0.7,
+                                marginTop: '4px',
+                                textAlign: 'right'
+                              }}>
+                                {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                  
+                  {/* Message Input */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '8px'
+                  }}>
+                    <input
+                      type="text"
+                      value={messageInput}
+                      onChange={(e) => setMessageInput(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && messageInput.trim()) {
+                          handleSendMessage();
+                        }
+                      }}
+                      placeholder="Type a message..."
+                      style={{
+                        flex: 1,
+                        padding: '10px 14px',
+                        border: '1px solid #ddd',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                      }}
+                    />
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={!messageInput.trim()}
+                      style={{
+                        padding: '10px 20px',
+                        background: messageInput.trim() ? '#ff751f' : '#ccc',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: messageInput.trim() ? 'pointer' : 'not-allowed',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (messageInput.trim()) {
+                          e.target.style.background = '#e6640f';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (messageInput.trim()) {
+                          e.target.style.background = '#ff751f';
+                        }
+                      }}
+                    >
+                      Send
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // Conversations List
+                <div style={{
+                  background: '#fff',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  <h3 style={{
+                    margin: '0 0 20px 0',
+                    fontSize: '20px',
+                    fontWeight: 'bold',
+                    color: '#333',
+                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                    borderBottom: '2px solid #ff751f',
+                    paddingBottom: '10px'
+                  }}>
+                    Conversations
+                  </h3>
+                  {conversationsLoading ? (
+                    <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+                      Loading conversations...
+                    </div>
+                  ) : conversations.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+                      No conversations yet. Send a message to start chatting!
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {conversations.map((conv) => {
+                        const otherUser = conv.otherUser;
+                        if (!otherUser) return null;
+                        
+                        return (
+                          <div
+                            key={conv.id}
+                            onClick={() => {
+                              setSelectedConversation(conv);
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '12px',
+                              padding: '12px',
+                              background: '#f9f9f9',
+                              borderRadius: '8px',
+                              border: '1px solid #e0e0e0',
+                              cursor: 'pointer',
+                              transition: 'background 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = '#f0f0f0';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = '#f9f9f9';
+                            }}
+                          >
+                            <div style={{
+                              width: '50px',
+                              height: '50px',
+                              flexShrink: 0,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                              {renderAvatar(false, false, null, 50, otherUser, null)}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                marginBottom: '4px'
+                              }}>
+                                <div style={{
+                                  fontSize: '16px',
+                                  fontWeight: 'bold',
+                                  color: '#333',
+                                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                                }}>
+                                  {otherUser.username || 'Unknown'}
+                                </div>
+                              </div>
+                              <div style={{
+                                fontSize: '12px',
+                                color: '#666',
+                                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                              }}>
+                                {conv.last_message_at ? new Date(conv.last_message_at).toLocaleDateString() : 'No messages'}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

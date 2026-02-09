@@ -8437,7 +8437,9 @@ function GameBoard() {
             </div>
             {/* Title and logo (right side) */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, minWidth: 200, flexWrap: 'wrap' }}>
-              <h2 style={{ margin: 0, fontSize: 24 }}>Online Guest Match - Unranked</h2>
+              <h2 style={{ margin: 0, fontSize: 24 }}>
+                {matchmakingType === 'ranked' ? 'Online Ranked Match' : 'Online Guest Match - Unranked'}
+              </h2>
               <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '100px' }} />
             </div>
           </div>

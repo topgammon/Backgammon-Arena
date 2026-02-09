@@ -1312,6 +1312,15 @@ function GameBoard() {
 
   // Break the dice timer - start when phase begins and it's player's turn
   useEffect(() => {
+    // Don't start timer if game is abandoned
+    if (gameOver?.type === 'abandoned') {
+      if (firstRollTimerRef.current) {
+        clearInterval(firstRollTimerRef.current);
+        firstRollTimerRef.current = null;
+      }
+      return;
+    }
+    
     if (firstRollPhase && isOnlineGame && firstRollTurn === playerNumber) {
       // Clear any existing timer
       if (firstRollTimerRef.current) {
@@ -1323,6 +1332,14 @@ function GameBoard() {
       // Start countdown
       firstRollTimerRef.current = setInterval(() => {
         setFirstRollTimer(prev => {
+          // Check if game was abandoned while timer was running
+          if (gameOver?.type === 'abandoned') {
+            if (firstRollTimerRef.current) {
+              clearInterval(firstRollTimerRef.current);
+              firstRollTimerRef.current = null;
+            }
+            return 0;
+          }
           if (prev <= 1) {
             if (firstRollTimerRef.current) {
               clearInterval(firstRollTimerRef.current);
@@ -1345,7 +1362,7 @@ function GameBoard() {
         firstRollTimerRef.current = null;
       }
     };
-  }, [firstRollPhase, firstRollTurn, isOnlineGame, playerNumber]);
+  }, [firstRollPhase, firstRollTurn, isOnlineGame, playerNumber, gameOver]);
 
   // Timer countdown
   useEffect(() => {
@@ -3580,6 +3597,12 @@ function GameBoard() {
   }
 
   function handleRematch() {
+    // Don't allow rematch if game is abandoned - should use "New Game" instead
+    if (gameOver?.type === 'abandoned') {
+      console.log('⚠️ Cannot rematch abandoned game - use "New Game" instead');
+      return;
+    }
+    
     gameOverProcessedRef.current = false; // Reset flag for new game
     setGameOver(null);
     setCheckers(getInitialCheckers());
@@ -7430,6 +7453,12 @@ function GameBoard() {
           timestamp: Date.now()
         }));
         
+        // Don't reset if game is abandoned
+        if (gameOver?.type === 'abandoned') {
+          console.log('⚠️ Ignoring game state reset - game is abandoned');
+          return;
+        }
+        
         // Initialize game state for online play
         setCheckers(getInitialCheckers());
         setBar({ 1: [], 2: [] });
@@ -7833,8 +7862,17 @@ function GameBoard() {
         console.log('🎮 Current matchmakingType:', matchmakingType);
         console.log('🎮 ELO changes in data:', data.eloChanges);
         
+        // Prevent duplicate processing
+        if (gameOverProcessedRef.current && data.gameOver?.type === 'abandoned') {
+          console.log('⚠️ Abandoned game over already processed, ignoring duplicate');
+          return;
+        }
+        
         // Handle abandoned games - stop everything immediately
         if (data.gameOver?.type === 'abandoned') {
+          // Mark as processed immediately
+          gameOverProcessedRef.current = true;
+          
           // Stop all timers immediately
           if (firstRollTimerRef.current) {
             clearInterval(firstRollTimerRef.current);
@@ -7849,7 +7887,7 @@ function GameBoard() {
             firstRollIntervalRef.current = null;
           }
           
-          // Stop the game completely
+          // Stop the game completely - use functional updates to ensure state is set
           setFirstRollPhase(false);
           setHasRolled(false);
           setTimer(0);
@@ -7871,6 +7909,8 @@ function GameBoard() {
           
           // Clear active match from localStorage when game ends
           localStorage.removeItem('activeMatch');
+          
+          console.log('🛑 Game abandoned - all timers stopped, game state frozen');
           return; // Exit early - game is completely stopped
         }
         
@@ -8128,6 +8168,12 @@ function GameBoard() {
     
     const handleRematchAccept = async (data) => {
       if (data.matchId === currentMatchId) {
+        // Don't accept rematch if game is abandoned
+        if (gameOver?.type === 'abandoned') {
+          console.log('⚠️ Ignoring rematch accept - game is abandoned');
+          return;
+        }
+        
         console.log('🔄 Rematch accepted, resetting game state...');
         
         // CRITICAL: Reset game over processed flag
@@ -8149,6 +8195,7 @@ function GameBoard() {
         setDice([0, 0]);
         setUsedDice([]);
         setCurrentPlayer(1);
+        
         setHasRolled(false);
         setBar({ 1: [], 2: [] });
         setBorneOff({ 1: 0, 2: 0 });

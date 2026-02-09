@@ -289,7 +289,7 @@ function GameBoard() {
   const [onlineUsers, setOnlineUsers] = useState(new Set()); // Set of online user IDs
   const [gameHistory, setGameHistory] = useState([]); // Game history for profile page
   const [eloTimePeriod, setEloTimePeriod] = useState('all'); // Time period for ELO graph: '1w', '1m', '3m', '6m', '1y', 'all'
-  const [profileTab, setProfileTab] = useState('stats'); // Profile page tab: 'stats', 'achievements', 'friends'
+  const [profileTab, setProfileTab] = useState('stats'); // Profile page tab: 'stats', 'achievements', 'friends', 'messages', 'settings'
   const [highestRatingLeaderboard, setHighestRatingLeaderboard] = useState([]); // Top 10 users by highest rating
   const [mostWinsLeaderboard, setMostWinsLeaderboard] = useState([]); // Top 10 users by most wins
   const [globalRank, setGlobalRank] = useState(null); // User's global rank
@@ -1445,8 +1445,20 @@ $$;
     if (screen !== 'profile') {
       setViewingUserId(null);
       setViewingUserProfile(null);
+      hasIncrementedViewsRef.current = null; // Reset increment tracking when leaving profile
     }
   }, [screen]);
+
+  // Reset profile tab to 'stats' when switching between own profile and other profiles
+  useEffect(() => {
+    if (screen === 'profile') {
+      const isViewingOwnProfile = !viewingUserId || viewingUserId === user?.id;
+      // If viewing someone else's profile and current tab is messages or settings, reset to stats
+      if (!isViewingOwnProfile && (profileTab === 'messages' || profileTab === 'settings')) {
+        setProfileTab('stats');
+      }
+    }
+  }, [screen, viewingUserId, user?.id, profileTab]);
 
   // Fetch game history when on profile page
   useEffect(() => {
@@ -10642,6 +10654,47 @@ $$;
             >
               Friends
             </button>
+            {/* Messages and Settings tabs - only visible to profile owner */}
+            {isViewingOwnProfile && (
+              <>
+                <button
+                  onClick={() => setProfileTab('messages')}
+                  style={{
+                    padding: '12px 24px',
+                    background: 'transparent',
+                    color: profileTab === 'messages' ? '#ff751f' : '#666',
+                    border: 'none',
+                    borderBottom: profileTab === 'messages' ? '3px solid #ff751f' : '3px solid transparent',
+                    cursor: 'pointer',
+                    fontSize: '16px',
+                    fontWeight: profileTab === 'messages' ? 'bold' : 'normal',
+                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                    transition: 'all 0.2s',
+                    marginBottom: '-2px'
+                  }}
+                >
+                  Messages
+                </button>
+                <button
+                  onClick={() => setProfileTab('settings')}
+                  style={{
+                    padding: '12px 24px',
+                    background: 'transparent',
+                    color: profileTab === 'settings' ? '#ff751f' : '#666',
+                    border: 'none',
+                    borderBottom: profileTab === 'settings' ? '3px solid #ff751f' : '3px solid transparent',
+                    cursor: 'pointer',
+                    fontSize: '16px',
+                    fontWeight: profileTab === 'settings' ? 'bold' : 'normal',
+                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                    transition: 'all 0.2s',
+                    marginBottom: '-2px'
+                  }}
+                >
+                  Settings
+                </button>
+              </>
+            )}
           </div>
 
           {/* Stats Tab Content */}
@@ -11417,6 +11470,44 @@ $$;
 
           {/* Friends Tab Content */}
           {profileTab === 'friends' && (
+            <div style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '40px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              textAlign: 'center'
+            }}>
+              <div style={{
+                fontSize: '24px',
+                color: '#666',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+              }}>
+                Coming Soon
+              </div>
+            </div>
+          )}
+
+          {/* Messages Tab Content - only visible to profile owner */}
+          {isViewingOwnProfile && profileTab === 'messages' && (
+            <div style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '40px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              textAlign: 'center'
+            }}>
+              <div style={{
+                fontSize: '24px',
+                color: '#666',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+              }}>
+                Coming Soon
+              </div>
+            </div>
+          )}
+
+          {/* Settings Tab Content - only visible to profile owner */}
+          {isViewingOwnProfile && profileTab === 'settings' && (
             <div style={{
               background: '#fff',
               borderRadius: '12px',

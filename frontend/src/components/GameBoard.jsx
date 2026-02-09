@@ -225,6 +225,7 @@ function GameBoard() {
   const [gameOver, setGameOver] = useState(null);
   const gameOverProcessedRef = useRef(false); // Prevent duplicate game over events
   const [abandoningPlayer, setAbandoningPlayer] = useState(null); // Track who abandoned (1 or 2)
+  const isAbandonedRef = useRef(false); // Ref to track abandonment (more reliable than state for guards)
   const [timer, setTimer] = useState(45);
   const [rematchRequest, setRematchRequest] = useState(null); // { from: playerNumber, to: playerNumber }
   const firstRollIntervalRef = useRef(null);
@@ -1292,11 +1293,14 @@ function GameBoard() {
 
   // Reset first roll state on mount
   useEffect(() => {
-    setFirstRollPhase(true);
-    setFirstRolls([null, null]);
-    setFirstRollTurn(1);
-    setFirstRollResult(null);
-    setAutoRoll({ 1: false, 2: false });
+    // Don't reset if game is abandoned
+    if (!isAbandonedRef.current && gameOver?.type !== 'abandoned') {
+      setFirstRollPhase(true);
+      setFirstRolls([null, null]);
+      setFirstRollTurn(1);
+      setFirstRollResult(null);
+      setAutoRoll({ 1: false, 2: false });
+    }
   }, []);
 
   // Reset undo stack and moveMade at the start of each turn
@@ -1312,16 +1316,17 @@ function GameBoard() {
 
   // Break the dice timer - start when phase begins and it's player's turn
   useEffect(() => {
-    // Don't start timer if game is abandoned
-    if (gameOver?.type === 'abandoned') {
+    // Don't start timer if game is abandoned - check both ref and state
+    if (isAbandonedRef.current || gameOver?.type === 'abandoned') {
       if (firstRollTimerRef.current) {
         clearInterval(firstRollTimerRef.current);
         firstRollTimerRef.current = null;
       }
+      setFirstRollTimer(0);
       return;
     }
     
-    if (firstRollPhase && isOnlineGame && firstRollTurn === playerNumber) {
+    if (firstRollPhase && isOnlineGame && firstRollTurn === playerNumber && !isAbandonedRef.current) {
       // Clear any existing timer
       if (firstRollTimerRef.current) {
         clearInterval(firstRollTimerRef.current);
@@ -1332,8 +1337,8 @@ function GameBoard() {
       // Start countdown
       firstRollTimerRef.current = setInterval(() => {
         setFirstRollTimer(prev => {
-          // Check if game was abandoned while timer was running
-          if (gameOver?.type === 'abandoned') {
+          // Check if game was abandoned while timer was running - check both ref and state
+          if (isAbandonedRef.current || gameOver?.type === 'abandoned') {
             if (firstRollTimerRef.current) {
               clearInterval(firstRollTimerRef.current);
               firstRollTimerRef.current = null;
@@ -1363,6 +1368,15 @@ function GameBoard() {
       }
     };
   }, [firstRollPhase, firstRollTurn, isOnlineGame, playerNumber, gameOver]);
+  
+  // Helper function to safely set firstRollPhase - prevents setting to true if abandoned
+  const safeSetFirstRollPhase = (value) => {
+    if (value === true && (isAbandonedRef.current || gameOver?.type === 'abandoned')) {
+      console.log('⚠️ Prevented setting firstRollPhase to true - game is abandoned');
+      return;
+    }
+    setFirstRollPhase(value);
+  };
 
   // Timer countdown
   useEffect(() => {
@@ -3484,6 +3498,9 @@ function GameBoard() {
     
     // For abandoned games, no winner/loser needed
     if (type === 'abandoned') {
+      // Set ref immediately to prevent any state changes
+      isAbandonedRef.current = true;
+      
       // Stop all timers immediately
       if (firstRollTimerRef.current) {
         clearInterval(firstRollTimerRef.current);
@@ -3504,7 +3521,7 @@ function GameBoard() {
       setTimer(0);
       setFirstRollTimer(0);
       
-      const gameOverData = { type: 'abandoned', winner: null, loser: null, winType: null, multiplier: 1 };
+      const gameOverData = { type: 'abandoned', winner: null, loser: null, winType: null, multiplier: 1, abandoningPlayer: abandoningPlayerNum };
       console.log(`🎯 Setting gameOver state (abandoned):`, gameOverData);
       setGameOver(gameOverData);
       setAbandoningPlayer(abandoningPlayerNum);
@@ -3627,10 +3644,12 @@ function GameBoard() {
     setGameStakes(1);
     setNoMoveOverlay(false);
     setShowConfirmResign(false);
-    setFirstRollPhase(true);
-    setFirstRolls([null, null]);
-    setFirstRollTurn(1);
-    setFirstRollResult(null);
+    if (!isAbandonedRef.current) {
+      setFirstRollPhase(true);
+      setFirstRolls([null, null]);
+      setFirstRollTurn(1);
+      setFirstRollResult(null);
+    }
     if (timerRef.current) clearInterval(timerRef.current);
   }
 
@@ -5292,7 +5311,12 @@ function GameBoard() {
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 22, marginTop: 8 }}>
-                  <button style={{ ...buttonStyle, background: '#28a745', color: '#fff', fontSize: 22 }} onClick={handleRematch}>New Game</button>
+                  <button style={{ ...buttonStyle, background: '#28a745', color: '#fff', fontSize: 22 }} onClick={() => {
+                    // Reset abandonment ref for new game
+                    isAbandonedRef.current = false;
+                    gameOverProcessedRef.current = false;
+                    handleRematch();
+                  }}>New Game</button>
                   <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', fontSize: 22 }} onClick={handleQuit}>Quit</button>
                 </div>
               </>
@@ -7223,7 +7247,12 @@ function GameBoard() {
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: 22, marginTop: 8 }}>
-                    <button style={{ ...buttonStyle, background: '#28a745', color: '#fff', fontSize: 22 }} onClick={handleRematch}>New Game</button>
+                    <button style={{ ...buttonStyle, background: '#28a745', color: '#fff', fontSize: 22 }} onClick={() => {
+                      // Reset abandonment ref for new game
+                      isAbandonedRef.current = false;
+                      gameOverProcessedRef.current = false;
+                      handleRematch();
+                    }}>New Game</button>
                     <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', fontSize: 22 }} onClick={handleQuit}>Quit</button>
                   </div>
                 </>
@@ -7454,7 +7483,7 @@ function GameBoard() {
         }));
         
         // Don't reset if game is abandoned
-        if (gameOver?.type === 'abandoned') {
+        if (isAbandonedRef.current || gameOver?.type === 'abandoned') {
           console.log('⚠️ Ignoring game state reset - game is abandoned');
           return;
         }
@@ -7467,7 +7496,9 @@ function GameBoard() {
         setUsedDice([]);
         setCurrentPlayer(1);
         setHasRolled(false);
-        setFirstRollPhase(true);
+        if (!isAbandonedRef.current) {
+          setFirstRollPhase(true);
+        }
         setFirstRolls([null, null]);
         setFirstRollTurn(1);
         setFirstRollResult(null);
@@ -7872,6 +7903,7 @@ function GameBoard() {
         if (data.gameOver?.type === 'abandoned') {
           // Mark as processed immediately
           gameOverProcessedRef.current = true;
+          isAbandonedRef.current = true; // Set ref immediately
           
           // Stop all timers immediately
           if (firstRollTimerRef.current) {
@@ -8200,10 +8232,12 @@ function GameBoard() {
         setBar({ 1: [], 2: [] });
         setBorneOff({ 1: 0, 2: 0 });
         setMessage('');
-        setFirstRollPhase(true);
-        setFirstRolls([null, null]);
-        setFirstRollTurn(1);
-        setFirstRollResult(null);
+        if (!isAbandonedRef.current) {
+          setFirstRollPhase(true);
+          setFirstRolls([null, null]);
+          setFirstRollTurn(1);
+          setFirstRollResult(null);
+        }
         setFirstRollTimer(10);
         setTimer(45);
         setDoubleOffer(null);

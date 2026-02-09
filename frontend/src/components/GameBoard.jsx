@@ -1318,6 +1318,14 @@ function GameBoard() {
     };
   }, [viewingUserId, supabase, user?.id]);
 
+  // Reset viewingUserId when leaving profile page
+  useEffect(() => {
+    if (screen !== 'profile') {
+      setViewingUserId(null);
+      setViewingUserProfile(null);
+    }
+  }, [screen]);
+
   // Fetch game history when on profile page
   useEffect(() => {
     if (screen === 'profile' && supabase) {
@@ -9808,7 +9816,10 @@ function GameBoard() {
         }}>
           <div style={{ marginBottom: '32px', textAlign: 'left' }}>
             <button
-              onClick={() => setScreen('home')}
+              onClick={() => {
+                setViewingUserId(null); // Reset to own profile when leaving
+                setScreen('home');
+              }}
               style={{
                 ...buttonStyle,
                 background: '#6c757d',
@@ -9836,16 +9847,16 @@ function GameBoard() {
                 // OR
                 // 2. Profile not loaded yet but user has Google metadata (fallback for new Google users)
                 // This allows new Google users to see their Google photo immediately, but existing accounts keep their chosen avatar
-                const googleAvatarUrl = userProfile?.google_avatar_url;
-                const avatarName = userProfile?.avatar || 'Barry';
-                const isGoogleUser = user?.identities?.some(id => id.provider === 'google') || 
+                const googleAvatarUrl = profileToDisplay?.google_avatar_url;
+                const avatarName = profileToDisplay?.avatar || 'Barry';
+                const isGoogleUser = isViewingOwnProfile && (user?.identities?.some(id => id.provider === 'google') || 
                                     user?.user_metadata?.avatar_url || 
-                                    user?.user_metadata?.picture;
-                const fallbackGoogleAvatarUrl = !userProfile && isGoogleUser ? 
+                                    user?.user_metadata?.picture);
+                const fallbackGoogleAvatarUrl = !profileToDisplay && isGoogleUser ? 
                   (user?.user_metadata?.avatar_url || user?.user_metadata?.picture) : null;
                 
                 const shouldUseGoogleAvatar = (googleAvatarUrl && avatarName === 'Barry') || 
-                                              (fallbackGoogleAvatarUrl && !userProfile);
+                                              (fallbackGoogleAvatarUrl && !profileToDisplay);
                 
                 if (shouldUseGoogleAvatar) {
                   const avatarUrlToUse = googleAvatarUrl || fallbackGoogleAvatarUrl;
@@ -9932,26 +9943,30 @@ function GameBoard() {
                   // Show regular avatar
                   return (
                     <div
-                      onClick={() => setShowAvatarSelector(true)}
+                      onClick={() => isViewingOwnProfile && setShowAvatarSelector(true)}
                       style={{
                         position: 'relative',
                         width: '120px',
                         height: '120px',
                         borderRadius: '12px',
-                        cursor: 'pointer',
+                        cursor: isViewingOwnProfile ? 'pointer' : 'default',
                         border: '3px solid #ff751f',
                         overflow: 'hidden',
                         transition: 'all 0.2s'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'scale(1.05)';
-                        const icon = e.currentTarget.querySelector('.avatar-edit-icon');
-                        if (icon) icon.style.opacity = '1';
+                        if (isViewingOwnProfile) {
+                          e.currentTarget.style.transform = 'scale(1.05)';
+                          const icon = e.currentTarget.querySelector('.avatar-edit-icon');
+                          if (icon) icon.style.opacity = '1';
+                        }
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'scale(1)';
-                        const icon = e.currentTarget.querySelector('.avatar-edit-icon');
-                        if (icon) icon.style.opacity = '0.8';
+                        if (isViewingOwnProfile) {
+                          e.currentTarget.style.transform = 'scale(1)';
+                          const icon = e.currentTarget.querySelector('.avatar-edit-icon');
+                          if (icon) icon.style.opacity = '0.8';
+                        }
                       }}
                     >
                       <img 
@@ -9991,39 +10006,41 @@ function GameBoard() {
                       >
                         {profileToDisplay?.username?.[0]?.toUpperCase() || (isViewingOwnProfile ? (user.email?.[0]?.toUpperCase() || '👤') : '👤')}
                       </div>
-                      {/* Edit pencil icon overlay */}
-                      <div
-                        className="avatar-edit-icon"
-                        style={{
-                          position: 'absolute',
-                          bottom: '4px',
-                          right: '4px',
-                          width: '28px',
-                          height: '28px',
-                          borderRadius: '50%',
-                          background: 'rgba(0, 0, 0, 0.6)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          opacity: '0.8',
-                          transition: 'opacity 0.2s',
-                          pointerEvents: 'none'
-                        }}
-                      >
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="white"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
+                      {/* Edit pencil icon overlay - only show when viewing own profile */}
+                      {isViewingOwnProfile && (
+                        <div
+                          className="avatar-edit-icon"
+                          style={{
+                            position: 'absolute',
+                            bottom: '4px',
+                            right: '4px',
+                            width: '28px',
+                            height: '28px',
+                            borderRadius: '50%',
+                            background: 'rgba(0, 0, 0, 0.6)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            opacity: '0.8',
+                            transition: 'opacity 0.2s',
+                            pointerEvents: 'none'
+                          }}
                         >
-                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
-                      </div>
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="white"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                          </svg>
+                        </div>
+                      )}
                     </div>
                   );
                 }
@@ -10087,12 +10104,16 @@ function GameBoard() {
                         fontWeight: 'bold',
                         cursor: 'pointer',
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                        transition: 'background 0.2s'
+                        transition: 'background 0.2s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
                       }}
                       onMouseEnter={(e) => e.target.style.background = '#218838'}
                       onMouseLeave={(e) => e.target.style.background = '#28a745'}
                     >
-                      Add Friend
+                      <span>👤</span>
+                      <span>Add Friend</span>
                     </button>
                     
                     <button
@@ -10110,12 +10131,16 @@ function GameBoard() {
                         fontWeight: 'bold',
                         cursor: 'pointer',
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                        transition: 'background 0.2s'
+                        transition: 'background 0.2s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
                       }}
                       onMouseEnter={(e) => e.target.style.background = '#e6640f'}
                       onMouseLeave={(e) => e.target.style.background = '#ff751f'}
                     >
-                      Message
+                      <span>💬</span>
+                      <span>Message</span>
                     </button>
                     
                     <button
@@ -10133,12 +10158,16 @@ function GameBoard() {
                         fontWeight: 'bold',
                         cursor: 'pointer',
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                        transition: 'background 0.2s'
+                        transition: 'background 0.2s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
                       }}
                       onMouseEnter={(e) => e.target.style.background = '#0056b3'}
                       onMouseLeave={(e) => e.target.style.background = '#007bff'}
                     >
-                      Challenge
+                      <span>⚔️</span>
+                      <span>Challenge</span>
                     </button>
                   </div>
                 )}

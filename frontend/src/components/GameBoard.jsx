@@ -294,6 +294,7 @@ function GameBoard() {
   const [globalRank, setGlobalRank] = useState(null); // User's global rank
   const [percentile, setPercentile] = useState(null); // User's percentile
   const [gamesToDisplay, setGamesToDisplay] = useState(10); // Number of games to display in history
+  const [hoveredPointIndex, setHoveredPointIndex] = useState(null); // Index of hovered point on ELO graph
   const transitioningToGameRef = useRef(false);
   
   // Track window width for responsive design
@@ -10522,16 +10523,54 @@ function GameBoard() {
                     {eloData.map((point, i) => {
                       const x = toX(point.gameNumber);
                       const y = toY(point.elo);
+                      const isHovered = hoveredPointIndex === i;
                       return (
-                        <circle
-                          key={i}
-                          cx={x}
-                          cy={y}
-                          r="4"
-                          fill="#ff751f"
-                          stroke="#fff"
-                          strokeWidth="2"
-                        />
+                        <g key={i}>
+                          <circle
+                            cx={x}
+                            cy={y}
+                            r={isHovered ? "6" : "4"}
+                            fill="#ff751f"
+                            stroke="#fff"
+                            strokeWidth="2"
+                            style={{ cursor: 'pointer' }}
+                            onMouseEnter={() => setHoveredPointIndex(i)}
+                            onMouseLeave={() => setHoveredPointIndex(null)}
+                          />
+                          {/* Tooltip */}
+                          {isHovered && (
+                            <g>
+                              {/* Tooltip background */}
+                              <rect
+                                x={x - 35}
+                                y={y - 35}
+                                width="70"
+                                height="24"
+                                rx="4"
+                                fill="#333"
+                                fillOpacity="0.9"
+                              />
+                              {/* Tooltip text */}
+                              <text
+                                x={x}
+                                y={y - 18}
+                                textAnchor="middle"
+                                fontSize="12"
+                                fill="#fff"
+                                fontFamily="Montserrat, Segoe UI, Verdana, Geneva, sans-serif"
+                                fontWeight="bold"
+                              >
+                                {Math.round(point.elo)}
+                              </text>
+                              {/* Tooltip arrow */}
+                              <polygon
+                                points={`${x - 5},${y - 11} ${x + 5},${y - 11} ${x},${y - 6}`}
+                                fill="#333"
+                                fillOpacity="0.9"
+                              />
+                            </g>
+                          )}
+                        </g>
                       );
                     })}
                   </svg>

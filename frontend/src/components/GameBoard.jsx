@@ -298,6 +298,7 @@ function GameBoard() {
   const [hoveredPointIndex, setHoveredPointIndex] = useState(null); // Index of hovered point on ELO graph
   const [viewingUserId, setViewingUserId] = useState(null); // User ID of profile being viewed (null = own profile)
   const [viewingUserProfile, setViewingUserProfile] = useState(null); // Profile data of user being viewed
+  const lastIncrementedProfileRef = useRef(null); // Track last profile we incremented views for
   const transitioningToGameRef = useRef(false);
   
   // Track window width for responsive design
@@ -1333,11 +1334,30 @@ function GameBoard() {
     // 1. We're on the profile screen
     // 2. viewingUserId is set (viewing someone else's profile)
     // 3. viewingUserId is not the current user's ID (not viewing own profile)
-    // 4. viewingUserProfile exists (profile data has been loaded)
-    if (screen !== 'profile' || !viewingUserId || viewingUserId === user?.id || !viewingUserProfile || !supabase) {
+    // 4. We have supabase client
+    if (screen !== 'profile' || !viewingUserId || viewingUserId === user?.id || !supabase) {
+      // Reset tracking when leaving profile screen or viewing own profile
+      if (screen !== 'profile' || !viewingUserId || viewingUserId === user?.id) {
+        lastIncrementedProfileRef.current = null;
+      }
       return;
     }
 
+    // We want to increment EVERY time someone navigates to view a profile (not their own)
+    // The key insight: increment when viewingUserId changes (someone navigated to view a profile)
+    // We use a ref to track the last viewingUserId we incremented for
+    // If it's the same, we've already incremented for this view session
+    // If it's different, it's a new profile view and we should increment
+    // The ref gets reset when screen changes away from profile, so returning to the same profile counts as a new view
+    
+    // Check if we've already incremented for this viewingUserId in the current session
+    if (lastIncrementedProfileRef.current === viewingUserId) {
+      return; // Already incremented for this view session
+    }
+    
+    // Mark that we're incrementing for this viewingUserId
+    lastIncrementedProfileRef.current = viewingUserId;
+    
     // Increment views counter - this runs every time the profile is viewed
     const incrementViews = async () => {
       try {
@@ -1349,7 +1369,7 @@ function GameBoard() {
         });
         
         if (rpcError) {
-          console.log('RPC not available, using fallback method');
+          console.log('RPC not available, using fallback method', rpcError);
           // If RPC doesn't exist, fallback to read-then-update
           const { data: currentProfile, error: fetchError } = await supabase
             .from('users')
@@ -1369,11 +1389,15 @@ function GameBoard() {
               if (updateError.code === 'PGRST204') {
                 console.warn('Views column does not exist in database. Please run the SQL to add it.');
               }
+              // Reset on error so we can try again
+              lastIncrementedProfileRef.current = null;
             } else {
               console.log(`✅ Views incremented for user ${viewingUserId}: ${currentProfile.views || 0} → ${newViews}`);
             }
           } else if (fetchError) {
             console.error('Error fetching current views:', fetchError);
+            // Reset on error so we can try again
+            lastIncrementedProfileRef.current = null;
           }
         } else {
           console.log(`✅ Views incremented for user ${viewingUserId} (using RPC)`);
@@ -1393,13 +1417,14 @@ function GameBoard() {
         }
       } catch (err) {
         console.error('Error incrementing views:', err);
+        // Reset the ref on error so we can try again
+        lastIncrementedProfileRef.current = null;
       }
     };
 
-    // Small delay to ensure profile data is loaded before incrementing
-    const timeoutId = setTimeout(incrementViews, 100);
-    return () => clearTimeout(timeoutId);
-  }, [screen, viewingUserId, user?.id, viewingUserProfile, supabase]);
+    // Increment immediately when profile is viewed
+    incrementViews();
+  }, [screen, viewingUserId, user?.id, supabase]);
   
   // Refresh own profile data (including views) when viewing own profile
   // This ensures the owner sees the same view count as others

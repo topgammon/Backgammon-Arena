@@ -597,7 +597,7 @@ io.on('connection', (socket) => {
     console.log(`💰 Player ${player} offered double in match ${matchId}`);
   });
   
-  socket.on('game:double-response', (data) => {
+  socket.on('game:double-response', async (data) => {
     const { matchId, player, accepted, gameStakes, gameOver } = data;
     const match = activeMatches.get(matchId);
     

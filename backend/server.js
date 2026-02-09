@@ -1231,7 +1231,16 @@ io.on('connection', (socket) => {
     
     // Now do database operations asynchronously (don't block)
     // Save game to database for ranked matches (for game history)
+    console.log(`💾 Checking if game should be saved:`, {
+      hasSupabase: !!supabase,
+      isRanked: match.isRanked,
+      player1Guest: match.player1.isGuest,
+      player2Guest: match.player2.isGuest,
+      hasEloChanges: !!eloChanges
+    });
+    
     if (supabase && match.isRanked && !match.player1.isGuest && !match.player2.isGuest && eloChanges) {
+      console.log(`💾 Starting async database save for match ${matchId}...`);
       // Run database operations asynchronously - don't await
       (async () => {
         try {
@@ -1248,29 +1257,36 @@ io.on('connection', (socket) => {
           // Determine winner_id
           const winnerId = gameOver.winner === 1 ? match.player1.userId : match.player2.userId;
           
+          const gameData = {
+            player1_id: match.player1.userId,
+            player2_id: match.player2.userId,
+            game_type: 'online',
+            status: gameStatus,
+            winner_id: winnerId,
+            elo_stake: match.gameStakes || 1,
+            win_type: gameOver.winType || 'standard',
+            win_multiplier: gameOver.multiplier || 1,
+            completed_at: new Date().toISOString(),
+            player1_elo_change: eloChanges.player1.change,
+            player2_elo_change: eloChanges.player2.change,
+            player1_elo_before: eloChanges.player1.oldELO,
+            player2_elo_before: eloChanges.player2.oldELO
+          };
+          
+          console.log(`💾 Inserting game record:`, gameData);
+          
           // Save game record with ELO changes
-          const { error: gameError } = await supabase
+          const { data: insertedGame, error: gameError } = await supabase
             .from('games')
-            .insert({
-              player1_id: match.player1.userId,
-              player2_id: match.player2.userId,
-              game_type: 'online',
-              status: gameStatus,
-              winner_id: winnerId,
-              elo_stake: match.gameStakes || 1,
-              win_type: gameOver.winType || 'standard',
-              win_multiplier: gameOver.multiplier || 1,
-              completed_at: new Date().toISOString(),
-              player1_elo_change: eloChanges.player1.change,
-              player2_elo_change: eloChanges.player2.change,
-              player1_elo_before: eloChanges.player1.oldELO,
-              player2_elo_before: eloChanges.player2.oldELO
-            });
+            .insert(gameData)
+            .select();
           
           if (gameError) {
             console.error('❌ Error saving game to database:', gameError);
+            console.error('   Game data:', gameData);
           } else {
             console.log(`✅ Game saved to database for match ${matchId}`);
+            console.log(`   Inserted game ID:`, insertedGame?.[0]?.id);
           }
           
           // Update ELO in database
@@ -1330,9 +1346,23 @@ io.on('connection', (socket) => {
             }
           }
         } catch (err) {
-          console.error('Error in async database operations:', err);
+          console.error('❌ CRITICAL: Error in async database operations:', err);
+          console.error('   Error stack:', err.stack);
+          console.error('   Match ID:', matchId);
+          console.error('   Game Over:', gameOver);
         }
-      })();
+      })().catch(err => {
+        console.error('❌ CRITICAL: Unhandled error in async database operations:', err);
+        console.error('   Error stack:', err.stack);
+      });
+    } else {
+      console.log(`⚠️ Game NOT being saved - conditions:`, {
+        hasSupabase: !!supabase,
+        isRanked: match.isRanked,
+        player1Guest: match.player1.isGuest,
+        player2Guest: match.player2.isGuest,
+        hasEloChanges: !!eloChanges
+      });
     }
     
     console.log(`📤 Game over broadcasted to both players for match ${matchId}`);

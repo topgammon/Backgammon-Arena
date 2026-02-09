@@ -1173,26 +1173,35 @@ function GameBoard() {
       return;
     }
 
-    try {
-      // Fetch all games where user was player1 or player2 (for graph and history)
-      const { data: games, error } = await supabase
-        .from('games')
-        .select('*')
-        .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
-        .eq('game_type', 'online')
-        .not('completed_at', 'is', null)
-        .order('completed_at', { ascending: false });
+      try {
+        // Fetch all games where user was player1 or player2 (for graph and history)
+        console.log(`📊 Fetching game history for user: ${user.id}`);
+        const { data: games, error } = await supabase
+          .from('games')
+          .select('*')
+          .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
+          .eq('game_type', 'online')
+          .not('completed_at', 'is', null)
+          .order('completed_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching game history:', error);
-        setGameHistory([]);
-        return;
-      }
+        if (error) {
+          console.error('❌ Error fetching game history:', error);
+          setGameHistory([]);
+          return;
+        }
 
-      console.log(`📊 Fetched ${games?.length || 0} games from history`);
-      if (games && games.length > 0) {
-        console.log('Sample game:', games[0]);
-      }
+        console.log(`📊 Fetched ${games?.length || 0} games from history`);
+        if (games && games.length > 0) {
+          console.log('📊 Most recent game:', {
+            id: games[0].id,
+            completed_at: games[0].completed_at,
+            winner_id: games[0].winner_id,
+            player1_id: games[0].player1_id,
+            player2_id: games[0].player2_id
+          });
+        } else {
+          console.log('⚠️ No games found in history');
+        }
 
       // Fetch opponent usernames separately
       if (games && games.length > 0) {
@@ -8067,8 +8076,13 @@ function GameBoard() {
                 console.log('🔄 Refreshing profile after ELO update...');
                 fetchUserProfileSafely(user.id, true);
                 // Refresh game history after database saves (if on profile page)
+                // Use longer delay and retry to account for async database operations
                 if (screen === 'profile') {
-                  setTimeout(() => refreshGameHistory(), 2000);
+                  setTimeout(() => {
+                    refreshGameHistory();
+                    // Retry after another 3 seconds in case first attempt was too early
+                    setTimeout(() => refreshGameHistory(), 3000);
+                  }, 3000);
                 }
               }, 1000);
             }
@@ -8079,8 +8093,13 @@ function GameBoard() {
                 console.log('🔄 Refreshing profile after ELO update...');
                 fetchUserProfileSafely(user.id, true);
                 // Refresh game history after database saves (if on profile page)
+                // Use longer delay and retry to account for async database operations
                 if (screen === 'profile') {
-                  setTimeout(() => refreshGameHistory(), 2000);
+                  setTimeout(() => {
+                    refreshGameHistory();
+                    // Retry after another 3 seconds in case first attempt was too early
+                    setTimeout(() => refreshGameHistory(), 3000);
+                  }, 3000);
                 }
               }, 1000);
             }

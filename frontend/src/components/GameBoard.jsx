@@ -7956,9 +7956,39 @@ function GameBoard() {
           return; // Exit early - game is completely stopped
         }
         
-        // Prevent duplicate processing for non-abandoned games
+        // CRITICAL: Always process ELO changes FIRST, even if game over was already processed locally
+        // This ensures both players see their rating changes
+        if (data.eloChanges) {
+          console.log('📊 ELO changes received from server - Player 1:', data.eloChanges.player1);
+          console.log('📊 ELO changes received from server - Player 2:', data.eloChanges.player2);
+          console.log('✅ Setting eloChanges state - BOTH players should see their ratings');
+          setEloChanges(data.eloChanges);
+          
+          // Update user profile if this player's ELO changed
+          if (data.eloChanges.player1 && data.eloChanges.player1.userId === user?.id) {
+            setUserProfile(prev => prev ? { ...prev, elo_rating: data.eloChanges.player1.newELO } : null);
+            if (supabase && user) {
+              setTimeout(() => {
+                console.log('🔄 Refreshing profile after ELO update...');
+                fetchUserProfileSafely(user.id, true);
+              }, 1000);
+            }
+          } else if (data.eloChanges.player2 && data.eloChanges.player2.userId === user?.id) {
+            setUserProfile(prev => prev ? { ...prev, elo_rating: data.eloChanges.player2.newELO } : null);
+            if (supabase && user) {
+              setTimeout(() => {
+                console.log('🔄 Refreshing profile after ELO update...');
+                fetchUserProfileSafely(user.id, true);
+              }, 1000);
+            }
+          }
+        } else {
+          console.log('⚠️ WARNING: No ELO changes in game over data!');
+        }
+        
+        // Prevent duplicate processing for non-abandoned games (but ELO changes already processed above)
         if (gameOverProcessedRef.current) {
-          console.log('⚠️ Game over already processed, ignoring duplicate');
+          console.log('⚠️ Game over already processed locally, but ELO changes have been set');
           return;
         }
         
@@ -7985,47 +8015,6 @@ function GameBoard() {
         }
         // Clear active match from localStorage when game ends
         localStorage.removeItem('activeMatch');
-        // Store ELO changes if provided (for ranked matches)
-        // CRITICAL: Always set eloChanges when provided - this ensures BOTH players see the data
-        console.log('📊 ELO changes in game over data:', data.eloChanges);
-        console.log('📊 Matchmaking type:', matchmakingType);
-        if (data.eloChanges) {
-          console.log('📊 ELO changes received - Player 1:', data.eloChanges.player1);
-          console.log('📊 ELO changes received - Player 2:', data.eloChanges.player2);
-          console.log('✅ Setting eloChanges state - BOTH players should see their ratings');
-        } else {
-          console.log('⚠️ WARNING: No ELO changes in game over data!');
-        }
-        // ALWAYS set eloChanges - this ensures both players see the data
-        setEloChanges(data.eloChanges || null);
-        if (data.eloChanges) {
-          // Update user profile if this player's ELO changed - refresh from database to get latest
-          if (data.eloChanges.player1 && data.eloChanges.player1.userId === user?.id) {
-            // Update local state immediately for UI responsiveness
-            setUserProfile(prev => prev ? { ...prev, elo_rating: data.eloChanges.player1.newELO } : null);
-            // Also refresh from database to ensure we have the latest data
-            // Add a small delay to ensure backend has finished updating
-            if (supabase && user) {
-              setTimeout(() => {
-                console.log('🔄 Refreshing profile after ELO update...');
-                fetchUserProfileSafely(user.id, true);
-              }, 1000);
-            }
-          } else if (data.eloChanges.player2 && data.eloChanges.player2.userId === user?.id) {
-            // Update local state immediately for UI responsiveness
-            setUserProfile(prev => prev ? { ...prev, elo_rating: data.eloChanges.player2.newELO } : null);
-            // Also refresh from database to ensure we have the latest data
-            // Add a small delay to ensure backend has finished updating
-            if (supabase && user) {
-              setTimeout(() => {
-                console.log('🔄 Refreshing profile after ELO update...');
-                fetchUserProfileSafely(user.id, true);
-              }, 1000);
-            }
-          }
-        } else {
-          console.log('⚠️ No ELO changes in game over data');
-        }
       } else {
         console.log('⚠️ Game over event for different match:', data.matchId, 'current:', currentMatchId);
       }

@@ -3360,6 +3360,24 @@ function GameBoard() {
     return Array.from(moves);
   }
 
+  // Helper function to get resignation loss message
+  function getResignationLossMessage(resigningPlayer, winningPlayer) {
+    const winInfo = detectWinType(winningPlayer, resigningPlayer);
+    const multiplier = winInfo.multiplier;
+    const totalMultiplier = multiplier * Math.max(1, gameStakes || 1);
+    
+    if (multiplier === 1) {
+      return `You will lose rating points based on current ELO wager`;
+    } else {
+      const winTypeText = multiplier === 3 ? 'backgammon' : 'gammon';
+      let message = `You will lose rating points ×${multiplier} (${winTypeText})`;
+      if (gameStakes > 1) {
+        message += ` × ${gameStakes} (doubling cube)`;
+      }
+      return message;
+    }
+  }
+
   // Helper function to detect gammon and backgammon
   function detectWinType(winner, loser) {
     // Check if loser has borne off any checkers
@@ -5132,17 +5150,23 @@ function GameBoard() {
           </div>
         </div>
       )}
-      {showConfirmResign && (
-        <div style={{ position: 'absolute', top: '54.5%', left: 'calc(50% - 373px)', transform: 'translateY(-50%)', zIndex: 20, pointerEvents: 'none' }}>
-          <div style={{ background: 'rgba(255,255,255,0.97)', border: '2px solid #dc3545', borderRadius: 12, padding: 32, minWidth: 260, maxWidth: 340, textAlign: 'center', fontSize: 24, fontWeight: 'bold', color: '#222', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
-            <div style={{ marginBottom: 18 }}>Are you sure you want to resign?</div>
-            <div style={{ display: 'flex', gap: 18, marginTop: 8 }}>
-              <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff', minWidth: 0, width: 90, fontSize: 20 }} onClick={doResign}>Yes</button>
-              <button style={{ ...buttonStyle, background: '#bbb', color: '#222', minWidth: 0, width: 90, fontSize: 20 }} onClick={cancelResign}>No</button>
+      {showConfirmResign && (() => {
+        const resigningPlayer = isOnlineGame ? playerNumber : currentPlayer;
+        const winningPlayer = resigningPlayer === 1 ? 2 : 1;
+        const lossMessage = getResignationLossMessage(resigningPlayer, winningPlayer);
+        return (
+          <div style={{ position: 'absolute', top: '54.5%', left: 'calc(50% - 373px)', transform: 'translateY(-50%)', zIndex: 20, pointerEvents: 'none' }}>
+            <div style={{ background: 'rgba(255,255,255,0.97)', border: '2px solid #dc3545', borderRadius: 12, padding: 32, minWidth: 260, maxWidth: 340, textAlign: 'center', fontSize: 24, fontWeight: 'bold', color: '#222', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+              <div style={{ marginBottom: 18 }}>Are you sure you want to resign?</div>
+              <div style={{ marginBottom: 18, fontSize: 16, color: '#dc3545', fontWeight: 'normal' }}>{lossMessage}</div>
+              <div style={{ display: 'flex', gap: 18, marginTop: 8 }}>
+                <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff', minWidth: 0, width: 90, fontSize: 20 }} onClick={doResign}>Yes</button>
+                <button style={{ ...buttonStyle, background: '#bbb', color: '#222', minWidth: 0, width: 90, fontSize: 20 }} onClick={cancelResign}>No</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       {gameOver && (
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.08)', zIndex: 1000, pointerEvents: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: 'rgba(255,255,255,0.98)', border: '2px solid #28a745', borderRadius: 12, padding: 36, minWidth: 400, maxWidth: 500, textAlign: 'center', fontSize: 26, fontWeight: 'bold', color: '#222', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
@@ -5161,7 +5185,15 @@ function GameBoard() {
                 </div>
                 <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>{passPlayPlayer1Name || 'Player 1'}</div>
                 {gameOver.winner === 1 && (
-                  <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                  <>
+                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                    {gameOver.winType && gameOver.multiplier && (
+                      <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
+                        {gameOver.multiplier}x
+                        {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               {/* Player 2 */}
@@ -5177,7 +5209,15 @@ function GameBoard() {
                 </div>
                 <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>{passPlayPlayer2Name || 'Player 2'}</div>
                 {gameOver.winner === 2 && (
-                  <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                  <>
+                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                    {gameOver.winType && gameOver.multiplier && (
+                      <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
+                        {gameOver.multiplier}x
+                        {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -7003,18 +7043,24 @@ function GameBoard() {
             </div>
           </div>
         )}
-        {showConfirmResign && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-            <div style={{ background: '#fff', padding: 30, borderRadius: 10, textAlign: 'center' }}>
-              <h3>Confirm Resignation</h3>
-              <p>Are you sure you want to resign?</p>
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20 }}>
-                <button style={buttonStyle} onClick={doResign}>Yes, Resign</button>
-                <button style={{ ...buttonStyle, background: '#6c757d' }} onClick={cancelResign}>Cancel</button>
+        {showConfirmResign && (() => {
+          const resigningPlayer = isOnlineGame ? playerNumber : currentPlayer;
+          const winningPlayer = resigningPlayer === 1 ? 2 : 1;
+          const lossMessage = getResignationLossMessage(resigningPlayer, winningPlayer);
+          return (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+              <div style={{ background: '#fff', padding: 30, borderRadius: 10, textAlign: 'center' }}>
+                <h3>Confirm Resignation</h3>
+                <p>Are you sure you want to resign?</p>
+                <p style={{ color: '#dc3545', fontSize: 14, marginTop: 10 }}>{lossMessage}</p>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20 }}>
+                  <button style={buttonStyle} onClick={doResign}>Yes, Resign</button>
+                  <button style={{ ...buttonStyle, background: '#6c757d' }} onClick={cancelResign}>Cancel</button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
         {gameOver && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
             <div style={{ background: '#fff', padding: 40, borderRadius: 16, textAlign: 'center', maxWidth: 500, boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)' }}>
@@ -7035,7 +7081,15 @@ function GameBoard() {
                     {user && userProfile ? userProfile.username : (passPlayPlayer1Name || 'Player 1')}
                   </div>
                   {gameOver.winner === 1 && (
-                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                    <>
+                      <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                      {gameOver.winType && gameOver.multiplier && (
+                        <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
+                          {gameOver.multiplier}x
+                          {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
                 {/* CPU */}
@@ -7051,7 +7105,15 @@ function GameBoard() {
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>{DIFFICULTY_LEVELS[cpuDifficulty]?.avatar || 'CPU'}</div>
                   {gameOver.winner === 2 && (
-                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                    <>
+                      <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                      {gameOver.winType && gameOver.multiplier && (
+                        <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
+                          {gameOver.multiplier}x
+                          {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -8555,7 +8617,15 @@ function GameBoard() {
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ marginBottom: 24, fontSize: 20, fontWeight: 'bold', color: '#222' }}>Are you sure you want to resign?</div>
+              <div style={{ marginBottom: 12, fontSize: 20, fontWeight: 'bold', color: '#222' }}>Are you sure you want to resign?</div>
+              {(() => {
+                const resigningPlayer = isOnlineGame ? playerNumber : currentPlayer;
+                const winningPlayer = resigningPlayer === 1 ? 2 : 1;
+                const lossMessage = getResignationLossMessage(resigningPlayer, winningPlayer);
+                return (
+                  <div style={{ marginBottom: 24, fontSize: 16, color: '#dc3545', fontWeight: 'normal' }}>{lossMessage}</div>
+                );
+              })()}
               <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
                 <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff', minWidth: 120, fontSize: 18, padding: '12px 24px' }} onClick={doResign}>Yes</button>
                 <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', minWidth: 120, fontSize: 18, padding: '12px 24px' }} onClick={cancelResign}>No</button>
@@ -8647,7 +8717,15 @@ function GameBoard() {
                     </div>
                   )}
                   {gameOver.winner === 1 && (
-                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                    <>
+                      <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                      {gameOver.winType && gameOver.multiplier && (
+                        <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
+                          {gameOver.multiplier}x
+                          {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
                 {/* Player 2 */}
@@ -8697,7 +8775,15 @@ function GameBoard() {
                     </div>
                   )}
                   {gameOver.winner === 2 && (
-                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                    <>
+                      <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                      {gameOver.winType && gameOver.multiplier && (
+                        <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
+                          {gameOver.multiplier}x
+                          {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

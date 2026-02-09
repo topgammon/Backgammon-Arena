@@ -896,7 +896,41 @@ io.on('connection', (socket) => {
     match.gameOverWinner = gameOver.winner;
     match.gameOverLoser = gameOver.loser;
     
-    // Validate winner and loser
+    // Handle abandoned games - no winner, no stats, no ELO changes
+    if (gameOver.type === 'abandoned') {
+      console.log(`🏁 Game abandoned for match ${matchId} - no stats recorded`);
+      
+      // Broadcast game over to both players with no ELO changes
+      io.to(opponentSocketId).emit('game:over', {
+        matchId,
+        gameOver: {
+          type: 'abandoned',
+          winner: null,
+          loser: null,
+          winType: null,
+          multiplier: 1
+        },
+        eloChanges: null,
+        gameStakes: match.gameStakes || 1
+      });
+      
+      socket.emit('game:over', {
+        matchId,
+        gameOver: {
+          type: 'abandoned',
+          winner: null,
+          loser: null,
+          winType: null,
+          multiplier: 1
+        },
+        eloChanges: null,
+        gameStakes: match.gameStakes || 1
+      });
+      
+      return; // Exit early - no ELO changes, no stats
+    }
+    
+    // Validate winner and loser for non-abandoned games
     if (!gameOver.winner || !gameOver.loser) {
       console.error(`❌ Invalid game over data: missing winner or loser`, gameOver);
       return;

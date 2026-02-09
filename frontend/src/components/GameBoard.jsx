@@ -1327,7 +1327,8 @@ function GameBoard() {
               clearInterval(firstRollTimerRef.current);
               firstRollTimerRef.current = null;
             }
-            triggerGameOver('timeout', firstRollTurn === 1 ? 2 : 1, firstRollTurn);
+            // First roll timeout = game abandoned (no winner, no stats)
+            triggerGameOver('abandoned', null, firstRollTurn);
             return 0;
           }
           return prev - 1;
@@ -3457,6 +3458,25 @@ function GameBoard() {
     
     gameOverProcessedRef.current = true;
     
+    // For abandoned games, no winner/loser needed
+    if (type === 'abandoned') {
+      const gameOverData = { type: 'abandoned', winner: null, loser: null, winType: null, multiplier: 1 };
+      console.log(`🎯 Setting gameOver state (abandoned):`, gameOverData);
+      setGameOver(gameOverData);
+      setShowConfirmResign(false);
+      setNoMoveOverlay(false);
+      
+      // Send game over to server for online games
+      if (isOnlineGame && socketRef.current && matchId) {
+        console.log(`📤 Sending game over to server: type=abandoned`);
+        socketRef.current.emit('game:over', {
+          matchId,
+          gameOver: { type: 'abandoned', winner: null, loser: null, winType: null, multiplier: 1 }
+        });
+      }
+      return;
+    }
+    
     // Detect win type (gammon/backgammon) for wins and resignations
     let winType = null;
     let multiplier = 1;
@@ -3514,6 +3534,11 @@ function GameBoard() {
     
     const winnerName = go.winner === 1 ? player1Name : player2Name;
     
+    // Handle abandoned games (no winner)
+    if (go.type === 'abandoned') {
+      return 'Game Abandoned';
+    }
+    
     // Map game over types to reasons
     let reason = '';
     if (go.type === 'win') reason = 'Completion';
@@ -3523,6 +3548,7 @@ function GameBoard() {
     else if (go.type === 'timeout') reason = 'Timeout';
     else reason = 'Completion'; // Default fallback
     
+    const winnerName = go.winner === 1 ? player1Name : player2Name;
     return `${winnerName} wins by ${reason}`;
   }
 
@@ -5202,9 +5228,20 @@ function GameBoard() {
       })()}
       {gameOver && (
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.08)', zIndex: 1000, pointerEvents: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'rgba(255,255,255,0.98)', border: '2px solid #28a745', borderRadius: 12, padding: 36, minWidth: 400, maxWidth: 500, textAlign: 'center', fontSize: 26, fontWeight: 'bold', color: '#222', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
-            {/* Player avatars */}
-            <div style={{ display: 'flex', gap: 40, marginBottom: 24, alignItems: 'center' }}>
+          <div style={{ background: 'rgba(255,255,255,0.98)', border: gameOver.type === 'abandoned' ? '2px solid #6c757d' : '2px solid #28a745', borderRadius: 12, padding: 36, minWidth: 400, maxWidth: 500, textAlign: 'center', fontSize: 26, fontWeight: 'bold', color: '#222', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+            {/* For abandoned games, show simple message */}
+            {gameOver.type === 'abandoned' ? (
+              <>
+                <div style={{ fontSize: 24, fontWeight: 'bold', color: '#6c757d', marginBottom: 24 }}>Game Abandoned</div>
+                <div style={{ fontSize: 16, color: '#666', marginBottom: 24 }}>No statistics or ELO changes were recorded.</div>
+                <div style={{ display: 'flex', gap: 22, marginTop: 8 }}>
+                  <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', fontSize: 22 }} onClick={handleQuit}>Quit</button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Player avatars */}
+                <div style={{ display: 'flex', gap: 40, marginBottom: 24, alignItems: 'center' }}>
               {/* Player 1 */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
                 <div style={{
@@ -7113,61 +7150,86 @@ function GameBoard() {
         {gameOver && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
             <div style={{ background: '#fff', padding: 40, borderRadius: 16, textAlign: 'center', maxWidth: 500, boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)' }}>
-              {/* Player avatars */}
-              <div style={{ display: 'flex', gap: 40, marginBottom: 24, alignItems: 'center', justifyContent: 'center' }}>
-                {/* Player 1 */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                  <div style={{
-                    position: 'relative',
-                    border: gameOver.winner === 1 ? '4px solid #28a745' : '4px solid transparent',
-                    borderRadius: '16px',
-                    padding: '4px',
-                    boxShadow: gameOver.winner === 1 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
-                  }}>
-                    {renderAvatar(!user, false, null, 80, user ? userProfile : null, user ? user : null)}
+              {/* For abandoned games, show simple message */}
+              {gameOver.type === 'abandoned' ? (
+                <>
+                  <div style={{ fontSize: 24, fontWeight: 'bold', color: '#6c757d', marginBottom: 24 }}>Game Abandoned</div>
+                  <div style={{ fontSize: 16, color: '#666', marginBottom: 24 }}>No statistics or ELO changes were recorded.</div>
+                  <div style={{ display: 'flex', gap: 22, marginTop: 8 }}>
+                    <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', fontSize: 22 }} onClick={handleQuit}>Quit</button>
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>
-                    {user && userProfile ? userProfile.username : (passPlayPlayer1Name || 'Player 1')}
-                  </div>
-                  {gameOver.winner === 1 && (
-                    <>
-                      <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
-                      {gameOver.winType && gameOver.multiplier && (
-                        <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
-                          {gameOver.multiplier}x
-                          {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
-                        </div>
+                </>
+              ) : (
+                <>
+                  {/* Player avatars */}
+                  <div style={{ display: 'flex', gap: 40, marginBottom: 24, alignItems: 'center', justifyContent: 'center' }}>
+                    {/* Player 1 */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                      <div style={{
+                        position: 'relative',
+                        border: gameOver.winner === 1 ? '4px solid #28a745' : '4px solid transparent',
+                        borderRadius: '16px',
+                        padding: '4px',
+                        boxShadow: gameOver.winner === 1 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
+                      }}>
+                        {renderAvatar(!user, false, null, 80, user ? userProfile : null, user ? user : null)}
+                      </div>
+                      <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>
+                        {user && userProfile ? userProfile.username : (passPlayPlayer1Name || 'Player 1')}
+                      </div>
+                      {gameOver.winner === 1 && (
+                        <>
+                          <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                          {(() => {
+                            let displayMultiplier = gameOver.multiplier;
+                            if (!displayMultiplier || displayMultiplier === 1) {
+                              const winInfo = detectWinType(1, 2);
+                              displayMultiplier = winInfo.multiplier;
+                            }
+                            return displayMultiplier > 1 ? (
+                              <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
+                                {displayMultiplier}x
+                                {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
+                              </div>
+                            ) : null;
+                          })()}
+                        </>
                       )}
-                    </>
-                  )}
-                </div>
-                {/* CPU */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                  <div style={{
-                    position: 'relative',
-                    border: gameOver.winner === 2 ? '4px solid #28a745' : '4px solid transparent',
-                    borderRadius: '16px',
-                    padding: '4px',
-                    boxShadow: gameOver.winner === 2 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
-                  }}>
-                    {renderAvatar(false, true, cpuDifficulty, 80)}
-                  </div>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>{DIFFICULTY_LEVELS[cpuDifficulty]?.avatar || 'CPU'}</div>
-                  {gameOver.winner === 2 && (
-                    <>
-                      <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
-                      {gameOver.winType && gameOver.multiplier && (
-                        <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
-                          {gameOver.multiplier}x
-                          {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
-                        </div>
+                    </div>
+                    {/* CPU */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                      <div style={{
+                        position: 'relative',
+                        border: gameOver.winner === 2 ? '4px solid #28a745' : '4px solid transparent',
+                        borderRadius: '16px',
+                        padding: '4px',
+                        boxShadow: gameOver.winner === 2 ? '0 0 20px rgba(40, 167, 69, 0.5)' : 'none'
+                      }}>
+                        {renderAvatar(false, true, cpuDifficulty, 80)}
+                      </div>
+                      <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>{DIFFICULTY_LEVELS[cpuDifficulty]?.avatar || 'CPU'}</div>
+                      {gameOver.winner === 2 && (
+                        <>
+                          <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
+                          {(() => {
+                            let displayMultiplier = gameOver.multiplier;
+                            if (!displayMultiplier || displayMultiplier === 1) {
+                              const winInfo = detectWinType(2, 1);
+                              displayMultiplier = winInfo.multiplier;
+                            }
+                            return displayMultiplier > 1 ? (
+                              <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
+                                {displayMultiplier}x
+                                {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
+                              </div>
+                            ) : null;
+                          })()}
+                        </>
                       )}
-                    </>
-                  )}
-                </div>
-              </div>
-              {/* Game over message */}
-              <div style={{ fontSize: 18, marginBottom: 24, color: '#666', fontWeight: 'normal' }}>{getGameOverMessage(gameOver)}</div>
+                    </div>
+                  </div>
+                  {/* Game over message */}
+                  <div style={{ fontSize: 18, marginBottom: 24, color: '#666', fontWeight: 'normal' }}>{getGameOverMessage(gameOver)}</div>
               
               {/* Scoring breakdown for wins and resignations */}
               {(gameOver.type === 'win' || gameOver.type === 'resign') && gameOver.winType && (
@@ -7215,10 +7277,12 @@ function GameBoard() {
                   </div>
                 </div>
               )}
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-                <button style={buttonStyle} onClick={handleRematch}>Rematch</button>
-                <button style={{ ...buttonStyle, background: '#6c757d' }} onClick={handleQuit}>Quit</button>
-              </div>
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                    <button style={buttonStyle} onClick={handleRematch}>Rematch</button>
+                    <button style={{ ...buttonStyle, background: '#6c757d' }} onClick={handleQuit}>Quit</button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -7848,7 +7912,8 @@ function GameBoard() {
                       clearInterval(firstRollTimerRef.current);
                       firstRollTimerRef.current = null;
                     }
-                    triggerGameOver('timeout', 1, 2);
+                    // First roll timeout = game abandoned (no winner, no stats)
+                    triggerGameOver('abandoned', null, currentPlayerNumber);
                     return 0;
                   }
                   return prev - 1;
@@ -8722,15 +8787,26 @@ function GameBoard() {
                 padding: '40px', 
                 minWidth: '400px', 
                 maxWidth: '500px',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)', 
                 position: 'relative',
                 animation: 'fadeIn 0.2s ease-in',
                 textAlign: 'center'
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Player avatars */}
-              <div style={{ display: 'flex', gap: 40, marginBottom: 24, alignItems: 'center', justifyContent: 'center' }}>
+              {/* For abandoned games, show simple message */}
+              {gameOver.type === 'abandoned' ? (
+                <>
+                  <div style={{ fontSize: 24, fontWeight: 'bold', color: '#6c757d', marginBottom: 24 }}>Game Abandoned</div>
+                  <div style={{ fontSize: 16, color: '#666', marginBottom: 24 }}>No statistics or ELO changes were recorded.</div>
+                  <div style={{ display: 'flex', gap: 22, marginTop: 8 }}>
+                    <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', fontSize: 22 }} onClick={handleQuit}>Quit</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Player avatars */}
+                  <div style={{ display: 'flex', gap: 40, marginBottom: 24, alignItems: 'center', justifyContent: 'center' }}>
                 {/* Player 1 */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
                   <div style={{
@@ -8864,53 +8940,53 @@ function GameBoard() {
                   )}
                 </div>
               </div>
-              {/* Game over message */}
-              <div style={{ fontSize: 18, marginBottom: 20, color: '#666', fontWeight: 'normal' }}>{getGameOverMessage(gameOver)}</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, justifyContent: 'center', marginTop: 20, width: '100%' }}>
-                {!rematchRequest ? (
-                  <>
-                    <button style={buttonStyle} onClick={() => {
-                      if (isOnlineGame && socketRef.current && matchId) {
-                        // Clear any existing timeout
-                        if (rematchTimeoutRef.current) {
-                          clearTimeout(rematchTimeoutRef.current);
-                          rematchTimeoutRef.current = null;
-                        }
-                        const toPlayer = playerNumber === 1 ? 2 : 1;
-                        setRematchRequest({ from: playerNumber, to: toPlayer });
-                        socketRef.current.emit('game:rematch-request', {
-                          matchId,
-                          from: playerNumber,
-                          to: toPlayer
-                        });
-                        // Set timeout to auto-decline if no response within 5 seconds
-                        rematchTimeoutRef.current = setTimeout(() => {
-                          setRematchRequest(prev => {
-                            // Only clear if still waiting for response
-                            if (prev && prev.from === playerNumber) {
-                              setMessage('Rematch request timed out - opponent may have left');
-                              setTimeout(() => setMessage(''), 3000);
-                              return null;
+                  {/* Game over message */}
+                  <div style={{ fontSize: 18, marginBottom: 20, color: '#666', fontWeight: 'normal' }}>{getGameOverMessage(gameOver)}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, justifyContent: 'center', marginTop: 20, width: '100%' }}>
+                    {!rematchRequest ? (
+                      <>
+                        <button style={buttonStyle} onClick={() => {
+                          if (isOnlineGame && socketRef.current && matchId) {
+                            // Clear any existing timeout
+                            if (rematchTimeoutRef.current) {
+                              clearTimeout(rematchTimeoutRef.current);
+                              rematchTimeoutRef.current = null;
                             }
-                            return prev;
-                          });
-                          rematchTimeoutRef.current = null;
-                        }, 5000);
-                      } else {
-                        handleRematch();
-                      }
-                    }}>Rematch</button>
-                    <button style={{ ...buttonStyle, background: '#007bff' }} onClick={() => { 
-                      if (isOnlineGame) {
-                        // Disconnect from current match
-                        if (socketRef.current) {
-                          socketRef.current.disconnect();
-                          socketRef.current = null;
-                        }
-                        // Reset game state
-                        setGameOver(null);
-                        setRematchRequest(null);
-                        setIsOnlineGame(false);
+                            const toPlayer = playerNumber === 1 ? 2 : 1;
+                            setRematchRequest({ from: playerNumber, to: toPlayer });
+                            socketRef.current.emit('game:rematch-request', {
+                              matchId,
+                              from: playerNumber,
+                              to: toPlayer
+                            });
+                            // Set timeout to auto-decline if no response within 5 seconds
+                            rematchTimeoutRef.current = setTimeout(() => {
+                              setRematchRequest(prev => {
+                                // Only clear if still waiting for response
+                                if (prev && prev.from === playerNumber) {
+                                  setMessage('Rematch request timed out - opponent may have left');
+                                  setTimeout(() => setMessage(''), 3000);
+                                  return null;
+                                }
+                                return prev;
+                              });
+                              rematchTimeoutRef.current = null;
+                            }, 5000);
+                          } else {
+                            handleRematch();
+                          }
+                        }}>Rematch</button>
+                        <button style={{ ...buttonStyle, background: '#007bff' }} onClick={() => { 
+                          if (isOnlineGame) {
+                            // Disconnect from current match
+                            if (socketRef.current) {
+                              socketRef.current.disconnect();
+                              socketRef.current = null;
+                            }
+                            // Reset game state
+                            setGameOver(null);
+                            setRematchRequest(null);
+                            setIsOnlineGame(false);
                         setMatchId(null);
                         setPlayerNumber(null);
                         setOpponent(null);
@@ -8982,7 +9058,9 @@ function GameBoard() {
                     </div>
                   </>
                 )}
-              </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

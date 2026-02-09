@@ -2684,7 +2684,6 @@ function GameBoard() {
   };
   
   const doResign = () => {
-    setShowConfirmResign(false);
     // Determine which player is resigning
     // For online games, use playerNumber (which player this client is)
     // For offline games (CPU, pass-and-play), use currentPlayer (whose turn it is)
@@ -2694,7 +2693,34 @@ function GameBoard() {
     console.log(`🏳️ Resignation: Player ${resigningPlayer} resigns, Player ${winningPlayer} wins`);
     console.log(`   isOnlineGame: ${isOnlineGame}, playerNumber: ${playerNumber}, currentPlayer: ${currentPlayer}`);
     
-    // Trigger game over (this will send to server for online games)
+    // Close resignation confirmation overlay
+    setShowConfirmResign(false);
+    
+    // For online games, send resignation to server and wait for complete response
+    // This ensures both players see the overlay at the same time with all data (including ELO)
+    if (isOnlineGame && socketRef.current && matchId) {
+      // Detect win type locally for the server
+      const winInfo = detectWinType(winningPlayer, resigningPlayer);
+      
+      console.log(`📤 Sending resignation to server: type=resign, winner=${winningPlayer}, loser=${resigningPlayer}, winType=${winInfo.winType}, multiplier=${winInfo.multiplier}`);
+      socketRef.current.emit('game:over', {
+        matchId,
+        gameOver: { 
+          type: 'resign', 
+          winner: winningPlayer, 
+          loser: resigningPlayer, 
+          winType: winInfo.winType, 
+          multiplier: winInfo.multiplier 
+        }
+      });
+      
+      // Don't set gameOver locally - wait for server response with ELO changes
+      // The server will send back game:over event with complete data
+      // This ensures smooth UX - both players see overlay at same time with all data
+      return;
+    }
+    
+    // For local games (pass-and-play, CPU), trigger immediately
     triggerGameOver('resign', winningPlayer, resigningPlayer);
   };
 
@@ -2779,8 +2805,12 @@ function GameBoard() {
           accepted: false,
           gameOver: { type: 'double', winner: fromPlayer, loser: toPlayer }
         });
+        // Don't trigger game over locally - wait for server response with complete data
+        // This ensures both players see the overlay at the same time with all data (including ELO)
+        return;
       }
       
+      // For local games (pass-and-play, CPU), trigger immediately
       triggerGameOver('double', fromPlayer, toPlayer);
     }
   };
@@ -7880,12 +7910,11 @@ function GameBoard() {
           setDoubleTimer(12);
         } else {
           // Double was declined - game over
-          // Set game over state immediately for UI responsiveness
-          // The backend will send a game:over event with eloChanges shortly
-          setGameOver(data.gameOver);
+          // Don't set gameOver locally - wait for server's game:over event with complete data
+          // This ensures both players see the overlay at the same time with all data (including ELO)
           setDoubleOffer(null);
-          // Note: eloChanges will be set when game:over event is received from backend
-          console.log('📊 Double declined - waiting for game:over event with ELO changes');
+          console.log('📊 Double declined - waiting for game:over event with complete data');
+          // The backend will send a game:over event with eloChanges and complete gameOver data
         }
       }
     };
@@ -7986,11 +8015,22 @@ function GameBoard() {
           console.log('⚠️ WARNING: No ELO changes in game over data!');
         }
         
-        // Prevent duplicate processing for non-abandoned games (but ELO changes already processed above)
-        if (gameOverProcessedRef.current) {
+        // For online resignations, we don't set gameOver locally - we wait for server response
+        // So if gameOverProcessedRef is set, it means this is a different type of game over
+        // (like a local win). In that case, we've already processed ELO changes above, so we can return.
+        // But if gameOver is null/undefined, this is a resignation we're waiting for, so process it.
+        if (gameOverProcessedRef.current && gameOver) {
           console.log('⚠️ Game over already processed locally, but ELO changes have been set');
           return;
         }
+        
+        // If gameOver is not set yet (e.g., resignation we sent), process it now
+        if (!gameOver) {
+          console.log('✅ Processing server response for resignation - setting game over state');
+        }
+        
+        // Mark as processed to prevent duplicate processing
+        gameOverProcessedRef.current = true;
         
         // If winType/multiplier not provided by server, detect it locally
         let winType = data.gameOver?.winType || null;

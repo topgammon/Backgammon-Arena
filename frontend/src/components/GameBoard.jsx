@@ -290,6 +290,10 @@ function GameBoard() {
   const [gameHistory, setGameHistory] = useState([]); // Game history for profile page
   const [eloTimePeriod, setEloTimePeriod] = useState('all'); // Time period for ELO graph: '1w', '1m', '3m', '6m', '1y', 'all'
   const [profileTab, setProfileTab] = useState('stats'); // Profile page tab: 'stats', 'achievements', 'friends', 'messages', 'settings'
+  const [friendRequests, setFriendRequests] = useState([]); // Incoming friend requests
+  const [friends, setFriends] = useState([]); // List of friends
+  const [friendRequestsLoading, setFriendRequestsLoading] = useState(false);
+  const [friendsLoading, setFriendsLoading] = useState(false);
   const [highestRatingLeaderboard, setHighestRatingLeaderboard] = useState([]); // Top 10 users by highest rating
   const [mostWinsLeaderboard, setMostWinsLeaderboard] = useState([]); // Top 10 users by most wins
   const [globalRank, setGlobalRank] = useState(null); // User's global rank
@@ -1459,6 +1463,75 @@ $$;
       }
     }
   }, [screen, viewingUserId, user?.id, profileTab]);
+
+  // Fetch friend requests and friends when viewing own profile
+  useEffect(() => {
+    if (screen === 'profile' && supabase && user?.id && (!viewingUserId || viewingUserId === user.id)) {
+      const fetchFriendData = async () => {
+        setFriendRequestsLoading(true);
+        setFriendsLoading(true);
+        
+        try {
+          // Fetch incoming friend requests (where current user is the recipient)
+          const { data: requests, error: requestsError } = await supabase
+            .from('friend_requests')
+            .select(`
+              *,
+              from_user:users!friend_requests_from_user_id_fkey(id, username, avatar, elo_rating)
+            `)
+            .eq('to_user_id', user.id)
+            .eq('status', 'pending');
+          
+          if (requestsError) {
+            console.error('Error fetching friend requests:', requestsError);
+            setFriendRequests([]);
+          } else {
+            setFriendRequests(requests || []);
+          }
+          
+          // Fetch friends list
+          const { data: friendsData, error: friendsError } = await supabase
+            .from('friends')
+            .select(`
+              *,
+              friend1:users!friends_user1_id_fkey(id, username, avatar, elo_rating),
+              friend2:users!friends_user2_id_fkey(id, username, avatar, elo_rating)
+            `)
+            .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
+          
+          if (friendsError) {
+            console.error('Error fetching friends:', friendsError);
+            setFriends([]);
+          } else {
+            // Transform friends data to include friend info (the other user)
+            const friendsList = (friendsData || []).map(friendship => {
+              const friend = friendship.user1_id === user.id 
+                ? friendship.friend2 
+                : friendship.friend1;
+              return {
+                ...friendship,
+                friend: friend
+              };
+            });
+            setFriends(friendsList);
+          }
+        } catch (err) {
+          console.error('Error fetching friend data:', err);
+          setFriendRequests([]);
+          setFriends([]);
+        } finally {
+          setFriendRequestsLoading(false);
+          setFriendsLoading(false);
+        }
+      };
+      
+      fetchFriendData();
+    } else {
+      // Clear friend data when not viewing own profile
+      setFriendRequests([]);
+      setFriends([]);
+    }
+  }, [screen, user?.id, viewingUserId, supabase]);
 
   // Fetch game history when on profile page
   useEffect(() => {
@@ -10371,9 +10444,71 @@ $$;
                     </div>
                     
                     <button
-                      onClick={() => {
-                        // TODO: Implement add friend functionality
-                        console.log('Add friend clicked for:', profileToDisplay.username);
+                      onClick={async () => {
+                        if (!supabase || !user?.id || !profileToDisplay?.id) return;
+                        
+                        try {
+                          // Check if already friends or request already sent
+                          const { data: existingRequests, error: checkError } = await supabase
+                            .from('friend_requests')
+                            .select('*')
+                            .or(`and(from_user_id.eq.${user.id},to_user_id.eq.${profileToDisplay.id}),and(from_user_id.eq.${profileToDisplay.id},to_user_id.eq.${user.id})`);
+                          
+                          if (checkError && checkError.code !== 'PGRST116') {
+                            console.error('Error checking friend request:', checkError);
+                            return;
+                          }
+                          
+                          // Check if already friends
+                          const { data: existingFriends, error: friendCheckError } = await supabase
+                            .from('friends')
+                            .select('*')
+                            .or(`and(user1_id.eq.${user.id},user2_id.eq.${profileToDisplay.id}),and(user1_id.eq.${profileToDisplay.id},user2_id.eq.${user.id})`);
+                          
+                          if (friendCheckError && friendCheckError.code !== 'PGRST116') {
+                            console.error('Error checking friends:', friendCheckError);
+                            return;
+                          }
+                          
+                          if (existingFriends && existingFriends.length > 0) {
+                            alert('You are already friends with this user!');
+                            return;
+                          }
+                          
+                          if (existingRequests && existingRequests.length > 0) {
+                            const pendingRequest = existingRequests.find(r => r.status === 'pending');
+                            if (pendingRequest) {
+                              alert('Friend request already sent!');
+                            } else {
+                              alert('Friend request already exists!');
+                            }
+                            return;
+                          }
+                          
+                          // Send friend request
+                          const { error: insertError } = await supabase
+                            .from('friend_requests')
+                            .insert({
+                              from_user_id: user.id,
+                              to_user_id: profileToDisplay.id,
+                              status: 'pending'
+                            });
+                          
+                          if (insertError) {
+                            console.error('Error sending friend request:', insertError);
+                            if (insertError.code === 'PGRST204') {
+                              alert('Friend requests feature is not set up yet. Please run the SQL to create the tables.');
+                            } else {
+                              alert('Failed to send friend request. Please try again.');
+                            }
+                          } else {
+                            console.log('Friend request sent successfully');
+                            alert('Friend request sent!');
+                          }
+                        } catch (err) {
+                          console.error('Error sending friend request:', err);
+                          alert('Failed to send friend request. Please try again.');
+                        }
                       }}
                       style={{
                         padding: '8px 16px',
@@ -11471,18 +11606,328 @@ $$;
           {/* Friends Tab Content */}
           {profileTab === 'friends' && (
             <div style={{
-              background: '#fff',
-              borderRadius: '12px',
-              padding: '40px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-              textAlign: 'center'
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '24px'
             }}>
+              {/* Friend Requests Section */}
               <div style={{
-                fontSize: '24px',
-                color: '#666',
-                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                background: '#fff',
+                borderRadius: '12px',
+                padding: '24px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
               }}>
-                Coming Soon
+                <h3 style={{
+                  margin: '0 0 20px 0',
+                  fontSize: '20px',
+                  fontWeight: 'bold',
+                  color: '#333',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                  borderBottom: '2px solid #ff751f',
+                  paddingBottom: '10px'
+                }}>
+                  Friend Requests
+                </h3>
+                {friendRequestsLoading ? (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+                    Loading requests...
+                  </div>
+                ) : friendRequests.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+                    No pending friend requests
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {friendRequests.map((request) => {
+                      const sender = request.from_user;
+                      if (!sender) return null;
+                      
+                      return (
+                        <div key={request.id} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '12px',
+                          background: '#f9f9f9',
+                          borderRadius: '8px',
+                          border: '1px solid #e0e0e0'
+                        }}>
+                          <div 
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '12px',
+                              cursor: 'pointer',
+                              flex: 1
+                            }}
+                            onClick={() => {
+                              setViewingUserId(sender.id);
+                              setScreen('profile');
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.opacity = '0.7';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.opacity = '1';
+                            }}
+                          >
+                            <div style={{
+                              width: '40px',
+                              height: '40px',
+                              borderRadius: '50%',
+                              background: '#ddd',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '18px',
+                              fontWeight: 'bold',
+                              color: '#666'
+                            }}>
+                              {sender.avatar || 'U'}
+                            </div>
+                            <div>
+                              <div style={{
+                                fontSize: '16px',
+                                fontWeight: 'bold',
+                                color: '#333',
+                                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                                textDecoration: 'underline'
+                              }}>
+                                {sender.username || 'Unknown'}
+                              </div>
+                              <div style={{
+                                fontSize: '12px',
+                                color: '#666',
+                                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                              }}>
+                                ELO: {sender.elo_rating || 1000}
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                              onClick={async () => {
+                                if (!supabase || !user?.id) return;
+                                
+                                try {
+                                  // Accept friend request - create friendship and delete request
+                                  const { error: deleteError } = await supabase
+                                    .from('friend_requests')
+                                    .delete()
+                                    .eq('id', request.id);
+                                  
+                                  if (deleteError) {
+                                    console.error('Error deleting friend request:', deleteError);
+                                    return;
+                                  }
+                                  
+                                  // Create friendship (always store with smaller ID first for consistency)
+                                  const user1Id = user.id < request.from_user_id ? user.id : request.from_user_id;
+                                  const user2Id = user.id < request.from_user_id ? request.from_user_id : user.id;
+                                  
+                                  const { error: friendError } = await supabase
+                                    .from('friends')
+                                    .insert({
+                                      user1_id: user1Id,
+                                      user2_id: user2Id
+                                    });
+                                  
+                                  if (friendError) {
+                                    console.error('Error creating friendship:', friendError);
+                                    alert('Failed to accept friend request. Please try again.');
+                                  } else {
+                                    // Refresh friend data
+                                    setFriendRequests(prev => prev.filter(r => r.id !== request.id));
+                                    // Refresh friends list
+                                    const { data: friendsData } = await supabase
+                                      .from('friends')
+                                      .select(`
+                                        *,
+                                        friend1:users!friends_user1_id_fkey(id, username, avatar, elo_rating),
+                                        friend2:users!friends_user2_id_fkey(id, username, avatar, elo_rating)
+                                      `)
+                                      .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
+                                    
+                                    if (friendsData) {
+                                      const friendsList = friendsData.map(friendship => {
+                                        const friend = friendship.user1_id === user.id 
+                                          ? friendship.friend2 
+                                          : friendship.friend1;
+                                        return {
+                                          ...friendship,
+                                          friend: friend
+                                        };
+                                      });
+                                      setFriends(friendsList);
+                                    }
+                                  }
+                                } catch (err) {
+                                  console.error('Error accepting friend request:', err);
+                                  alert('Failed to accept friend request. Please try again.');
+                                }
+                              }}
+                              style={{
+                                padding: '8px 16px',
+                                background: '#28a745',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                fontWeight: 'bold',
+                                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                                transition: 'background 0.2s'
+                              }}
+                              onMouseEnter={(e) => e.target.style.background = '#218838'}
+                              onMouseLeave={(e) => e.target.style.background = '#28a745'}
+                            >
+                              Accept
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (!supabase || !user?.id) return;
+                                
+                                try {
+                                  const { error } = await supabase
+                                    .from('friend_requests')
+                                    .delete()
+                                    .eq('id', request.id);
+                                  
+                                  if (error) {
+                                    console.error('Error declining friend request:', error);
+                                    alert('Failed to decline friend request. Please try again.');
+                                  } else {
+                                    setFriendRequests(prev => prev.filter(r => r.id !== request.id));
+                                  }
+                                } catch (err) {
+                                  console.error('Error declining friend request:', err);
+                                  alert('Failed to decline friend request. Please try again.');
+                                }
+                              }}
+                              style={{
+                                padding: '8px 16px',
+                                background: '#dc3545',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                fontWeight: 'bold',
+                                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                                transition: 'background 0.2s'
+                              }}
+                              onMouseEnter={(e) => e.target.style.background = '#c82333'}
+                              onMouseLeave={(e) => e.target.style.background = '#dc3545'}
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Friends List Section */}
+              <div style={{
+                background: '#fff',
+                borderRadius: '12px',
+                padding: '24px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}>
+                <h3 style={{
+                  margin: '0 0 20px 0',
+                  fontSize: '20px',
+                  fontWeight: 'bold',
+                  color: '#333',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                  borderBottom: '2px solid #ff751f',
+                  paddingBottom: '10px'
+                }}>
+                  Friends
+                </h3>
+                {friendsLoading ? (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+                    Loading friends...
+                  </div>
+                ) : friends.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+                    No friends yet
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {friends.map((friendship) => {
+                      const friend = friendship.friend;
+                      if (!friend) return null;
+                      
+                      return (
+                        <div key={friendship.id} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '12px',
+                          background: '#f9f9f9',
+                          borderRadius: '8px',
+                          border: '1px solid #e0e0e0'
+                        }}>
+                          <div 
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '12px',
+                              cursor: 'pointer',
+                              flex: 1
+                            }}
+                            onClick={() => {
+                              setViewingUserId(friend.id);
+                              setScreen('profile');
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.opacity = '0.7';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.opacity = '1';
+                            }}
+                          >
+                            <div style={{
+                              width: '40px',
+                              height: '40px',
+                              borderRadius: '50%',
+                              background: '#ddd',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '18px',
+                              fontWeight: 'bold',
+                              color: '#666'
+                            }}>
+                              {friend.avatar || 'U'}
+                            </div>
+                            <div>
+                              <div style={{
+                                fontSize: '16px',
+                                fontWeight: 'bold',
+                                color: '#333',
+                                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                                textDecoration: 'underline'
+                              }}>
+                                {friend.username || 'Unknown'}
+                              </div>
+                              <div style={{
+                                fontSize: '12px',
+                                color: '#666',
+                                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                              }}>
+                                ELO: {friend.elo_rating || 1000}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -3532,12 +3532,12 @@ function GameBoard() {
       player2Name = passPlayPlayer2Name || 'Player 2';
     }
     
-    const winnerName = go.winner === 1 ? player1Name : player2Name;
-    
     // Handle abandoned games (no winner)
     if (go.type === 'abandoned') {
       return 'Game Abandoned';
     }
+    
+    const winnerName = go.winner === 1 ? player1Name : player2Name;
     
     // Map game over types to reasons
     let reason = '';
@@ -3548,7 +3548,6 @@ function GameBoard() {
     else if (go.type === 'timeout') reason = 'Timeout';
     else reason = 'Completion'; // Default fallback
     
-    const winnerName = go.winner === 1 ? player1Name : player2Name;
     return `${winnerName} wins by ${reason}`;
   }
 
@@ -5307,60 +5306,62 @@ function GameBoard() {
                 )}
               </div>
             </div>
-            {/* Game over message */}
-            <div style={{ marginBottom: 24, fontSize: 18, color: '#666', fontWeight: 'normal' }}>{getGameOverMessage(gameOver)}</div>
-            
-            {/* Scoring breakdown for wins and resignations */}
-            {(gameOver.type === 'win' || gameOver.type === 'resign') && gameOver.winType && (
-              <div style={{ 
-                marginBottom: 24, 
-                padding: '16px', 
-                background: '#f8f9fa', 
-                borderRadius: '8px',
-                fontSize: 14,
-                color: '#333',
-                textAlign: 'left'
-              }}>
-                <div style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 16 }}>Scoring Breakdown:</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Base ELO Wager:</span>
-                    <span style={{ fontWeight: 'bold' }}>1x</span>
-                  </div>
-                  {gameOver.winType !== 'standard' && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ textTransform: 'capitalize' }}>{gameOver.winType}:</span>
-                      <span style={{ fontWeight: 'bold' }}>{gameOver.multiplier}x</span>
-                    </div>
-                  )}
-                  {gameStakes > 1 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Doubling Cube:</span>
-                      <span style={{ fontWeight: 'bold' }}>{gameStakes}x</span>
-                    </div>
-                  )}
+                {/* Game over message */}
+                <div style={{ marginBottom: 24, fontSize: 18, color: '#666', fontWeight: 'normal' }}>{getGameOverMessage(gameOver)}</div>
+                
+                {/* Scoring breakdown for wins and resignations */}
+                {(gameOver.type === 'win' || gameOver.type === 'resign') && gameOver.winType && (
                   <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    marginTop: 8, 
-                    paddingTop: 8, 
-                    borderTop: '1px solid #ddd',
-                    fontWeight: 'bold',
-                    fontSize: 16
+                    marginBottom: 24, 
+                    padding: '16px', 
+                    background: '#f8f9fa', 
+                    borderRadius: '8px',
+                    fontSize: 14,
+                    color: '#333',
+                    textAlign: 'left'
                   }}>
-                    <span>Total Multiplier:</span>
-                    <span style={{ color: '#28a745' }}>
-                      {(gameOver.multiplier || 1) * Math.max(1, gameStakes || 1)}x
-                    </span>
+                    <div style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 16 }}>Scoring Breakdown:</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Base ELO Wager:</span>
+                        <span style={{ fontWeight: 'bold' }}>1x</span>
+                      </div>
+                      {gameOver.winType !== 'standard' && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ textTransform: 'capitalize' }}>{gameOver.winType}:</span>
+                          <span style={{ fontWeight: 'bold' }}>{gameOver.multiplier}x</span>
+                        </div>
+                      )}
+                      {gameStakes > 1 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Doubling Cube:</span>
+                          <span style={{ fontWeight: 'bold' }}>{gameStakes}x</span>
+                        </div>
+                      )}
+                      <div style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        marginTop: 8, 
+                        paddingTop: 8, 
+                        borderTop: '1px solid #ddd',
+                        fontWeight: 'bold',
+                        fontSize: 16
+                      }}>
+                        <span>Total Multiplier:</span>
+                        <span style={{ color: '#28a745' }}>
+                          {(gameOver.multiplier || 1) * Math.max(1, gameStakes || 1)}x
+                        </span>
+                      </div>
+                    </div>
                   </div>
+                )}
+                
+                <div style={{ display: 'flex', gap: 22, marginTop: 8 }}>
+                  <button style={{ ...buttonStyle, background: '#28a745', color: '#fff', fontSize: 22 }} onClick={handleRematch}>Rematch</button>
+                  <button style={{ ...buttonStyle, background: '#bbb', color: '#222', minWidth: 0, width: 110, fontSize: 22 }} onClick={handleQuit}>Quit</button>
                 </div>
-              </div>
+              </>
             )}
-            
-            <div style={{ display: 'flex', gap: 22, marginTop: 8 }}>
-              <button style={{ ...buttonStyle, background: '#28a745', color: '#fff', fontSize: 22 }} onClick={handleRematch}>Rematch</button>
-              <button style={{ ...buttonStyle, background: '#bbb', color: '#222', minWidth: 0, width: 110, fontSize: 22 }} onClick={handleQuit}>Quit</button>
-            </div>
           </div>
         </div>
       )}

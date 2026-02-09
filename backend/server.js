@@ -900,7 +900,15 @@ io.on('connection', (socket) => {
     if (gameOver.type === 'abandoned') {
       console.log(`🏁 Game abandoned for match ${matchId} - no stats recorded`);
       
+      // Get the abandoning player number (1 or 2)
+      const abandoningPlayer = gameOver.abandoningPlayer || (senderIsPlayer1 ? 1 : 2);
+      
+      // Mark match as abandoned to prevent any further game events
+      match.isAbandoned = true;
+      match.abandoningPlayer = abandoningPlayer;
+      
       // Broadcast game over to both players with no ELO changes
+      // Include abandoningPlayer so each client knows if they abandoned
       io.to(opponentSocketId).emit('game:over', {
         matchId,
         gameOver: {
@@ -908,7 +916,8 @@ io.on('connection', (socket) => {
           winner: null,
           loser: null,
           winType: null,
-          multiplier: 1
+          multiplier: 1,
+          abandoningPlayer: abandoningPlayer
         },
         eloChanges: null,
         gameStakes: match.gameStakes || 1
@@ -921,7 +930,8 @@ io.on('connection', (socket) => {
           winner: null,
           loser: null,
           winType: null,
-          multiplier: 1
+          multiplier: 1,
+          abandoningPlayer: abandoningPlayer
         },
         eloChanges: null,
         gameStakes: match.gameStakes || 1

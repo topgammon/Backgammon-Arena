@@ -224,6 +224,7 @@ function GameBoard() {
   const [showConfirmResign, setShowConfirmResign] = useState(false);
   const [gameOver, setGameOver] = useState(null);
   const gameOverProcessedRef = useRef(false); // Prevent duplicate game over events
+  const [abandoningPlayer, setAbandoningPlayer] = useState(null); // Track who abandoned (1 or 2)
   const [timer, setTimer] = useState(45);
   const [rematchRequest, setRematchRequest] = useState(null); // { from: playerNumber, to: playerNumber }
   const firstRollIntervalRef = useRef(null);
@@ -1328,7 +1329,8 @@ function GameBoard() {
               firstRollTimerRef.current = null;
             }
             // First roll timeout = game abandoned (no winner, no stats)
-            triggerGameOver('abandoned', null, firstRollTurn);
+            // firstRollTurn is the player who timed out (the abandoning player)
+            triggerGameOver('abandoned', null, firstRollTurn, firstRollTurn);
             return 0;
           }
           return prev - 1;
@@ -1348,6 +1350,11 @@ function GameBoard() {
   // Timer countdown
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
+    
+    // Don't start timer if game is abandoned
+    if (gameOver?.type === 'abandoned') {
+      return;
+    }
     
     if (currentPlayer !== prevPlayerRef.current) {
       setTimer(45);
@@ -3449,7 +3456,7 @@ function GameBoard() {
     }
   }
 
-  function triggerGameOver(type, winner, loser) {
+  function triggerGameOver(type, winner, loser, abandoningPlayerNum = null) {
     // Prevent duplicate game over events
     if (gameOverProcessedRef.current) {
       console.log(`⚠️ Duplicate game over event prevented: type=${type}, winner=${winner}, loser=${loser}`);
@@ -3460,18 +3467,39 @@ function GameBoard() {
     
     // For abandoned games, no winner/loser needed
     if (type === 'abandoned') {
+      // Stop all timers immediately
+      if (firstRollTimerRef.current) {
+        clearInterval(firstRollTimerRef.current);
+        firstRollTimerRef.current = null;
+      }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      if (firstRollIntervalRef.current) {
+        clearInterval(firstRollIntervalRef.current);
+        firstRollIntervalRef.current = null;
+      }
+      
+      // Stop the game completely
+      setFirstRollPhase(false);
+      setHasRolled(false);
+      setTimer(0);
+      setFirstRollTimer(0);
+      
       const gameOverData = { type: 'abandoned', winner: null, loser: null, winType: null, multiplier: 1 };
       console.log(`🎯 Setting gameOver state (abandoned):`, gameOverData);
       setGameOver(gameOverData);
+      setAbandoningPlayer(abandoningPlayerNum);
       setShowConfirmResign(false);
       setNoMoveOverlay(false);
       
       // Send game over to server for online games
       if (isOnlineGame && socketRef.current && matchId) {
-        console.log(`📤 Sending game over to server: type=abandoned`);
+        console.log(`📤 Sending game over to server: type=abandoned, abandoningPlayer=${abandoningPlayerNum}`);
         socketRef.current.emit('game:over', {
           matchId,
-          gameOver: { type: 'abandoned', winner: null, loser: null, winType: null, multiplier: 1 }
+          gameOver: { type: 'abandoned', winner: null, loser: null, winType: null, multiplier: 1, abandoningPlayer: abandoningPlayerNum }
         });
       }
       return;
@@ -5233,7 +5261,15 @@ function GameBoard() {
               <>
                 <div style={{ fontSize: 24, fontWeight: 'bold', color: '#6c757d', marginBottom: 24 }}>Game Abandoned</div>
                 <div style={{ fontSize: 16, color: '#666', marginBottom: 24 }}>No statistics or ELO changes were recorded.</div>
+                {/* Show warning only to the player who abandoned */}
+                {((gameOver.abandoningPlayer || abandoningPlayer) === currentPlayer) && (
+                  <div style={{ fontSize: 14, color: '#dc3545', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 18 }}>⚠️</span>
+                    <span>If you abandon too often your account may be suspended.</span>
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 22, marginTop: 8 }}>
+                  <button style={{ ...buttonStyle, background: '#28a745', color: '#fff', fontSize: 22 }} onClick={handleRematch}>New Game</button>
                   <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', fontSize: 22 }} onClick={handleQuit}>Quit</button>
                 </div>
               </>
@@ -7156,7 +7192,15 @@ function GameBoard() {
                 <>
                   <div style={{ fontSize: 24, fontWeight: 'bold', color: '#6c757d', marginBottom: 24 }}>Game Abandoned</div>
                   <div style={{ fontSize: 16, color: '#666', marginBottom: 24 }}>No statistics or ELO changes were recorded.</div>
+                  {/* Show warning only to the player who abandoned */}
+                  {((gameOver.abandoningPlayer || abandoningPlayer) === (isOnlineGame ? playerNumber : currentPlayer)) && (
+                    <div style={{ fontSize: 14, color: '#dc3545', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 18 }}>⚠️</span>
+                      <span>If you abandon too often your account may be suspended.</span>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: 22, marginTop: 8 }}>
+                    <button style={{ ...buttonStyle, background: '#28a745', color: '#fff', fontSize: 22 }} onClick={handleRematch}>New Game</button>
                     <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', fontSize: 22 }} onClick={handleQuit}>Quit</button>
                   </div>
                 </>
@@ -7641,6 +7685,10 @@ function GameBoard() {
     // Listen for opponent's moves
     const handleMove = (data) => {
       if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
+        // Don't process moves if game is abandoned
+        if (gameOver?.type === 'abandoned') {
+          return;
+        }
         // Apply opponent's move by syncing game state
         console.log('Opponent move received:', data);
         if (data.gameState) {
@@ -7681,6 +7729,10 @@ function GameBoard() {
     // Listen for dice rolls
     const handleDiceRolled = (data) => {
       if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
+        // Don't process dice rolls if game is abandoned
+        if (gameOver?.type === 'abandoned') {
+          return;
+        }
         setDice(data.dice);
         setHasRolled(true);
         setIsRolling(false);
@@ -7714,6 +7766,10 @@ function GameBoard() {
     // Listen for game state sync
     const handleStateSync = (data) => {
       if (data.matchId === currentMatchId && data.player !== currentPlayerNumber) {
+        // Don't process state syncs if game is abandoned
+        if (gameOver?.type === 'abandoned') {
+          return;
+        }
         // Only update if this is from the opponent
         if (data.checkers) setCheckers(data.checkers);
         if (data.bar) setBar(data.bar);
@@ -7776,6 +7832,47 @@ function GameBoard() {
         console.log('🎮 Game over received:', data);
         console.log('🎮 Current matchmakingType:', matchmakingType);
         console.log('🎮 ELO changes in data:', data.eloChanges);
+        
+        // Handle abandoned games - stop everything immediately
+        if (data.gameOver?.type === 'abandoned') {
+          // Stop all timers immediately
+          if (firstRollTimerRef.current) {
+            clearInterval(firstRollTimerRef.current);
+            firstRollTimerRef.current = null;
+          }
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          if (firstRollIntervalRef.current) {
+            clearInterval(firstRollIntervalRef.current);
+            firstRollIntervalRef.current = null;
+          }
+          
+          // Stop the game completely
+          setFirstRollPhase(false);
+          setHasRolled(false);
+          setTimer(0);
+          setFirstRollTimer(0);
+          
+          // Set game over state with abandoning player info
+          const abandoningPlayerNum = data.gameOver?.abandoningPlayer || null;
+          setGameOver({
+            type: 'abandoned',
+            winner: null,
+            loser: null,
+            winType: null,
+            multiplier: 1,
+            abandoningPlayer: abandoningPlayerNum
+          });
+          setAbandoningPlayer(abandoningPlayerNum);
+          setShowConfirmResign(false);
+          setNoMoveOverlay(false);
+          
+          // Clear active match from localStorage when game ends
+          localStorage.removeItem('activeMatch');
+          return; // Exit early - game is completely stopped
+        }
         
         // If winType/multiplier not provided by server, detect it locally
         let winType = data.gameOver?.winType || null;
@@ -7914,7 +8011,8 @@ function GameBoard() {
                       firstRollTimerRef.current = null;
                     }
                     // First roll timeout = game abandoned (no winner, no stats)
-                    triggerGameOver('abandoned', null, currentPlayerNumber);
+                    // currentPlayerNumber is the player who timed out (the abandoning player)
+                    triggerGameOver('abandoned', null, currentPlayerNumber, currentPlayerNumber);
                     return 0;
                   }
                   return prev - 1;
@@ -8800,7 +8898,40 @@ function GameBoard() {
                 <>
                   <div style={{ fontSize: 24, fontWeight: 'bold', color: '#6c757d', marginBottom: 24 }}>Game Abandoned</div>
                   <div style={{ fontSize: 16, color: '#666', marginBottom: 24 }}>No statistics or ELO changes were recorded.</div>
+                  {/* Show warning only to the player who abandoned */}
+                  {((gameOver.abandoningPlayer || abandoningPlayer) === playerNumber) && (
+                    <div style={{ fontSize: 14, color: '#dc3545', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 18 }}>⚠️</span>
+                      <span>If you abandon too often your account may be suspended.</span>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: 22, marginTop: 8 }}>
+                    <button style={{ ...buttonStyle, background: '#007bff', color: '#fff', fontSize: 22 }} onClick={() => {
+                      if (isOnlineGame) {
+                        // Disconnect from current match
+                        if (socketRef.current) {
+                          socketRef.current.disconnect();
+                          socketRef.current = null;
+                        }
+                        // Reset game state
+                        setGameOver(null);
+                        setAbandoningPlayer(null);
+                        setRematchRequest(null);
+                        setIsOnlineGame(false);
+                        setMatchId(null);
+                        setPlayerNumber(null);
+                        setOpponent(null);
+                        setOpponentProfile(null);
+                        // Start matchmaking - use ranked for signed-in users, guest for non-signed-in
+                        const matchmakingTypeToUse = user ? 'ranked' : 'guest';
+                        setIsMatchmaking(true);
+                        setMatchmakingType(matchmakingTypeToUse);
+                        setScreen('matchmaking');
+                        setMatchmakingStatus('Connecting...');
+                      } else {
+                        handleRematch();
+                      }
+                    }}>New Game</button>
                     <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', fontSize: 22 }} onClick={handleQuit}>Quit</button>
                   </div>
                 </>

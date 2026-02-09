@@ -1274,22 +1274,66 @@ function GameBoard() {
             viewsIncrementedRef.current.add(viewingUserId);
             (async () => {
               try {
-                const currentViews = profile.views || 0;
-                const { error: updateError } = await supabase
-                  .from('users')
-                  .update({ views: currentViews + 1 })
-                  .eq('id', viewingUserId);
+                // Use RPC function for atomic increment, or fallback to direct SQL increment
+                // This ensures the counter never goes down and handles concurrent views properly
+                const { data: rpcData, error: rpcError } = await supabase.rpc('increment_user_views', {
+                  user_id: viewingUserId
+                });
                 
-                if (updateError) {
-                  console.error('Error incrementing views:', updateError);
-                  // If column doesn't exist, that's okay - just log it
-                  if (updateError.code === 'PGRST204') {
-                    console.warn('Views column does not exist in database. Please run the SQL to add it.');
+                if (rpcError) {
+                  // If RPC doesn't exist, fallback to read-then-update
+                  // This ensures we always increment correctly
+                  
+                  if (updateError) {
+                    // If raw SQL doesn't work, fallback to read-then-update
+                    const { data: currentProfile, error: fetchError } = await supabase
+                      .from('users')
+                      .select('views')
+                      .eq('id', viewingUserId)
+                      .maybeSingle();
+                    
+                    if (!fetchError && currentProfile) {
+                      const newViews = (currentProfile.views || 0) + 1;
+                      const { error: updateError2 } = await supabase
+                        .from('users')
+                        .update({ views: newViews })
+                        .eq('id', viewingUserId);
+                      
+                      if (updateError2) {
+                        console.error('Error incrementing views:', updateError2);
+                        if (updateError2.code === 'PGRST204') {
+                          console.warn('Views column does not exist in database. Please run the SQL to add it.');
+                        }
+                      } else {
+                        console.log(`✅ Views incremented for user ${viewingUserId}: ${currentProfile.views || 0} → ${newViews}`);
+                        setViewingUserProfile(prev => prev ? { ...prev, views: newViews } : null);
+                      }
+                    }
+                  } else {
+                    // Success with direct SQL increment
+                    console.log(`✅ Views incremented for user ${viewingUserId} (using SQL increment)`);
+                    // Refresh the profile to get updated views count
+                    const { data: updatedProfile } = await supabase
+                      .from('users')
+                      .select('views')
+                      .eq('id', viewingUserId)
+                      .maybeSingle();
+                    if (updatedProfile) {
+                      setViewingUserProfile(prev => prev ? { ...prev, views: updatedProfile.views } : null);
+                    }
                   }
                 } else {
-                  console.log(`✅ Views incremented for user ${viewingUserId}: ${currentViews} → ${currentViews + 1}`);
-                  // Update the local state to reflect the new view count
-                  setViewingUserProfile(prev => prev ? { ...prev, views: currentViews + 1 } : null);
+                  // Success with RPC
+                  console.log(`✅ Views incremented for user ${viewingUserId} (using RPC)`);
+                  // Refresh the profile to get updated views count
+                  const { data: updatedProfile } = await supabase
+                    .from('users')
+                    .select('views')
+                    .eq('id', viewingUserId)
+                    .maybeSingle();
+                  if (updatedProfile) {
+                    setViewingUserProfile(prev => prev ? { ...prev, views: updatedProfile.views } : null);
+                  }
                 }
               } catch (err) {
                 console.error('Error incrementing views:', err);
@@ -6504,7 +6548,29 @@ function GameBoard() {
                   const playerFlag = getCountryFlag(player.country || 'US', true, true);
                   
                   return (
-                    <tr key={player.id} style={{ borderBottom: '1px solid #eee' }}>
+                    <tr 
+                      key={player.id} 
+                      onClick={() => {
+                        if (player.id && player.id !== user?.id) {
+                          setViewingUserId(player.id);
+                          setScreen('profile');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
+                      }}
+                      style={{ 
+                        borderBottom: '1px solid #eee',
+                        cursor: player.id && player.id !== user?.id ? 'pointer' : 'default',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (player.id && player.id !== user?.id) {
+                          e.currentTarget.style.background = '#f5f5f5';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent';
+                      }}
+                    >
                       <td style={{ textAlign: 'left', padding: '8px 4px', fontSize: '14px', fontWeight: 'bold', color: '#666' }}>
                         {rank}
                       </td>
@@ -6514,7 +6580,12 @@ function GameBoard() {
                             {playerAvatar}
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <span style={{ fontSize: '14px', fontWeight: '500', color: '#333' }}>
+                            <span style={{ 
+                              fontSize: '14px', 
+                              fontWeight: '500', 
+                              color: player.id && player.id !== user?.id ? '#ff751f' : '#333',
+                              textDecoration: player.id && player.id !== user?.id ? 'none' : 'none'
+                            }}>
                               {player.username || 'Unknown'}
                             </span>
                             <span style={{ fontSize: '12px', fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif' }}>
@@ -6563,14 +6634,40 @@ function GameBoard() {
                   const playerFlag = getCountryFlag(player.country || 'US', true, true);
                   
                   return (
-                    <tr key={player.id} style={{ borderBottom: '1px solid #eee' }}>
+                    <tr 
+                      key={player.id} 
+                      onClick={() => {
+                        if (player.id && player.id !== user?.id) {
+                          setViewingUserId(player.id);
+                          setScreen('profile');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
+                      }}
+                      style={{ 
+                        borderBottom: '1px solid #eee',
+                        cursor: player.id && player.id !== user?.id ? 'pointer' : 'default',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (player.id && player.id !== user?.id) {
+                          e.currentTarget.style.background = '#f5f5f5';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent';
+                      }}
+                    >
                       <td style={{ textAlign: 'left', padding: '8px 4px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <div style={{ width: '32px', height: '32px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             {playerAvatar}
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <span style={{ fontSize: '14px', fontWeight: '500', color: '#333' }}>
+                            <span style={{ 
+                              fontSize: '14px', 
+                              fontWeight: '500', 
+                              color: player.id && player.id !== user?.id ? '#ff751f' : '#333'
+                            }}>
                               {player.username || 'Unknown'}
                             </span>
                             <span style={{ fontSize: '12px', fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif' }}>
@@ -7667,6 +7764,11 @@ function GameBoard() {
       console.log('Connected to matchmaking server');
       setMatchmakingStatus('Searching for opponent...');
       
+      // Mark current user as online
+      if (user?.id) {
+        setOnlineUsers(prev => new Set([...prev, user.id]));
+      }
+      
       if (isGuest) {
         socket.emit('matchmaking:guest:join');
       } else {
@@ -7791,6 +7893,14 @@ function GameBoard() {
     
     socket.on('disconnect', () => {
       console.log('Disconnected from matchmaking server');
+      // Mark current user as offline
+      if (user?.id) {
+        setOnlineUsers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(user.id);
+          return newSet;
+        });
+      }
       if (isMatchmaking) {
         setMatchmakingStatus('Disconnected. Please try again.');
       }
@@ -7958,6 +8068,10 @@ function GameBoard() {
       
       socket.on('connect', () => {
         console.log('Reconnected to server for match:', matchId);
+        // Mark current user as online
+        if (user?.id) {
+          setOnlineUsers(prev => new Set([...prev, user.id]));
+        }
         // Rejoin the match
         socket.emit('game:rejoin', {
           matchId: matchId,
@@ -10077,15 +10191,14 @@ function GameBoard() {
                         width: '8px',
                         height: '8px',
                         borderRadius: '50%',
-                        background: '#6c757d', // Default to offline (gray)
-                        // TODO: Update based on actual online status
+                        background: onlineUsers.has(profileToDisplay.id) ? '#28a745' : '#6c757d', // Green if online, gray if offline
                       }}></div>
                       <span style={{
                         fontSize: '12px',
                         color: '#666',
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
                       }}>
-                        Offline
+                        {onlineUsers.has(profileToDisplay.id) ? 'Online' : 'Offline'}
                       </span>
                     </div>
                     

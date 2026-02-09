@@ -298,7 +298,7 @@ function GameBoard() {
   const [hoveredPointIndex, setHoveredPointIndex] = useState(null); // Index of hovered point on ELO graph
   const [viewingUserId, setViewingUserId] = useState(null); // User ID of profile being viewed (null = own profile)
   const [viewingUserProfile, setViewingUserProfile] = useState(null); // Profile data of user being viewed
-  const lastIncrementedProfileRef = useRef({ previousScreen: null, viewingUserId: null }); // Track previous screen and viewingUserId for increment-on-leave
+  const hasIncrementedViewsRef = useRef(null); // Track if we've incremented views for the current viewingUserId
   const transitioningToGameRef = useRef(false);
   
   // Track window width for responsive design
@@ -1300,10 +1300,12 @@ function GameBoard() {
     const fetchViewingUserProfile = async () => {
       if (!supabase || !viewingUserId || viewingUserId === user?.id) {
         setViewingUserProfile(null);
+        hasIncrementedViewsRef.current = null; // Reset when viewing own profile or no profile
         return;
       }
 
       try {
+        // Fetch the profile
         const { data: profile, error } = await supabase
           .from('users')
           .select('*')
@@ -1315,6 +1317,82 @@ function GameBoard() {
           setViewingUserProfile(null);
         } else if (profile) {
           setViewingUserProfile(profile);
+          
+          // Increment views if we haven't already for this viewingUserId
+          // Only increment when viewing someone else's profile (not owner's own profile)
+          if (hasIncrementedViewsRef.current !== viewingUserId) {
+            hasIncrementedViewsRef.current = viewingUserId;
+            
+            // Increment views
+            const incrementViews = async () => {
+              try {
+                console.log(`📊 Incrementing views for user ${viewingUserId}`);
+                
+                // Try RPC function first
+                const { error: rpcError } = await supabase.rpc('increment_user_views', {
+                  user_id: viewingUserId
+                });
+                
+                if (rpcError) {
+                  // Fallback to read-then-update
+                  const { data: currentProfile, error: fetchError } = await supabase
+                    .from('users')
+                    .select('views')
+                    .eq('id', viewingUserId)
+                    .maybeSingle();
+                  
+                  if (!fetchError && currentProfile) {
+                    const newViews = (currentProfile.views || 0) + 1;
+                    const { error: updateError } = await supabase
+                      .from('users')
+                      .update({ views: newViews })
+                      .eq('id', viewingUserId);
+                    
+                    if (updateError) {
+                      console.error('Error incrementing views:', updateError);
+                      if (updateError.code === 'PGRST204') {
+                        console.warn('Views column does not exist in database. Please run the SQL to add it.');
+                      }
+                      hasIncrementedViewsRef.current = null; // Reset on error to retry
+                    } else {
+                      console.log(`✅ Views incremented: ${currentProfile.views || 0} → ${newViews}`);
+                      // Wait a moment for database to update, then refresh profile
+                      setTimeout(async () => {
+                        const { data: updatedProfile } = await supabase
+                          .from('users')
+                          .select('*')
+                          .eq('id', viewingUserId)
+                          .maybeSingle();
+                        if (updatedProfile) {
+                          setViewingUserProfile(updatedProfile);
+                          console.log(`✅ Profile refreshed: ${updatedProfile.views || 0} views`);
+                        }
+                      }, 500);
+                    }
+                  }
+                } else {
+                  console.log(`✅ Views incremented (using RPC)`);
+                  // Wait a moment for database to update, then refresh profile
+                  setTimeout(async () => {
+                    const { data: updatedProfile } = await supabase
+                      .from('users')
+                      .select('*')
+                      .eq('id', viewingUserId)
+                      .maybeSingle();
+                    if (updatedProfile) {
+                      setViewingUserProfile(updatedProfile);
+                      console.log(`✅ Profile refreshed: ${updatedProfile.views || 0} views`);
+                    }
+                  }, 500);
+                }
+              } catch (err) {
+                console.error('Error incrementing views:', err);
+                hasIncrementedViewsRef.current = null; // Reset on error to retry
+              }
+            };
+            
+            incrementViews();
+          }
         } else {
           setViewingUserProfile(null);
         }
@@ -1326,77 +1404,6 @@ function GameBoard() {
 
     fetchViewingUserProfile();
   }, [viewingUserId, supabase, user?.id]);
-  
-  // Track which profile was being viewed when leaving the profile screen
-  // Increment views when leaving a profile (not when entering)
-  // Never count when owner views their own profile
-  useEffect(() => {
-    // This runs when screen changes
-    // If we're leaving the profile screen and were viewing someone else's profile, increment views
-    const previousScreen = lastIncrementedProfileRef.current?.previousScreen;
-    const previousViewingUserId = lastIncrementedProfileRef.current?.viewingUserId;
-    
-    // If we were on profile screen viewing someone else's profile, and now we're leaving
-    if (previousScreen === 'profile' && 
-        screen !== 'profile' && 
-        previousViewingUserId && 
-        previousViewingUserId !== user?.id && 
-        supabase) {
-      
-      // Increment views for the profile we were viewing
-      const incrementViews = async () => {
-        try {
-          console.log(`📊 Incrementing views for user ${previousViewingUserId} (leaving profile)`);
-          
-          // Try RPC function first (if it exists in database)
-          const { error: rpcError } = await supabase.rpc('increment_user_views', {
-            user_id: previousViewingUserId
-          });
-          
-          if (rpcError) {
-            console.log('RPC not available, using fallback method', rpcError);
-            // If RPC doesn't exist, fallback to read-then-update
-            const { data: currentProfile, error: fetchError } = await supabase
-              .from('users')
-              .select('views')
-              .eq('id', previousViewingUserId)
-              .maybeSingle();
-            
-            if (!fetchError && currentProfile) {
-              const newViews = (currentProfile.views || 0) + 1;
-              const { error: updateError } = await supabase
-                .from('users')
-                .update({ views: newViews })
-                .eq('id', previousViewingUserId);
-              
-              if (updateError) {
-                console.error('Error incrementing views:', updateError);
-                if (updateError.code === 'PGRST204') {
-                  console.warn('Views column does not exist in database. Please run the SQL to add it.');
-                }
-              } else {
-                console.log(`✅ Views incremented for user ${previousViewingUserId}: ${currentProfile.views || 0} → ${newViews}`);
-              }
-            } else if (fetchError) {
-              console.error('Error fetching current views:', fetchError);
-            }
-          } else {
-            console.log(`✅ Views incremented for user ${previousViewingUserId} (using RPC)`);
-          }
-        } catch (err) {
-          console.error('Error incrementing views:', err);
-        }
-      };
-      
-      incrementViews();
-    }
-    
-    // Update tracking: store current screen and viewingUserId for next time
-    lastIncrementedProfileRef.current = {
-      previousScreen: screen,
-      viewingUserId: viewingUserId
-    };
-  }, [screen, viewingUserId, user?.id, supabase]);
 
   // Reset viewingUserId when leaving profile page
   useEffect(() => {

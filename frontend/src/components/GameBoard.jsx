@@ -1166,42 +1166,70 @@ function GameBoard() {
     fetchUserProfile();
   }, [user, supabase]); // Removed userProfile from deps to prevent loops, but will always fetch fresh data
 
-  // Fetch game history when on profile page
-  useEffect(() => {
-    const fetchGameHistory = async () => {
-      if (!supabase || !user?.id || screen !== 'profile') {
+  // Fetch game history function (can be called manually for refresh)
+  const refreshGameHistory = async () => {
+    if (!supabase || !user?.id) {
+      setGameHistory([]);
+      return;
+    }
+
+    try {
+      // Fetch all games where user was player1 or player2 (for graph and history)
+      const { data: games, error } = await supabase
+        .from('games')
+        .select('*')
+        .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
+        .eq('game_type', 'online')
+        .not('completed_at', 'is', null)
+        .order('completed_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching game history:', error);
         setGameHistory([]);
         return;
       }
 
-      try {
-        // Fetch all games where user was player1 or player2 (for graph and history)
-        const { data: games, error } = await supabase
-          .from('games')
-          .select(`
-            *,
-            player1:users!games_player1_id_fkey(username, elo_rating),
-            player2:users!games_player2_id_fkey(username, elo_rating)
-          `)
-          .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
-          .eq('game_type', 'online')
-          .not('completed_at', 'is', null)
-          .order('completed_at', { ascending: false });
-
-        if (error) {
-          console.error('Error fetching game history:', error);
-          setGameHistory([]);
-          return;
-        }
-
-        setGameHistory(games || []);
-      } catch (err) {
-        console.error('Error fetching game history:', err);
-        setGameHistory([]);
+      console.log(`📊 Fetched ${games?.length || 0} games from history`);
+      if (games && games.length > 0) {
+        console.log('Sample game:', games[0]);
       }
-    };
 
-    fetchGameHistory();
+      // Fetch opponent usernames separately
+      if (games && games.length > 0) {
+        const userIds = new Set();
+        games.forEach(game => {
+          if (game.player1_id) userIds.add(game.player1_id);
+          if (game.player2_id) userIds.add(game.player2_id);
+        });
+        
+        const { data: users, error: usersError } = await supabase
+          .from('users')
+          .select('id, username, elo_rating')
+          .in('id', Array.from(userIds));
+        
+        if (!usersError && users) {
+          const userMap = new Map(users.map(u => [u.id, u]));
+          games.forEach(game => {
+            game.player1 = userMap.get(game.player1_id);
+            game.player2 = userMap.get(game.player2_id);
+          });
+        }
+      }
+
+      setGameHistory(games || []);
+    } catch (err) {
+      console.error('Error fetching game history:', err);
+      setGameHistory([]);
+    }
+  };
+
+  // Fetch game history when on profile page
+  useEffect(() => {
+    if (screen === 'profile' && supabase && user?.id) {
+      refreshGameHistory();
+    } else {
+      setGameHistory([]);
+    }
   }, [screen, user?.id, supabase]);
 
   // Fetch Highest Rating Leaderboard
@@ -8038,6 +8066,10 @@ function GameBoard() {
               setTimeout(() => {
                 console.log('🔄 Refreshing profile after ELO update...');
                 fetchUserProfileSafely(user.id, true);
+                // Refresh game history after database saves (if on profile page)
+                if (screen === 'profile') {
+                  setTimeout(() => refreshGameHistory(), 2000);
+                }
               }, 1000);
             }
           } else if (data.eloChanges.player2 && data.eloChanges.player2.userId === user?.id) {
@@ -8046,6 +8078,10 @@ function GameBoard() {
               setTimeout(() => {
                 console.log('🔄 Refreshing profile after ELO update...');
                 fetchUserProfileSafely(user.id, true);
+                // Refresh game history after database saves (if on profile page)
+                if (screen === 'profile') {
+                  setTimeout(() => refreshGameHistory(), 2000);
+                }
               }, 1000);
             }
           }
@@ -10023,10 +10059,13 @@ function GameBoard() {
                   bestWinStreak = Math.max(bestWinStreak, currentStreak);
                   
                   // Check for highest rated win
+                  // Use elo_before (opponent's ELO at game start) - this is the most accurate
                   const opponentElo = game.player1_id === user?.id ? 
-                    (game.player2_elo_before || game.player2?.elo_rating || 0) :
-                    (game.player1_elo_before || game.player1?.elo_rating || 0);
-                  if (opponentElo > highestRatedWin) {
+                    (game.player2_elo_before ?? (game.player2?.elo_rating ?? 0)) :
+                    (game.player1_elo_before ?? (game.player1?.elo_rating ?? 0));
+                  
+                  // Only count if opponentElo is a valid number > 0
+                  if (opponentElo && opponentElo > 0 && opponentElo > highestRatedWin) {
                     highestRatedWin = opponentElo;
                   }
                 } else {
@@ -10038,6 +10077,8 @@ function GameBoard() {
                   highestRating = playerEloAfter;
                 }
               });
+              
+              console.log(`📊 Stats calculated: highestRatedWin=${highestRatedWin}, highestRating=${highestRating}, bestWinStreak=${bestWinStreak}`);
             }
             
             return (

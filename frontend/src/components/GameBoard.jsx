@@ -1314,62 +1314,6 @@ function GameBoard() {
           setViewingUserProfile(null);
         } else if (profile) {
           setViewingUserProfile(profile);
-          
-          // Increment views counter when viewing another player's profile
-          // Increment every time the profile is viewed, even multiple times in the same session
-          (async () => {
-            try {
-              // Try RPC function first (if it exists in database)
-              const { error: rpcError } = await supabase.rpc('increment_user_views', {
-                user_id: viewingUserId
-              });
-              
-              if (rpcError) {
-                // If RPC doesn't exist, fallback to read-then-update
-                const { data: currentProfile, error: fetchError } = await supabase
-                  .from('users')
-                  .select('views')
-                  .eq('id', viewingUserId)
-                  .maybeSingle();
-                
-                if (!fetchError && currentProfile) {
-                  const newViews = (currentProfile.views || 0) + 1;
-                  const { error: updateError } = await supabase
-                    .from('users')
-                    .update({ views: newViews })
-                    .eq('id', viewingUserId);
-                  
-                  if (updateError) {
-                    console.error('Error incrementing views:', updateError);
-                    if (updateError.code === 'PGRST204') {
-                      console.warn('Views column does not exist in database. Please run the SQL to add it.');
-                    }
-                  } else {
-                    console.log(`✅ Views incremented for user ${viewingUserId}: ${currentProfile.views || 0} → ${newViews}`);
-                  }
-                } else if (fetchError) {
-                  console.error('Error fetching current views:', fetchError);
-                }
-              } else {
-                console.log(`✅ Views incremented for user ${viewingUserId} (using RPC)`);
-              }
-              
-              // Always refresh the profile to get the updated views count (ensures consistency)
-              // This ensures both owner and other players see the same count
-              const { data: updatedProfile, error: refreshError } = await supabase
-                .from('users')
-                .select('*')
-                .eq('id', viewingUserId)
-                .maybeSingle();
-              
-              if (!refreshError && updatedProfile) {
-                setViewingUserProfile(updatedProfile);
-                console.log(`✅ Profile refreshed for user ${viewingUserId}: ${updatedProfile.views || 0} views`);
-              }
-            } catch (err) {
-              console.error('Error incrementing views:', err);
-            }
-          })();
         } else {
           setViewingUserProfile(null);
         }
@@ -1382,7 +1326,83 @@ function GameBoard() {
     fetchViewingUserProfile();
   }, [viewingUserId, supabase, user?.id]);
   
+  // Increment views counter when viewing another player's profile
+  // This runs every time the profile screen is shown for a non-owner profile
+  useEffect(() => {
+    // Only increment if:
+    // 1. We're on the profile screen
+    // 2. viewingUserId is set (viewing someone else's profile)
+    // 3. viewingUserId is not the current user's ID (not viewing own profile)
+    // 4. viewingUserProfile exists (profile data has been loaded)
+    if (screen !== 'profile' || !viewingUserId || viewingUserId === user?.id || !viewingUserProfile || !supabase) {
+      return;
+    }
+
+    // Increment views counter - this runs every time the profile is viewed
+    const incrementViews = async () => {
+      try {
+        console.log(`📊 Incrementing views for user ${viewingUserId}`);
+        
+        // Try RPC function first (if it exists in database)
+        const { error: rpcError } = await supabase.rpc('increment_user_views', {
+          user_id: viewingUserId
+        });
+        
+        if (rpcError) {
+          console.log('RPC not available, using fallback method');
+          // If RPC doesn't exist, fallback to read-then-update
+          const { data: currentProfile, error: fetchError } = await supabase
+            .from('users')
+            .select('views')
+            .eq('id', viewingUserId)
+            .maybeSingle();
+          
+          if (!fetchError && currentProfile) {
+            const newViews = (currentProfile.views || 0) + 1;
+            const { error: updateError } = await supabase
+              .from('users')
+              .update({ views: newViews })
+              .eq('id', viewingUserId);
+            
+            if (updateError) {
+              console.error('Error incrementing views:', updateError);
+              if (updateError.code === 'PGRST204') {
+                console.warn('Views column does not exist in database. Please run the SQL to add it.');
+              }
+            } else {
+              console.log(`✅ Views incremented for user ${viewingUserId}: ${currentProfile.views || 0} → ${newViews}`);
+            }
+          } else if (fetchError) {
+            console.error('Error fetching current views:', fetchError);
+          }
+        } else {
+          console.log(`✅ Views incremented for user ${viewingUserId} (using RPC)`);
+        }
+        
+        // Always refresh the profile to get the updated views count (ensures consistency)
+        // This ensures both owner and other players see the same count
+        const { data: updatedProfile, error: refreshError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', viewingUserId)
+          .maybeSingle();
+        
+        if (!refreshError && updatedProfile) {
+          setViewingUserProfile(updatedProfile);
+          console.log(`✅ Profile refreshed for user ${viewingUserId}: ${updatedProfile.views || 0} views`);
+        }
+      } catch (err) {
+        console.error('Error incrementing views:', err);
+      }
+    };
+
+    // Small delay to ensure profile data is loaded before incrementing
+    const timeoutId = setTimeout(incrementViews, 100);
+    return () => clearTimeout(timeoutId);
+  }, [screen, viewingUserId, user?.id, viewingUserProfile, supabase]);
+  
   // Refresh own profile data (including views) when viewing own profile
+  // This ensures the owner sees the same view count as others
   useEffect(() => {
     if (screen === 'profile' && user?.id && (!viewingUserId || viewingUserId === user.id)) {
       // Refresh own profile to get latest views count
@@ -1397,6 +1417,7 @@ function GameBoard() {
           
           if (!error && profile) {
             setUserProfile(profile);
+            console.log(`✅ Own profile refreshed: ${profile.views || 0} views`);
           }
         } catch (err) {
           console.error('Error refreshing own profile:', err);
@@ -1404,8 +1425,8 @@ function GameBoard() {
       };
       
       refreshOwnProfile();
-      // Refresh every 5 seconds when viewing own profile
-      const interval = setInterval(refreshOwnProfile, 5000);
+      // Refresh every 3 seconds when viewing own profile to keep views count updated
+      const interval = setInterval(refreshOwnProfile, 3000);
       return () => clearInterval(interval);
     }
   }, [screen, user?.id, viewingUserId, supabase]);

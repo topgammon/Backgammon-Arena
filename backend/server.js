@@ -624,7 +624,8 @@ io.on('connection', (socket) => {
       }
       console.log(`✅ Player ${player} accepted double in match ${matchId}, new stakes: ${gameStakes}`);
     } else {
-      // Broadcast double decline (game over) to both players
+      // Double was declined - trigger game over with ELO calculation
+      // First, send double-response to notify both players
       io.to(opponentSocketId).emit('game:double-response', {
         matchId,
         player,
@@ -638,6 +639,144 @@ io.on('connection', (socket) => {
         gameOver
       });
       console.log(`❌ Player ${player} declined double in match ${matchId}`);
+      
+      // Then trigger the game:over handler to calculate ELO and save game
+      // This ensures both players receive ELO changes
+      // Emit game:over event which will be handled by the game:over handler
+      // We need to manually trigger the game over logic here
+      const senderIsPlayer1 = match.player1.socketId === socket.id;
+      const senderPlayerNumber = senderIsPlayer1 ? 1 : 2;
+      
+      // Prevent duplicate processing
+      if (match.gameOverProcessed) {
+        console.log(`⚠️ Game over already processed for match ${matchId}, skipping double decline ELO calculation`);
+        return;
+      }
+      
+      // Mark as processed immediately
+      match.gameOverProcessed = true;
+      match.gameOverType = gameOver.type;
+      match.gameOverWinner = gameOver.winner;
+      match.gameOverLoser = gameOver.loser;
+      
+      // Calculate ELO changes (same logic as in game:over handler)
+      let eloChanges = null;
+      if (match.isRanked && !match.player1.isGuest && !match.player2.isGuest) {
+        const player1ELO = match.player1ELO || 1000;
+        const player2ELO = match.player2ELO || 1000;
+        
+        // Determine results (1 = win, 0 = loss)
+        const player1Result = gameOver.winner === 1 ? 1 : 0;
+        const player2Result = gameOver.winner === 2 ? 1 : 0;
+        
+        // Get game stakes and win multiplier
+        const gameStakes = Math.max(1, match.gameStakes || 1);
+        const winMultiplier = gameOver.multiplier || 1;
+        const totalMultiplier = winMultiplier * gameStakes;
+        
+        // Calculate ELO changes
+        const calculateELOChange = (playerELO, opponentELO, result, multiplier) => {
+          const K = 32;
+          const expectedScore = 1 / (1 + Math.pow(10, (opponentELO - playerELO) / 400));
+          return Math.round(K * (result - expectedScore) * multiplier);
+        };
+        
+        const player1Change = calculateELOChange(player1ELO, player2ELO, player1Result, totalMultiplier);
+        const player2Change = calculateELOChange(player2ELO, player1ELO, player2Result, totalMultiplier);
+        
+        const newPlayer1ELO = player1ELO + player1Change;
+        const newPlayer2ELO = player2ELO + player2Change;
+        
+        eloChanges = {
+          player1: {
+            userId: match.player1.userId,
+            oldELO: player1ELO,
+            newELO: newPlayer1ELO,
+            change: player1Change
+          },
+          player2: {
+            userId: match.player2.userId,
+            oldELO: player2ELO,
+            newELO: newPlayer2ELO,
+            change: player2Change
+          }
+        };
+        
+        match.eloChanges = eloChanges;
+        
+        // Update ELO in database
+        if (supabase) {
+          try {
+            const { error: error1 } = await supabase
+              .from('user_profiles')
+              .update({ elo_rating: newPlayer1ELO })
+              .eq('id', match.player1.userId);
+            
+            const { error: error2 } = await supabase
+              .from('user_profiles')
+              .update({ elo_rating: newPlayer2ELO })
+              .eq('id', match.player2.userId);
+            
+            if (error1) console.error('Error updating player 1 ELO:', error1);
+            if (error2) console.error('Error updating player 2 ELO:', error2);
+          } catch (err) {
+            console.error('Error updating ELO in database:', err);
+          }
+        }
+        
+        // Save game to database
+        if (supabase) {
+          try {
+            const winnerId = gameOver.winner === 1 ? match.player1.userId : match.player2.userId;
+            const { error: gameError } = await supabase
+              .from('games')
+              .insert({
+                player1_id: match.player1.userId,
+                player2_id: match.player2.userId,
+                game_type: 'online',
+                status: 'completed',
+                winner_id: winnerId,
+                elo_stake: gameStakes,
+                win_type: gameOver.winType || 'standard',
+                win_multiplier: winMultiplier,
+                completed_at: new Date().toISOString(),
+                player1_elo_change: player1Change,
+                player2_elo_change: player2Change,
+                player1_elo_before: player1ELO,
+                player2_elo_before: player2ELO
+              });
+            
+            if (gameError) {
+              console.error('Error saving game to database:', gameError);
+            } else {
+              console.log(`✅ Game saved to database for match ${matchId} (double decline)`);
+            }
+          } catch (err) {
+            console.error('Error saving game to database:', err);
+          }
+        }
+      }
+      
+      // Broadcast game over to both players with ELO changes
+      const gameOverData = {
+        matchId,
+        gameOver: {
+          ...gameOver,
+          winType: gameOver.winType || null,
+          multiplier: gameOver.multiplier || 1
+        },
+        eloChanges: eloChanges || null,
+        gameStakes: match.gameStakes || 1
+      };
+      
+      if (match.player1.socketId) {
+        io.to(match.player1.socketId).emit('game:over', gameOverData);
+      }
+      if (match.player2.socketId) {
+        io.to(match.player2.socketId).emit('game:over', gameOverData);
+      }
+      
+      console.log(`📤 Game over (double decline) broadcasted to both players for match ${matchId}`);
     }
   });
   

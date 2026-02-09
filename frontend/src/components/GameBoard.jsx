@@ -7880,8 +7880,12 @@ function GameBoard() {
           setDoubleTimer(12);
         } else {
           // Double was declined - game over
+          // Set game over state immediately for UI responsiveness
+          // The backend will send a game:over event with eloChanges shortly
           setGameOver(data.gameOver);
           setDoubleOffer(null);
+          // Note: eloChanges will be set when game:over event is received from backend
+          console.log('📊 Double declined - waiting for game:over event with ELO changes');
         }
       }
     };

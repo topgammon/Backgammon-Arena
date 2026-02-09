@@ -1344,22 +1344,48 @@ function GameBoard() {
                   if (!fetchError && currentProfile) {
                     const newViews = (currentProfile.views || 0) + 1;
                     console.log(`📊 Attempting to update views: ${currentProfile.views || 0} → ${newViews}`);
-                    const { data: updateData, error: updateError } = await supabase
-                      .from('users')
-                      .update({ views: newViews })
-                      .eq('id', viewingUserId)
-                      .select(); // Select to verify update
                     
-                    if (updateError) {
-                      console.error('❌ Error incrementing views:', updateError);
-                      console.error('Error details:', JSON.stringify(updateError, null, 2));
-                      if (updateError.code === 'PGRST204') {
-                        console.warn('⚠️ Views column does not exist in database. Please run this SQL:');
-                        console.warn('ALTER TABLE public.users ADD COLUMN IF NOT EXISTS views INTEGER DEFAULT 0;');
+                    // Use a direct SQL update via RPC to bypass RLS
+                    // First try to use a database function, if it doesn't exist, we'll create it
+                    const { data: rpcResult, error: rpcUpdateError } = await supabase.rpc('increment_user_views', {
+                      user_id: viewingUserId
+                    }).catch(async () => {
+                      // If RPC doesn't exist, try direct update (might fail due to RLS)
+                      const { data, error } = await supabase
+                        .from('users')
+                        .update({ views: newViews })
+                        .eq('id', viewingUserId)
+                        .select();
+                      return { data, error };
+                    });
+                    
+                    if (rpcUpdateError) {
+                      // If direct update also fails, it's likely RLS blocking it
+                      console.error('❌ Error incrementing views:', rpcUpdateError);
+                      console.error('Error details:', JSON.stringify(rpcUpdateError, null, 2));
+                      if (rpcUpdateError.code === 'PGRST204') {
+                        console.warn('⚠️ Views column or RPC function does not exist. Please run this SQL:');
+                        console.warn(`
+-- Add views column
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS views INTEGER DEFAULT 0;
+
+-- Create function to increment views (bypasses RLS)
+CREATE OR REPLACE FUNCTION public.increment_user_views(user_id UUID)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE public.users 
+  SET views = COALESCE(views, 0) + 1 
+  WHERE id = user_id;
+END;
+$$;
+                        `);
                       }
                       hasIncrementedViewsRef.current = null; // Reset on error to retry
                     } else {
-                      console.log(`✅ Views update successful:`, updateData);
+                      console.log(`✅ Views update successful`);
                       console.log(`✅ Views incremented: ${currentProfile.views || 0} → ${newViews}`);
                       // Wait a moment for database to update, then refresh profile
                       setTimeout(async () => {

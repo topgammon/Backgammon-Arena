@@ -297,6 +297,7 @@ function GameBoard() {
   const [hoveredPointIndex, setHoveredPointIndex] = useState(null); // Index of hovered point on ELO graph
   const [viewingUserId, setViewingUserId] = useState(null); // User ID of profile being viewed (null = own profile)
   const [viewingUserProfile, setViewingUserProfile] = useState(null); // Profile data of user being viewed
+  const viewsIncrementedRef = useRef(new Set()); // Track which profiles have had views incremented to prevent duplicates
   const transitioningToGameRef = useRef(false);
   
   // Track window width for responsive design
@@ -1243,6 +1244,11 @@ function GameBoard() {
 
   // Fetch viewing user's profile when viewingUserId changes
   useEffect(() => {
+    // Scroll to top when viewing another profile
+    if (viewingUserId && viewingUserId !== user?.id) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    
     const fetchViewingUserProfile = async () => {
       if (!supabase || !viewingUserId || viewingUserId === user?.id) {
         setViewingUserProfile(null);
@@ -1263,24 +1269,33 @@ function GameBoard() {
           setViewingUserProfile(profile);
           
           // Increment views counter when viewing another player's profile
-          (async () => {
-            try {
-              const { error: updateError } = await supabase.rpc('increment_user_views', {
-                user_id: viewingUserId
-              });
-              
-              // If RPC doesn't exist, use direct update
-              if (updateError) {
+          // Use a ref to prevent duplicate increments on re-renders
+          if (!viewsIncrementedRef.current.has(viewingUserId)) {
+            viewsIncrementedRef.current.add(viewingUserId);
+            (async () => {
+              try {
                 const currentViews = profile.views || 0;
-                await supabase
+                const { error: updateError } = await supabase
                   .from('users')
                   .update({ views: currentViews + 1 })
                   .eq('id', viewingUserId);
+                
+                if (updateError) {
+                  console.error('Error incrementing views:', updateError);
+                  // If column doesn't exist, that's okay - just log it
+                  if (updateError.code === 'PGRST204') {
+                    console.warn('Views column does not exist in database. Please run the SQL to add it.');
+                  }
+                } else {
+                  console.log(`✅ Views incremented for user ${viewingUserId}: ${currentViews} → ${currentViews + 1}`);
+                  // Update the local state to reflect the new view count
+                  setViewingUserProfile(prev => prev ? { ...prev, views: currentViews + 1 } : null);
+                }
+              } catch (err) {
+                console.error('Error incrementing views:', err);
               }
-            } catch (err) {
-              console.error('Error incrementing views:', err);
-            }
-          })();
+            })();
+          }
         } else {
           setViewingUserProfile(null);
         }
@@ -1291,6 +1306,16 @@ function GameBoard() {
     };
 
     fetchViewingUserProfile();
+    
+    // Clear views increment tracking when switching profiles (after a delay to allow re-visits)
+    return () => {
+      if (viewingUserId) {
+        // Clear after 10 seconds to allow for re-visits within a short time
+        setTimeout(() => {
+          viewsIncrementedRef.current.delete(viewingUserId);
+        }, 10000);
+      }
+    };
   }, [viewingUserId, supabase, user?.id]);
 
   // Fetch game history when on profile page
@@ -10006,14 +10031,118 @@ function GameBoard() {
               })()}
             </div>
             <div>
-              <h1 style={{ 
-                margin: '0 0 8px 0', 
-                fontSize: '32px', 
-                color: '#000',
-                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-              }}>
-                {profileToDisplay?.username || (isViewingOwnProfile ? (user?.user_metadata?.username || user?.email?.split('@')[0] || 'User') : 'User')}
-              </h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                <h1 style={{ 
+                  margin: '0 0 8px 0', 
+                  fontSize: '32px', 
+                  color: '#000',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                }}>
+                  {profileToDisplay?.username || (isViewingOwnProfile ? (user?.user_metadata?.username || user?.email?.split('@')[0] || 'User') : 'User')}
+                </h1>
+                
+                {/* Action Buttons - only shown when viewing another player's profile */}
+                {!isViewingOwnProfile && profileToDisplay && (
+                  <div style={{
+                    display: 'flex',
+                    gap: '8px',
+                    flexWrap: 'wrap',
+                    alignItems: 'center'
+                  }}>
+                    {/* Status Display */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      marginRight: '8px'
+                    }}>
+                      <div style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        background: '#6c757d', // Default to offline (gray)
+                        // TODO: Update based on actual online status
+                      }}></div>
+                      <span style={{
+                        fontSize: '12px',
+                        color: '#666',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                      }}>
+                        Offline
+                      </span>
+                    </div>
+                    
+                    <button
+                      onClick={() => {
+                        // TODO: Implement add friend functionality
+                        console.log('Add friend clicked for:', profileToDisplay.username);
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        background: '#28a745',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.target.style.background = '#218838'}
+                      onMouseLeave={(e) => e.target.style.background = '#28a745'}
+                    >
+                      Add Friend
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        // TODO: Implement message functionality
+                        console.log('Message clicked for:', profileToDisplay.username);
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        background: '#ff751f',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.target.style.background = '#e6640f'}
+                      onMouseLeave={(e) => e.target.style.background = '#ff751f'}
+                    >
+                      Message
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        // TODO: Implement challenge functionality
+                        console.log('Challenge clicked for:', profileToDisplay.username);
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        background: '#007bff',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.target.style.background = '#0056b3'}
+                      onMouseLeave={(e) => e.target.style.background = '#007bff'}
+                    >
+                      Challenge
+                    </button>
+                  </div>
+                )}
+              </div>
               {isViewingOwnProfile && (
                 <p style={{ 
                   margin: '0 0 8px 0', 
@@ -10153,244 +10282,6 @@ function GameBoard() {
               )}
             </div>
           </div>
-          
-          {/* Action Buttons - only shown when viewing another player's profile */}
-          {!isViewingOwnProfile && profileToDisplay && (
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px',
-              marginBottom: '32px',
-              padding: '20px',
-              background: '#fff',
-              borderRadius: '12px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}>
-              {/* Status Display */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                marginBottom: '8px'
-              }}>
-                <div style={{
-                  width: '10px',
-                  height: '10px',
-                  borderRadius: '50%',
-                  background: '#6c757d', // Default to offline (gray)
-                  // TODO: Update based on actual online status
-                }}></div>
-                <span style={{
-                  fontSize: '14px',
-                  color: '#666',
-                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-                }}>
-                  Offline
-                </span>
-              </div>
-              
-              {/* Action Buttons */}
-              <div style={{
-                display: 'flex',
-                gap: '12px',
-                flexWrap: 'wrap'
-              }}>
-                <button
-                  onClick={() => {
-                    // TODO: Implement add friend functionality
-                    console.log('Add friend clicked for:', profileToDisplay.username);
-                  }}
-                  style={{
-                    flex: 1,
-                    minWidth: '120px',
-                    padding: '12px 24px',
-                    background: '#28a745',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '16px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                    transition: 'background 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.target.style.background = '#218838'}
-                  onMouseLeave={(e) => e.target.style.background = '#28a745'}
-                >
-                  Add Friend
-                </button>
-                
-                <button
-                  onClick={() => {
-                    // TODO: Implement message functionality
-                    console.log('Message clicked for:', profileToDisplay.username);
-                  }}
-                  style={{
-                    flex: 1,
-                    minWidth: '120px',
-                    padding: '12px 24px',
-                    background: '#ff751f',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '16px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                    transition: 'background 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.target.style.background = '#e6640f'}
-                  onMouseLeave={(e) => e.target.style.background = '#ff751f'}
-                >
-                  Message
-                </button>
-                
-                <button
-                  onClick={() => {
-                    // TODO: Implement challenge functionality
-                    console.log('Challenge clicked for:', profileToDisplay.username);
-                  }}
-                  style={{
-                    flex: 1,
-                    minWidth: '120px',
-                    padding: '12px 24px',
-                    background: '#007bff',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '16px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                    transition: 'background 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.target.style.background = '#0056b3'}
-                  onMouseLeave={(e) => e.target.style.background = '#007bff'}
-                >
-                  Challenge
-                </button>
-              </div>
-            </div>
-          )}
-          
-          {/* Action Buttons - only shown when viewing another player's profile */}
-          {!isViewingOwnProfile && profileToDisplay && (
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px',
-              marginBottom: '32px',
-              padding: '20px',
-              background: '#fff',
-              borderRadius: '12px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}>
-              {/* Status Display */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                marginBottom: '8px'
-              }}>
-                <div style={{
-                  width: '10px',
-                  height: '10px',
-                  borderRadius: '50%',
-                  background: '#6c757d', // Default to offline (gray)
-                  // TODO: Update based on actual online status
-                }}></div>
-                <span style={{
-                  fontSize: '14px',
-                  color: '#666',
-                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-                }}>
-                  Offline
-                </span>
-              </div>
-              
-              {/* Action Buttons */}
-              <div style={{
-                display: 'flex',
-                gap: '12px',
-                flexWrap: 'wrap'
-              }}>
-                <button
-                  onClick={() => {
-                    // TODO: Implement add friend functionality
-                    console.log('Add friend clicked for:', profileToDisplay.username);
-                  }}
-                  style={{
-                    flex: 1,
-                    minWidth: '120px',
-                    padding: '12px 24px',
-                    background: '#28a745',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '16px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                    transition: 'background 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.target.style.background = '#218838'}
-                  onMouseLeave={(e) => e.target.style.background = '#28a745'}
-                >
-                  Add Friend
-                </button>
-                
-                <button
-                  onClick={() => {
-                    // TODO: Implement message functionality
-                    console.log('Message clicked for:', profileToDisplay.username);
-                  }}
-                  style={{
-                    flex: 1,
-                    minWidth: '120px',
-                    padding: '12px 24px',
-                    background: '#ff751f',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '16px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                    transition: 'background 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.target.style.background = '#e6640f'}
-                  onMouseLeave={(e) => e.target.style.background = '#ff751f'}
-                >
-                  Message
-                </button>
-                
-                <button
-                  onClick={() => {
-                    // TODO: Implement challenge functionality
-                    console.log('Challenge clicked for:', profileToDisplay.username);
-                  }}
-                  style={{
-                    flex: 1,
-                    minWidth: '120px',
-                    padding: '12px 24px',
-                    background: '#007bff',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '16px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                    transition: 'background 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.target.style.background = '#0056b3'}
-                  onMouseLeave={(e) => e.target.style.background = '#007bff'}
-                >
-                  Challenge
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* Profile Tabs */}
           <div style={{
@@ -11072,6 +10963,8 @@ function GameBoard() {
                                 onClick={() => {
                                   if (opponentId && opponentId !== user?.id) {
                                     setViewingUserId(opponentId);
+                                    // Scroll to top when viewing another profile
+                                    window.scrollTo({ top: 0, behavior: 'smooth' });
                                     if (supabase) {
                                       setTimeout(() => refreshGameHistory(opponentId), 100);
                                     }

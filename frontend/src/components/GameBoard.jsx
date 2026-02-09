@@ -9750,6 +9750,67 @@ function GameBoard() {
     const isViewingOwnProfile = !viewingUserId || viewingUserId === user.id;
     const profileToDisplay = isViewingOwnProfile ? userProfile : viewingUserProfile;
     const profileUserId = isViewingOwnProfile ? user.id : viewingUserId;
+    
+    // Show loading state if viewing another profile but data hasn't loaded yet
+    if (!isViewingOwnProfile && viewingUserId && !viewingUserProfile) {
+      return (
+        <div style={{ textAlign: 'center', marginTop: 30, paddingBottom: 40, background: '#a8a7a8', minHeight: '100vh' }}>
+          <div style={{
+            background: '#f9f9f9',
+            borderRadius: '10px',
+            padding: '40px',
+            margin: '20px auto',
+            maxWidth: 1200,
+            width: '100%',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '18px', color: '#666', marginTop: '40px' }}>Loading profile...</div>
+          </div>
+        </div>
+      );
+    }
+    
+    // If viewing another profile but profile data is missing, show error
+    if (!isViewingOwnProfile && viewingUserId && viewingUserProfile === null) {
+      return (
+        <div style={{ textAlign: 'center', marginTop: 30, paddingBottom: 40, background: '#a8a7a8', minHeight: '100vh' }}>
+          <div style={{
+            background: '#f9f9f9',
+            borderRadius: '10px',
+            padding: '40px',
+            margin: '20px auto',
+            maxWidth: 1200,
+            width: '100%',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '18px', color: '#dc3545', marginTop: '40px' }}>Profile not found</div>
+            <button
+              onClick={() => {
+                setViewingUserId(null);
+                setScreen('profile');
+              }}
+              style={{
+                backgroundColor: '#6c757d',
+                color: 'white',
+                padding: '12px 24px',
+                margin: '20px 10px 10px',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '18px',
+                cursor: 'pointer',
+                minWidth: '162px'
+              }}
+            >
+              Back to My Profile
+            </button>
+          </div>
+        </div>
+      );
+    }
 
     const handleSignOut = async () => {
       try {
@@ -10191,14 +10252,14 @@ function GameBoard() {
                         width: '8px',
                         height: '8px',
                         borderRadius: '50%',
-                        background: onlineUsers.has(profileToDisplay.id) ? '#28a745' : '#6c757d', // Green if online, gray if offline
+                        background: profileToDisplay?.id && onlineUsers.has(profileToDisplay.id) ? '#28a745' : '#6c757d', // Green if online, gray if offline
                       }}></div>
                       <span style={{
                         fontSize: '12px',
                         color: '#666',
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
                       }}>
-                        {onlineUsers.has(profileToDisplay.id) ? 'Online' : 'Offline'}
+                        {profileToDisplay?.id && onlineUsers.has(profileToDisplay.id) ? 'Online' : 'Offline'}
                       </span>
                     </div>
                     
@@ -10419,7 +10480,7 @@ function GameBoard() {
                   fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
                 }}>
                   <span style={{ fontSize: '16px' }}>👁️</span>
-                  <span>{profileToDisplay.views || 0} views</span>
+                  <span>{profileToDisplay?.views || 0} views</span>
                 </div>
               )}
             </div>

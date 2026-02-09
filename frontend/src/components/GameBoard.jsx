@@ -7984,9 +7984,13 @@ function GameBoard() {
         // Store ELO changes if provided (for ranked matches)
         // Always set eloChanges if provided, even if null (to clear previous values)
         console.log('📊 ELO changes in game over data:', data.eloChanges);
+        console.log('📊 Matchmaking type:', matchmakingType);
+        if (data.eloChanges) {
+          console.log('📊 ELO changes received - Player 1:', data.eloChanges.player1);
+          console.log('📊 ELO changes received - Player 2:', data.eloChanges.player2);
+        }
         setEloChanges(data.eloChanges || null);
         if (data.eloChanges) {
-          console.log('📊 ELO changes received:', data.eloChanges);
           // Update user profile if this player's ELO changed - refresh from database to get latest
           if (data.eloChanges.player1 && data.eloChanges.player1.userId === user?.id) {
             // Update local state immediately for UI responsiveness
@@ -9060,26 +9064,32 @@ function GameBoard() {
                   <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>
                     {playerNumber === 1 ? (userProfile?.username || (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`)) : (opponentName || 'Opponent')}
                   </div>
-                  {/* ELO Rating and Change for ranked matches */}
-                  {matchmakingType === 'ranked' && eloChanges && eloChanges.player1 && eloChanges.player1.oldELO !== undefined && (
+                  {/* ELO Rating and Change for ranked matches - always show if available */}
+                  {matchmakingType === 'ranked' && eloChanges && eloChanges.player1 && (
                     <div style={{ fontSize: 14, color: '#666', marginTop: 4, textAlign: 'center' }}>
-                      <div>⭐ {eloChanges.player1.oldELO}</div>
-                      <div style={{ 
-                        color: eloChanges.player1.change > 0 ? '#28a745' : eloChanges.player1.change < 0 ? '#dc3545' : '#666',
-                        fontWeight: 'bold',
-                        fontSize: 16,
-                        marginTop: 2
-                      }}>
-                        {eloChanges.player1.change > 0 ? '+' : ''}{eloChanges.player1.change}
-                      </div>
-                      <div style={{ 
-                        fontSize: 16,
-                        fontWeight: 'bold',
-                        color: '#333',
-                        marginTop: 4
-                      }}>
-                        {eloChanges.player1.newELO}
-                      </div>
+                      {eloChanges.player1.oldELO !== undefined && (
+                        <>
+                          <div>⭐ {eloChanges.player1.oldELO}</div>
+                          <div style={{ 
+                            color: eloChanges.player1.change > 0 ? '#28a745' : eloChanges.player1.change < 0 ? '#dc3545' : '#666',
+                            fontWeight: 'bold',
+                            fontSize: 16,
+                            marginTop: 2
+                          }}>
+                            {eloChanges.player1.change > 0 ? '+' : ''}{eloChanges.player1.change}
+                          </div>
+                          {eloChanges.player1.newELO !== undefined && (
+                            <div style={{ 
+                              fontSize: 16,
+                              fontWeight: 'bold',
+                              color: '#333',
+                              marginTop: 4
+                            }}>
+                              {eloChanges.player1.newELO}
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
                   {gameOver.winner === 1 && (
@@ -9126,26 +9136,32 @@ function GameBoard() {
                   <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>
                     {playerNumber === 2 ? (userProfile?.username || (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`)) : (opponentName || 'Opponent')}
                   </div>
-                  {/* ELO Rating and Change for ranked matches */}
-                  {matchmakingType === 'ranked' && eloChanges && eloChanges.player2 && eloChanges.player2.oldELO !== undefined && (
+                  {/* ELO Rating and Change for ranked matches - always show if available */}
+                  {matchmakingType === 'ranked' && eloChanges && eloChanges.player2 && (
                     <div style={{ fontSize: 14, color: '#666', marginTop: 4, textAlign: 'center' }}>
-                      <div>⭐ {eloChanges.player2.oldELO}</div>
-                      <div style={{ 
-                        color: eloChanges.player2.change > 0 ? '#28a745' : eloChanges.player2.change < 0 ? '#dc3545' : '#666',
-                        fontWeight: 'bold',
-                        fontSize: 16,
-                        marginTop: 2
-                      }}>
-                        {eloChanges.player2.change > 0 ? '+' : ''}{eloChanges.player2.change}
-                      </div>
-                      <div style={{ 
-                        fontSize: 16,
-                        fontWeight: 'bold',
-                        color: '#333',
-                        marginTop: 4
-                      }}>
-                        {eloChanges.player2.newELO}
-                      </div>
+                      {eloChanges.player2.oldELO !== undefined && (
+                        <>
+                          <div>⭐ {eloChanges.player2.oldELO}</div>
+                          <div style={{ 
+                            color: eloChanges.player2.change > 0 ? '#28a745' : eloChanges.player2.change < 0 ? '#dc3545' : '#666',
+                            fontWeight: 'bold',
+                            fontSize: 16,
+                            marginTop: 2
+                          }}>
+                            {eloChanges.player2.change > 0 ? '+' : ''}{eloChanges.player2.change}
+                          </div>
+                          {eloChanges.player2.newELO !== undefined && (
+                            <div style={{ 
+                              fontSize: 16,
+                              fontWeight: 'bold',
+                              color: '#333',
+                              marginTop: 4
+                            }}>
+                              {eloChanges.player2.newELO}
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
                   {gameOver.winner === 2 && (

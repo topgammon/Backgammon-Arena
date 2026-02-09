@@ -1454,6 +1454,38 @@ io.on('connection', (socket) => {
     
     console.log(`💬 Chat message in match ${matchId} from Player ${player}${username ? ` (${username})` : ''}`);
   });
+  
+  // Message handler for profile messaging
+  socket.on('message:send', async (data) => {
+    const { conversation_id, sender_id, recipient_id, content } = data;
+    
+    try {
+      // Verify the sender is the authenticated user
+      if (socket.userId !== sender_id) {
+        console.error('❌ Unauthorized message send attempt');
+        return;
+      }
+      
+      // Find recipient socket and notify them
+      const recipientSocket = Array.from(io.sockets.sockets.values()).find(
+        s => s.userId === recipient_id
+      );
+      
+      if (recipientSocket) {
+        recipientSocket.emit('message:new', {
+          conversation_id,
+          sender_id,
+          recipient_id,
+          content
+        });
+        console.log(`📨 Message sent from ${sender_id} to ${recipient_id}`);
+      } else {
+        console.log(`📨 Message saved but recipient ${recipient_id} is offline`);
+      }
+    } catch (error) {
+      console.error('❌ Error handling message:send:', error);
+    }
+  });
 });
 
 const PORT = process.env.PORT || 3001;

@@ -296,6 +296,15 @@ function GameBoard() {
   const [friendsLoading, setFriendsLoading] = useState(false);
   const [isFriendWithViewedProfile, setIsFriendWithViewedProfile] = useState(false); // Track if current user is friends with viewed profile
   const [hasPendingRequestWithViewedProfile, setHasPendingRequestWithViewedProfile] = useState(false); // Track if friend request was sent but not accepted
+  const [conversations, setConversations] = useState([]); // List of conversations
+  const [selectedConversation, setSelectedConversation] = useState(null); // Currently selected conversation
+  const [conversationMessages, setConversationMessages] = useState([]); // Messages for selected conversation
+  const [messageInput, setMessageInput] = useState(''); // Input for sending messages
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0); // Total unread messages count
+  const [showMessageOverlay, setShowMessageOverlay] = useState(false); // Show message overlay on profile
+  const [messageOverlayText, setMessageOverlayText] = useState(''); // Text for message overlay
+  const [conversationsLoading, setConversationsLoading] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
   const [highestRatingLeaderboard, setHighestRatingLeaderboard] = useState([]); // Top 10 users by highest rating
   const [mostWinsLeaderboard, setMostWinsLeaderboard] = useState([]); // Top 10 users by most wins
   const [globalRank, setGlobalRank] = useState(null); // User's global rank
@@ -1271,6 +1280,62 @@ function GameBoard() {
       });
     });
     
+    // Listen for new messages
+    socket.on('message:new', async (data) => {
+      if (data.recipient_id === user.id) {
+        // Refresh conversations and unread count
+        if (screen === 'profile' && (!viewingUserId || viewingUserId === user.id)) {
+          const { data: convsData } = await supabase
+            .from('conversations')
+            .select(`
+              *,
+              user1:users!conversations_user1_id_fkey(id, username, avatar, google_avatar_url, country),
+              user2:users!conversations_user2_id_fkey(id, username, avatar, google_avatar_url, country)
+            `)
+            .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+            .order('last_message_at', { ascending: false });
+          
+          if (convsData) {
+            const convsList = convsData.map(conv => {
+              const otherUser = conv.user1_id === user.id ? conv.user2 : conv.user1;
+              return {
+                ...conv,
+                otherUser: otherUser
+              };
+            });
+            setConversations(convsList);
+          }
+          
+          // Update unread count
+          const { data: unreadData } = await supabase
+            .from('messages')
+            .select('id')
+            .eq('recipient_id', user.id)
+            .eq('is_read', false);
+          
+          if (unreadData !== null) {
+            setUnreadMessageCount(unreadData.length || 0);
+          }
+          
+          // If the conversation is currently open, refresh messages
+          if (selectedConversation && selectedConversation.id === data.conversation_id) {
+            const { data: messagesData } = await supabase
+              .from('messages')
+              .select(`
+                *,
+                sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
+              `)
+              .eq('conversation_id', selectedConversation.id)
+              .order('created_at', { ascending: true });
+            
+            if (messagesData) {
+              setConversationMessages(messagesData);
+            }
+          }
+        }
+      }
+    });
+    
     // Also fetch online users list periodically
     const fetchOnlineUsers = async () => {
       try {
@@ -1566,6 +1631,120 @@ $$;
       setFriends([]);
     }
   }, [screen, user?.id, viewingUserId, supabase]);
+
+  // Fetch conversations and unread count when viewing own profile
+  useEffect(() => {
+    if (screen === 'profile' && supabase && user?.id && (!viewingUserId || viewingUserId === user.id)) {
+      const fetchConversations = async () => {
+        setConversationsLoading(true);
+        
+        try {
+          // Fetch conversations where user is participant
+          const { data: convsData, error: convsError } = await supabase
+            .from('conversations')
+            .select(`
+              *,
+              user1:users!conversations_user1_id_fkey(id, username, avatar, google_avatar_url, country),
+              user2:users!conversations_user2_id_fkey(id, username, avatar, google_avatar_url, country)
+            `)
+            .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+            .order('last_message_at', { ascending: false });
+          
+          if (convsError) {
+            console.error('Error fetching conversations:', convsError);
+            setConversations([]);
+          } else {
+            // Transform conversations to include other user info
+            const convsList = (convsData || []).map(conv => {
+              const otherUser = conv.user1_id === user.id ? conv.user2 : conv.user1;
+              return {
+                ...conv,
+                otherUser: otherUser
+              };
+            });
+            setConversations(convsList);
+          }
+          
+          // Fetch unread message count
+          const { data: unreadData, error: unreadError } = await supabase
+            .from('messages')
+            .select('id', { count: 'exact', head: true })
+            .eq('recipient_id', user.id)
+            .eq('is_read', false);
+          
+          if (!unreadError && unreadData !== null) {
+            setUnreadMessageCount(unreadData.length || 0);
+          }
+        } catch (err) {
+          console.error('Error fetching conversations:', err);
+          setConversations([]);
+        } finally {
+          setConversationsLoading(false);
+        }
+      };
+      
+      fetchConversations();
+    } else {
+      setConversations([]);
+    }
+  }, [screen, user?.id, viewingUserId, supabase]);
+
+  // Fetch messages for selected conversation
+  useEffect(() => {
+    if (selectedConversation && supabase && user?.id) {
+      const fetchMessages = async () => {
+        setMessagesLoading(true);
+        
+        try {
+          const { data: messagesData, error: messagesError } = await supabase
+            .from('messages')
+            .select(`
+              *,
+              sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
+            `)
+            .eq('conversation_id', selectedConversation.id)
+            .order('created_at', { ascending: true });
+          
+          if (messagesError) {
+            console.error('Error fetching messages:', messagesError);
+            setConversationMessages([]);
+          } else {
+            setConversationMessages(messagesData || []);
+            
+            // Mark messages as read
+            const unreadMessages = (messagesData || []).filter(m => !m.is_read && m.recipient_id === user.id);
+            if (unreadMessages.length > 0) {
+              const messageIds = unreadMessages.map(m => m.id);
+              await supabase
+                .from('messages')
+                .update({ is_read: true })
+                .in('id', messageIds);
+              
+              // Refresh unread count
+              const { data: unreadData } = await supabase
+                .from('messages')
+                .select('id')
+                .eq('recipient_id', user.id)
+                .eq('is_read', false);
+              
+              if (unreadData !== null) {
+                setUnreadMessageCount(unreadData.length || 0);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching messages:', err);
+          setConversationMessages([]);
+        } finally {
+          setMessagesLoading(false);
+        }
+      };
+      
+      fetchMessages();
+    } else {
+      setConversationMessages([]);
+    }
+  }, [selectedConversation, supabase, user?.id]);
 
   // Fetch game history when on profile page
   useEffect(() => {
@@ -9057,6 +9236,84 @@ $$;
     const isWideScreen = windowWidth > 1200;
     const commonEmojis = ['😊', '😂', '😎', '👍', '👎', '❤️', '🎉', '🔥', '💪', '😢', '😮', '🤔', '👏', '🎯', '🏆', '😴'];
     
+  // Handle sending message from chat view
+  const handleSendMessage = async () => {
+    if (!supabase || !user?.id || !selectedConversation || !messageInput.trim()) return;
+    
+    try {
+      const { error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: selectedConversation.id,
+          sender_id: user.id,
+          recipient_id: selectedConversation.otherUser.id,
+          content: messageInput.trim()
+        });
+      
+      if (messageError) {
+        console.error('Error sending message:', messageError);
+        alert('Failed to send message. Please try again.');
+      } else {
+        // Update conversation last_message_at
+        await supabase
+          .from('conversations')
+          .update({ last_message_at: new Date().toISOString() })
+          .eq('id', selectedConversation.id);
+        
+        // Emit socket event to notify recipient
+        if (socketRef.current) {
+          socketRef.current.emit('message:send', {
+            conversation_id: selectedConversation.id,
+            sender_id: user.id,
+            recipient_id: selectedConversation.otherUser.id,
+            content: messageInput.trim()
+          });
+        }
+        
+        // Refresh messages
+        const { data: messagesData } = await supabase
+          .from('messages')
+          .select(`
+            *,
+            sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
+          `)
+          .eq('conversation_id', selectedConversation.id)
+          .order('created_at', { ascending: true });
+        
+        if (messagesData) {
+          setConversationMessages(messagesData);
+        }
+        
+        // Refresh conversations list
+        const { data: convsData } = await supabase
+          .from('conversations')
+          .select(`
+            *,
+            user1:users!conversations_user1_id_fkey(id, username, avatar, google_avatar_url, country),
+            user2:users!conversations_user2_id_fkey(id, username, avatar, google_avatar_url, country)
+          `)
+          .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+          .order('last_message_at', { ascending: false });
+        
+        if (convsData) {
+          const convsList = convsData.map(conv => {
+            const otherUser = conv.user1_id === user.id ? conv.user2 : conv.user1;
+            return {
+              ...conv,
+              otherUser: otherUser
+            };
+          });
+          setConversations(convsList);
+        }
+        
+        setMessageInput('');
+      }
+    } catch (err) {
+      console.error('Error sending message:', err);
+      alert('Failed to send message. Please try again.');
+    }
+  };
+
     const handleEmojiClick = (emoji) => {
       setChatInput(prev => prev + emoji);
       setShowEmojiPicker(false);
@@ -10622,8 +10879,8 @@ $$;
                     
                     <button
                       onClick={() => {
-                        // TODO: Implement message functionality
-                        console.log('Message clicked for:', profileToDisplay.username);
+                        setShowMessageOverlay(true);
+                        setMessageOverlayText('');
                       }}
                       style={{
                         padding: '8px 16px',
@@ -10896,10 +11153,31 @@ $$;
                     fontWeight: profileTab === 'messages' ? 'bold' : 'normal',
                     fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
                     transition: 'all 0.2s',
-                    marginBottom: '-2px'
+                    marginBottom: '-2px',
+                    position: 'relative'
                   }}
                 >
                   Messages
+                  {unreadMessageCount > 0 && (
+                    <span style={{
+                      position: 'absolute',
+                      top: '8px',
+                      right: '8px',
+                      background: '#ff751f',
+                      color: '#fff',
+                      borderRadius: '50%',
+                      width: '20px',
+                      height: '20px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                    }}>
+                      {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => setProfileTab('settings')}
@@ -12053,6 +12331,203 @@ $$;
             </div>
           )}
         </div>
+
+        {/* Message Overlay */}
+        {showMessageOverlay && profileToDisplay && (
+          <div 
+            style={{ 
+              position: 'fixed', 
+              top: 0, 
+              left: 0, 
+              width: '100vw', 
+              height: '100vh', 
+              background: 'rgba(0, 0, 0, 0.5)', 
+              zIndex: 2000, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              backdropFilter: 'blur(4px)'
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowMessageOverlay(false);
+                setMessageOverlayText('');
+              }
+            }}
+          >
+            <div 
+              style={{ 
+                background: '#fff', 
+                borderRadius: '16px', 
+                padding: '32px', 
+                minWidth: '400px', 
+                maxWidth: '500px',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+                position: 'relative'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 style={{
+                margin: '0 0 20px 0',
+                fontSize: '20px',
+                fontWeight: 'bold',
+                color: '#333',
+                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+              }}>
+                Send Message to {profileToDisplay.username || 'User'}
+              </h3>
+              <textarea
+                value={messageOverlayText}
+                onChange={(e) => setMessageOverlayText(e.target.value)}
+                placeholder="Type your message..."
+                style={{
+                  width: '100%',
+                  minHeight: '120px',
+                  padding: '12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                  resize: 'vertical',
+                  marginBottom: '16px'
+                }}
+              />
+              <div style={{
+                display: 'flex',
+                gap: '12px',
+                justifyContent: 'flex-end'
+              }}>
+                <button
+                  onClick={() => {
+                    setShowMessageOverlay(false);
+                    setMessageOverlayText('');
+                  }}
+                  style={{
+                    padding: '10px 20px',
+                    background: '#6c757d',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.target.style.background = '#5a6268'}
+                  onMouseLeave={(e) => e.target.style.background = '#6c757d'}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!supabase || !user?.id || !profileToDisplay?.id || !messageOverlayText.trim()) return;
+                    
+                    try {
+                      // Find or create conversation
+                      const user1Id = user.id < profileToDisplay.id ? user.id : profileToDisplay.id;
+                      const user2Id = user.id < profileToDisplay.id ? profileToDisplay.id : user.id;
+                      
+                      let { data: existingConv, error: convCheckError } = await supabase
+                        .from('conversations')
+                        .select('*')
+                        .eq('user1_id', user1Id)
+                        .eq('user2_id', user2Id)
+                        .maybeSingle();
+                      
+                      let conversationId;
+                      
+                      if (existingConv) {
+                        conversationId = existingConv.id;
+                      } else {
+                        // Create new conversation
+                        const { data: newConv, error: createError } = await supabase
+                          .from('conversations')
+                          .insert({
+                            user1_id: user1Id,
+                            user2_id: user2Id
+                          })
+                          .select()
+                          .single();
+                        
+                        if (createError) {
+                          console.error('Error creating conversation:', createError);
+                          alert('Failed to create conversation. Please try again.');
+                          return;
+                        }
+                        
+                        conversationId = newConv.id;
+                      }
+                      
+                      // Send message
+                      const { error: messageError } = await supabase
+                        .from('messages')
+                        .insert({
+                          conversation_id: conversationId,
+                          sender_id: user.id,
+                          recipient_id: profileToDisplay.id,
+                          content: messageOverlayText.trim()
+                        });
+                      
+                      if (messageError) {
+                        console.error('Error sending message:', messageError);
+                        alert('Failed to send message. Please try again.');
+                      } else {
+                        // Update conversation last_message_at
+                        await supabase
+                          .from('conversations')
+                          .update({ last_message_at: new Date().toISOString() })
+                          .eq('id', conversationId);
+                        
+                        // Emit socket event to notify recipient
+                        if (socketRef.current) {
+                          socketRef.current.emit('message:send', {
+                            conversation_id: conversationId,
+                            sender_id: user.id,
+                            recipient_id: profileToDisplay.id,
+                            content: messageOverlayText.trim()
+                          });
+                        }
+                        
+                        setShowMessageOverlay(false);
+                        setMessageOverlayText('');
+                        alert('Message sent!');
+                      }
+                    } catch (err) {
+                      console.error('Error sending message:', err);
+                      alert('Failed to send message. Please try again.');
+                    }
+                  }}
+                  disabled={!messageOverlayText.trim()}
+                  style={{
+                    padding: '10px 20px',
+                    background: messageOverlayText.trim() ? '#ff751f' : '#ccc',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: messageOverlayText.trim() ? 'pointer' : 'not-allowed',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (messageOverlayText.trim()) {
+                      e.target.style.background = '#e6640f';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (messageOverlayText.trim()) {
+                      e.target.style.background = '#ff751f';
+                    }
+                  }}
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Avatar Selector Modal */}
         {showAvatarSelector && (

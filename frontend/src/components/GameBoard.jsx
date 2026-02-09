@@ -298,7 +298,6 @@ function GameBoard() {
   const [hoveredPointIndex, setHoveredPointIndex] = useState(null); // Index of hovered point on ELO graph
   const [viewingUserId, setViewingUserId] = useState(null); // User ID of profile being viewed (null = own profile)
   const [viewingUserProfile, setViewingUserProfile] = useState(null); // Profile data of user being viewed
-  const viewsIncrementedRef = useRef(new Set()); // Track which profiles have had views incremented to prevent duplicates
   const transitioningToGameRef = useRef(false);
   
   // Track window width for responsive design
@@ -1243,6 +1242,29 @@ function GameBoard() {
     }
   };
 
+  // Fetch online users list on mount and periodically
+  useEffect(() => {
+    const fetchOnlineUsers = async () => {
+      try {
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+        const response = await fetch(`${backendUrl}/api/online-users`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.onlineUsers) {
+            setOnlineUsers(new Set(data.onlineUsers));
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching online users:', err);
+      }
+    };
+    
+    fetchOnlineUsers();
+    // Refresh online users list every 10 seconds
+    const interval = setInterval(fetchOnlineUsers, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Fetch viewing user's profile when viewingUserId changes
   useEffect(() => {
     // Scroll to top when viewing another profile
@@ -1270,63 +1292,60 @@ function GameBoard() {
           setViewingUserProfile(profile);
           
           // Increment views counter when viewing another player's profile
-          // Use a ref to prevent duplicate increments on re-renders
-          if (!viewsIncrementedRef.current.has(viewingUserId)) {
-            viewsIncrementedRef.current.add(viewingUserId);
-            (async () => {
-              try {
-                // Use RPC function for atomic increment, or fallback to direct SQL increment
-                // This ensures the counter never goes down and handles concurrent views properly
-                const { data: rpcData, error: rpcError } = await supabase.rpc('increment_user_views', {
-                  user_id: viewingUserId
-                });
+          // Increment every time the profile is viewed, even multiple times in the same session
+          (async () => {
+            try {
+              // Use RPC function for atomic increment, or fallback to direct SQL increment
+              // This ensures the counter never goes down and handles concurrent views properly
+              const { data: rpcData, error: rpcError } = await supabase.rpc('increment_user_views', {
+                user_id: viewingUserId
+              });
+              
+              if (rpcError) {
+                // If RPC doesn't exist, fallback to read-then-update
+                // This ensures we always increment correctly
+                const { data: currentProfile, error: fetchError } = await supabase
+                  .from('users')
+                  .select('views')
+                  .eq('id', viewingUserId)
+                  .maybeSingle();
                 
-                if (rpcError) {
-                  // If RPC doesn't exist, fallback to read-then-update
-                  // This ensures we always increment correctly
-                  const { data: currentProfile, error: fetchError } = await supabase
+                if (!fetchError && currentProfile) {
+                  const newViews = (currentProfile.views || 0) + 1;
+                  const { error: updateError } = await supabase
                     .from('users')
-                    .select('views')
-                    .eq('id', viewingUserId)
-                    .maybeSingle();
+                    .update({ views: newViews })
+                    .eq('id', viewingUserId);
                   
-                  if (!fetchError && currentProfile) {
-                    const newViews = (currentProfile.views || 0) + 1;
-                    const { error: updateError } = await supabase
-                      .from('users')
-                      .update({ views: newViews })
-                      .eq('id', viewingUserId);
-                    
-                    if (updateError) {
-                      console.error('Error incrementing views:', updateError);
-                      if (updateError.code === 'PGRST204') {
-                        console.warn('Views column does not exist in database. Please run the SQL to add it.');
-                      }
-                    } else {
-                      console.log(`✅ Views incremented for user ${viewingUserId}: ${currentProfile.views || 0} → ${newViews}`);
-                      setViewingUserProfile(prev => prev ? { ...prev, views: newViews } : null);
+                  if (updateError) {
+                    console.error('Error incrementing views:', updateError);
+                    if (updateError.code === 'PGRST204') {
+                      console.warn('Views column does not exist in database. Please run the SQL to add it.');
                     }
-                  } else if (fetchError) {
-                    console.error('Error fetching current views:', fetchError);
+                  } else {
+                    console.log(`✅ Views incremented for user ${viewingUserId}: ${currentProfile.views || 0} → ${newViews}`);
+                    setViewingUserProfile(prev => prev ? { ...prev, views: newViews } : null);
                   }
-                } else {
-                  // Success with RPC
-                  console.log(`✅ Views incremented for user ${viewingUserId} (using RPC)`);
-                  // Refresh the profile to get updated views count
-                  const { data: updatedProfile } = await supabase
-                    .from('users')
-                    .select('views')
-                    .eq('id', viewingUserId)
-                    .maybeSingle();
-                  if (updatedProfile) {
-                    setViewingUserProfile(prev => prev ? { ...prev, views: updatedProfile.views } : null);
-                  }
+                } else if (fetchError) {
+                  console.error('Error fetching current views:', fetchError);
                 }
-              } catch (err) {
-                console.error('Error incrementing views:', err);
+              } else {
+                // Success with RPC
+                console.log(`✅ Views incremented for user ${viewingUserId} (using RPC)`);
+                // Refresh the profile to get updated views count
+                const { data: updatedProfile } = await supabase
+                  .from('users')
+                  .select('views')
+                  .eq('id', viewingUserId)
+                  .maybeSingle();
+                if (updatedProfile) {
+                  setViewingUserProfile(prev => prev ? { ...prev, views: updatedProfile.views } : null);
+                }
               }
-            })();
-          }
+            } catch (err) {
+              console.error('Error incrementing views:', err);
+            }
+          })();
         } else {
           setViewingUserProfile(null);
         }
@@ -1337,16 +1356,6 @@ function GameBoard() {
     };
 
     fetchViewingUserProfile();
-    
-    // Clear views increment tracking when switching profiles (after a delay to allow re-visits)
-    return () => {
-      if (viewingUserId) {
-        // Clear after 10 seconds to allow for re-visits within a short time
-        setTimeout(() => {
-          viewsIncrementedRef.current.delete(viewingUserId);
-        }, 10000);
-      }
-    };
   }, [viewingUserId, supabase, user?.id]);
 
   // Reset viewingUserId when leaving profile page
@@ -7779,6 +7788,23 @@ function GameBoard() {
     
     socket.on('matchmaking:ranked:queued', (data) => {
       setMatchmakingStatus(`Waiting for opponent... (Position: ${data.position})`);
+    });
+    
+    // Listen for user online/offline events
+    socket.on('user:online', (data) => {
+      if (data.userId) {
+        setOnlineUsers(prev => new Set([...prev, data.userId]));
+      }
+    });
+    
+    socket.on('user:offline', (data) => {
+      if (data.userId) {
+        setOnlineUsers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(data.userId);
+          return newSet;
+        });
+      }
     });
     
     socket.on('matchmaking:ranked:error', (data) => {

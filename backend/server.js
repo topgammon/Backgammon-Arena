@@ -49,6 +49,12 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Backgammon Arena API is running' });
 });
 
+// Get online users endpoint
+app.get('/api/online-users', (req, res) => {
+  const userIds = Array.from(onlineUsers.keys());
+  res.json({ onlineUsers: userIds });
+});
+
 // Proxy CPU move requests to Python AI service
 app.post('/api/cpu/move', async (req, res) => {
   try {
@@ -100,6 +106,9 @@ app.post('/api/evaluate', async (req, res) => {
 // Matchmaking queues
 const guestQueue = []; // Simple queue for guest matchmaking
 const rankedQueue = []; // Array of { socketId, userId, elo, timestamp } for ranked matchmaking
+
+// Track online users: userId -> Set of socketIds (users can have multiple tabs)
+const onlineUsers = new Map();
 
 // ELO calculation function (chess.com-style with stakes multiplier)
 // This formula accounts for rating differences through expected score calculation
@@ -160,6 +169,9 @@ io.on('connection', (socket) => {
   console.log('✅ User connected:', socket.id);
   console.log('📊 Current guest queue size:', guestQueue.length);
   
+  // Store userId on socket for tracking
+  socket.userId = null;
+  
   socket.on('error', (error) => {
     console.error('❌ Socket error:', error);
   });
@@ -216,6 +228,20 @@ io.on('connection', (socket) => {
   
   socket.on('disconnect', (reason) => {
     console.log('🔌 User disconnected:', socket.id, 'Reason:', reason);
+    
+    // Remove user from online tracking if logged in
+    if (socket.userId) {
+      const userSockets = onlineUsers.get(socket.userId);
+      if (userSockets) {
+        userSockets.delete(socket.id);
+        // If user has no more active sockets, mark as offline
+        if (userSockets.size === 0) {
+          onlineUsers.delete(socket.userId);
+          // Broadcast user offline status to all clients
+          io.emit('user:offline', { userId: socket.userId });
+        }
+      }
+    }
     
     // Remove from guest queue
     const guestIndex = guestQueue.findIndex(p => p.socketId === socket.id);
@@ -348,6 +374,16 @@ io.on('connection', (socket) => {
     }
     
     console.log('🏆 User joining ranked matchmaking queue:', socket.id, { userId, elo });
+    
+    // Track user as online
+    socket.userId = userId;
+    if (!onlineUsers.has(userId)) {
+      onlineUsers.set(userId, new Set());
+    }
+    onlineUsers.get(userId).add(socket.id);
+    
+    // Broadcast user online status to all clients
+    io.emit('user:online', { userId });
     
     // Remove from any existing queue position
     const existingIndex = rankedQueue.findIndex(p => p.socketId === socket.id || p.userId === userId);

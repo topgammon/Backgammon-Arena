@@ -2696,25 +2696,43 @@ function GameBoard() {
     // Close resignation confirmation overlay
     setShowConfirmResign(false);
     
-    // Detect win type locally for server
+    // Detect win type locally
     const winInfo = detectWinType(winningPlayer, resigningPlayer);
     
-    // For online games, send to server and wait for broadcast to BOTH players
-    // This ensures both players see the overlay at the exact same time with correct data
+    // For online games: stop timers immediately, show overlay immediately, then update with ELO when server responds
     if (isOnlineGame && socketRef.current && matchId) {
+      // STOP ALL TIMERS IMMEDIATELY
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      if (firstRollIntervalRef.current) {
+        clearInterval(firstRollIntervalRef.current);
+        firstRollIntervalRef.current = null;
+      }
+      setTimer(0);
+      setFirstRollTimer(0);
+      setHasRolled(false);
+      
+      // Set gameOver immediately with data we know - overlay shows RIGHT AWAY
+      const gameOverData = { 
+        type: 'resign', 
+        winner: winningPlayer, 
+        loser: resigningPlayer, 
+        winType: winInfo.winType, 
+        multiplier: winInfo.multiplier 
+      };
+      console.log(`🎯 Setting gameOver state IMMEDIATELY (timer stopped, overlay showing):`, gameOverData);
+      setGameOver(gameOverData);
+      setNoMoveOverlay(false);
+      gameOverProcessedRef.current = true;
+      
+      // Send to server - ELO changes will update smoothly when server responds
       console.log(`📤 Sending resignation to server: type=resign, winner=${winningPlayer}, loser=${resigningPlayer}, winType=${winInfo.winType}, multiplier=${winInfo.multiplier}`);
       socketRef.current.emit('game:over', {
         matchId,
-        gameOver: { 
-          type: 'resign', 
-          winner: winningPlayer, 
-          loser: resigningPlayer, 
-          winType: winInfo.winType, 
-          multiplier: winInfo.multiplier 
-        }
+        gameOver: gameOverData
       });
-      // Don't set gameOver locally - wait for server to broadcast to both players simultaneously
-      // This ensures smooth, synchronized experience for both players
       return;
     }
     
@@ -2797,15 +2815,33 @@ function GameBoard() {
       
       // Send double decline to server for online games
       if (isOnlineGame && socketRef.current && matchId) {
-        // Send to server - wait for broadcast to BOTH players simultaneously
-        // This ensures both players see the overlay at the exact same time with correct data
+        // STOP ALL TIMERS IMMEDIATELY
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+        if (firstRollIntervalRef.current) {
+          clearInterval(firstRollIntervalRef.current);
+          firstRollIntervalRef.current = null;
+        }
+        setTimer(0);
+        setFirstRollTimer(0);
+        setHasRolled(false);
+        
+        // Set gameOver immediately with data we know - overlay shows RIGHT AWAY
+        const gameOverData = { type: 'double', winner: fromPlayer, loser: toPlayer, winType: 'standard', multiplier: 1 };
+        console.log(`🎯 Setting gameOver state IMMEDIATELY (double decline, timer stopped, overlay showing):`, gameOverData);
+        setGameOver(gameOverData);
+        setNoMoveOverlay(false);
+        gameOverProcessedRef.current = true;
+        
+        // Send to server - ELO changes will update smoothly when server responds
         socketRef.current.emit('game:double-response', {
           matchId,
           player: toPlayer,
           accepted: false,
-          gameOver: { type: 'double', winner: fromPlayer, loser: toPlayer }
+          gameOver: gameOverData
         });
-        // Don't set gameOver locally - wait for server to broadcast to both players simultaneously
         return;
       }
       
@@ -7909,10 +7945,23 @@ function GameBoard() {
           setDoubleTimer(12);
         } else {
           // Double was declined - game over
+          // STOP ALL TIMERS IMMEDIATELY
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          if (firstRollIntervalRef.current) {
+            clearInterval(firstRollIntervalRef.current);
+            firstRollIntervalRef.current = null;
+          }
+          setTimer(0);
+          setFirstRollTimer(0);
+          setHasRolled(false);
+          
           // Don't set gameOver here - wait for server's game:over event
           // The server will broadcast to both players simultaneously with complete data
           setDoubleOffer(null);
-          console.log('📊 Double declined by opponent - waiting for server game:over event');
+          console.log('📊 Double declined by opponent - timers stopped, waiting for server game:over event');
         }
       }
     };
@@ -8013,10 +8062,28 @@ function GameBoard() {
           console.log('⚠️ WARNING: No ELO changes in game over data!');
         }
         
-        // Prevent duplicate processing
-        if (gameOverProcessedRef.current) {
-          console.log('⚠️ Game over already processed, ignoring duplicate');
+        // If gameOver was already set locally (we resigned/declined), we just need to update ELO
+        // The overlay is already showing, so ELO changes will update smoothly
+        if (gameOverProcessedRef.current && gameOver) {
+          console.log('✅ Game over already showing - ELO changes will update smoothly');
+          // ELO changes already processed above, so we're done
           return;
+        }
+        
+        // If gameOver is not set yet (opponent's action), stop timers and set it now
+        if (!gameOver) {
+          // STOP ALL TIMERS IMMEDIATELY
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          if (firstRollIntervalRef.current) {
+            clearInterval(firstRollIntervalRef.current);
+            firstRollIntervalRef.current = null;
+          }
+          setTimer(0);
+          setFirstRollTimer(0);
+          setHasRolled(false);
         }
         
         // Mark as processed to prevent duplicate processing
@@ -8033,7 +8100,7 @@ function GameBoard() {
           multiplier = winInfo.multiplier;
         }
         
-        // Set game over state (for opponent's actions or if not set yet)
+        // Set game over state (for opponent's actions)
         console.log('✅ Setting game over state from server response');
         setGameOver({
           ...data.gameOver,

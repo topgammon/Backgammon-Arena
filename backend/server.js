@@ -907,9 +907,8 @@ io.on('connection', (socket) => {
       match.isAbandoned = true;
       match.abandoningPlayer = abandoningPlayer;
       
-      // Broadcast game over to both players with no ELO changes
-      // Include abandoningPlayer so each client knows if they abandoned
-      io.to(opponentSocketId).emit('game:over', {
+      // Prepare abandonment data
+      const abandonmentData = {
         matchId,
         gameOver: {
           type: 'abandoned',
@@ -921,21 +920,20 @@ io.on('connection', (socket) => {
         },
         eloChanges: null,
         gameStakes: match.gameStakes || 1
-      });
+      };
       
-      socket.emit('game:over', {
-        matchId,
-        gameOver: {
-          type: 'abandoned',
-          winner: null,
-          loser: null,
-          winType: null,
-          multiplier: 1,
-          abandoningPlayer: abandoningPlayer
-        },
-        eloChanges: null,
-        gameStakes: match.gameStakes || 1
-      });
+      // CRITICAL: Broadcast to BOTH players explicitly using their socket IDs
+      // This ensures both players receive the abandonment event
+      if (match.player1.socketId) {
+        console.log(`📤 Sending abandonment to Player 1 (socket: ${match.player1.socketId})`);
+        io.to(match.player1.socketId).emit('game:over', abandonmentData);
+      }
+      if (match.player2.socketId) {
+        console.log(`📤 Sending abandonment to Player 2 (socket: ${match.player2.socketId})`);
+        io.to(match.player2.socketId).emit('game:over', abandonmentData);
+      }
+      
+      console.log(`✅ Abandonment broadcasted to both players for match ${matchId}`);
       
       return; // Exit early - no ELO changes, no stats
     }

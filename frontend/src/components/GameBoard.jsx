@@ -7892,31 +7892,33 @@ function GameBoard() {
         console.log('🎮 Game over received:', data);
         console.log('🎮 Current matchmakingType:', matchmakingType);
         console.log('🎮 ELO changes in data:', data.eloChanges);
-        
-        // Prevent duplicate processing
-        if (gameOverProcessedRef.current && data.gameOver?.type === 'abandoned') {
-          console.log('⚠️ Abandoned game over already processed, ignoring duplicate');
-          return;
-        }
+        console.log('🎮 Game over type:', data.gameOver?.type);
+        console.log('🎮 Abandoning player:', data.gameOver?.abandoningPlayer);
         
         // Handle abandoned games - stop everything immediately
+        // Process abandonment even if already processed (in case of duplicate events)
         if (data.gameOver?.type === 'abandoned') {
+          console.log('🛑 PROCESSING ABANDONMENT EVENT');
+          
           // Mark as processed immediately
           gameOverProcessedRef.current = true;
-          isAbandonedRef.current = true; // Set ref immediately
+          isAbandonedRef.current = true; // Set ref immediately - CRITICAL
           
           // Stop all timers immediately
           if (firstRollTimerRef.current) {
             clearInterval(firstRollTimerRef.current);
             firstRollTimerRef.current = null;
+            console.log('⏹️ Stopped firstRollTimer');
           }
           if (timerRef.current) {
             clearInterval(timerRef.current);
             timerRef.current = null;
+            console.log('⏹️ Stopped turn timer');
           }
           if (firstRollIntervalRef.current) {
             clearInterval(firstRollIntervalRef.current);
             firstRollIntervalRef.current = null;
+            console.log('⏹️ Stopped firstRollInterval');
           }
           
           // Stop the game completely - use functional updates to ensure state is set
@@ -7927,14 +7929,16 @@ function GameBoard() {
           
           // Set game over state with abandoning player info
           const abandoningPlayerNum = data.gameOver?.abandoningPlayer || null;
-          setGameOver({
+          const abandonmentState = {
             type: 'abandoned',
             winner: null,
             loser: null,
             winType: null,
             multiplier: 1,
             abandoningPlayer: abandoningPlayerNum
-          });
+          };
+          
+          setGameOver(abandonmentState);
           setAbandoningPlayer(abandoningPlayerNum);
           setShowConfirmResign(false);
           setNoMoveOverlay(false);
@@ -7943,7 +7947,15 @@ function GameBoard() {
           localStorage.removeItem('activeMatch');
           
           console.log('🛑 Game abandoned - all timers stopped, game state frozen');
+          console.log('🛑 Abandonment state set:', abandonmentState);
+          console.log('🛑 isAbandonedRef.current:', isAbandonedRef.current);
           return; // Exit early - game is completely stopped
+        }
+        
+        // Prevent duplicate processing for non-abandoned games
+        if (gameOverProcessedRef.current) {
+          console.log('⚠️ Game over already processed, ignoring duplicate');
+          return;
         }
         
         // If winType/multiplier not provided by server, detect it locally

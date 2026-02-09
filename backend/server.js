@@ -1093,13 +1093,28 @@ io.on('connection', (socket) => {
             });
           
           if (gameError) {
-            console.error('Error saving game to database:', gameError);
+            console.error('❌ Error saving game to database:', gameError);
+            console.error('   Game data:', {
+              player1_id: match.player1.userId,
+              player2_id: match.player2.userId,
+              winner_id: winnerId,
+              status: gameStatus
+            });
           } else {
             console.log(`✅ Game saved to database for match ${matchId}`);
+            console.log(`   Winner: Player ${gameOver.winner} (User ID: ${winnerId})`);
+            console.log(`   Status: ${gameStatus}, Win Type: ${gameOver.winType || 'standard'}, Multiplier: ${winMultiplier}x`);
           }
         } catch (err) {
-          console.error('Error saving game to database:', err);
+          console.error('❌ Exception saving game to database:', err);
         }
+      } else {
+        console.log(`⚠️ Game NOT saved - conditions:`, {
+          hasSupabase: !!supabase,
+          isRanked: match.isRanked,
+          player1Guest: match.player1.isGuest,
+          player2Guest: match.player2.isGuest
+        });
       }
       
       // Update ELO in database
@@ -1209,29 +1224,33 @@ io.on('connection', (socket) => {
       });
     }
     
-    // Broadcast game over to opponent with ELO changes
-    io.to(opponentSocketId).emit('game:over', {
+    // Prepare game over data with ELO changes
+    const gameOverData = {
       matchId,
       gameOver: {
         ...gameOver,
         winType: gameOver.winType || null,
         multiplier: gameOver.multiplier || 1
       },
-      eloChanges,
+      eloChanges: eloChanges || null, // Always include eloChanges (null if not ranked)
       gameStakes: match.gameStakes || 1
-    });
+    };
     
-    // Also send to sender with ELO changes
-    socket.emit('game:over', {
-      matchId,
-      gameOver: {
-        ...gameOver,
-        winType: gameOver.winType || null,
-        multiplier: gameOver.multiplier || 1
-      },
-      eloChanges,
-      gameStakes: match.gameStakes || 1
-    });
+    // Broadcast game over to BOTH players with ELO changes
+    // This ensures both players receive the same data
+    if (match.player1.socketId) {
+      io.to(match.player1.socketId).emit('game:over', gameOverData);
+    }
+    if (match.player2.socketId) {
+      io.to(match.player2.socketId).emit('game:over', gameOverData);
+    }
+    
+    console.log(`📤 Game over broadcasted to both players for match ${matchId}`);
+    console.log(`   ELO changes included:`, eloChanges ? 'YES' : 'NO');
+    if (eloChanges) {
+      console.log(`   Player 1 ELO change: ${eloChanges.player1?.change || 'N/A'}`);
+      console.log(`   Player 2 ELO change: ${eloChanges.player2?.change || 'N/A'}`);
+    }
     
     console.log(`🏁 Game over in match ${matchId}: ${gameOver.type}, Winner: Player ${gameOver.winner}`);
     if (eloChanges) {

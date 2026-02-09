@@ -7982,9 +7982,11 @@ function GameBoard() {
         // Clear active match from localStorage when game ends
         localStorage.removeItem('activeMatch');
         // Store ELO changes if provided (for ranked matches)
+        // Always set eloChanges if provided, even if null (to clear previous values)
+        console.log('📊 ELO changes in game over data:', data.eloChanges);
+        setEloChanges(data.eloChanges || null);
         if (data.eloChanges) {
           console.log('📊 ELO changes received:', data.eloChanges);
-          setEloChanges(data.eloChanges);
           // Update user profile if this player's ELO changed - refresh from database to get latest
           if (data.eloChanges.player1 && data.eloChanges.player1.userId === user?.id) {
             // Update local state immediately for UI responsiveness
@@ -9059,7 +9061,7 @@ function GameBoard() {
                     {playerNumber === 1 ? (userProfile?.username || (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`)) : (opponentName || 'Opponent')}
                   </div>
                   {/* ELO Rating and Change for ranked matches */}
-                  {matchmakingType === 'ranked' && eloChanges && eloChanges.player1 && (
+                  {matchmakingType === 'ranked' && eloChanges && eloChanges.player1 && eloChanges.player1.oldELO !== undefined && (
                     <div style={{ fontSize: 14, color: '#666', marginTop: 4, textAlign: 'center' }}>
                       <div>⭐ {eloChanges.player1.oldELO}</div>
                       <div style={{ 
@@ -9125,7 +9127,7 @@ function GameBoard() {
                     {playerNumber === 2 ? (userProfile?.username || (user ? `Guest ${playerNumber}` : `Guest ${playerNumber}`)) : (opponentName || 'Opponent')}
                   </div>
                   {/* ELO Rating and Change for ranked matches */}
-                  {matchmakingType === 'ranked' && eloChanges && eloChanges.player2 && (
+                  {matchmakingType === 'ranked' && eloChanges && eloChanges.player2 && eloChanges.player2.oldELO !== undefined && (
                     <div style={{ fontSize: 14, color: '#666', marginTop: 4, textAlign: 'center' }}>
                       <div>⭐ {eloChanges.player2.oldELO}</div>
                       <div style={{ 

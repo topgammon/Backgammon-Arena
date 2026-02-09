@@ -293,6 +293,7 @@ function GameBoard() {
   const [mostWinsLeaderboard, setMostWinsLeaderboard] = useState([]); // Top 10 users by most wins
   const [globalRank, setGlobalRank] = useState(null); // User's global rank
   const [percentile, setPercentile] = useState(null); // User's percentile
+  const [gamesToDisplay, setGamesToDisplay] = useState(10); // Number of games to display in history
   const transitioningToGameRef = useRef(false);
   
   // Track window width for responsive design
@@ -1244,6 +1245,13 @@ function GameBoard() {
       setGameHistory([]);
     }
   }, [screen, user?.id, supabase]);
+
+  // Reset games to display when navigating to profile or when game history changes
+  useEffect(() => {
+    if (screen === 'profile') {
+      setGamesToDisplay(10);
+    }
+  }, [screen, gameHistory.length]);
 
   // Fetch Highest Rating Leaderboard
   useEffect(() => {
@@ -10404,14 +10412,7 @@ function GameBoard() {
               gridLines.push({ y, elo });
             }
 
-            // X-axis labels (game numbers)
-            const xTicks = Math.min(6, maxGame - minGame + 1); // Don't show more ticks than games
-            const gameLabels = [];
-            for (let i = 0; i <= xTicks; i++) {
-              const gameNumber = Math.round(minGame + (gameRange * i / xTicks));
-              const x = padding.left + (chartWidth * i / xTicks);
-              gameLabels.push({ x, gameNumber });
-            }
+            // X-axis labels removed - no labels shown
 
             return (
               <div style={{
@@ -10506,20 +10507,6 @@ function GameBoard() {
                       </g>
                     ))}
 
-                    {/* X-axis labels */}
-                    {gameLabels.map((label, i) => (
-                      <text
-                        key={i}
-                        x={label.x}
-                        y={graphHeight - padding.bottom + 20}
-                        textAnchor="middle"
-                        fontSize="11"
-                        fill="#666"
-                        fontFamily="Montserrat, Segoe UI, Verdana, Geneva, sans-serif"
-                      >
-                        Game {label.gameNumber}
-                      </text>
-                    ))}
 
                     {/* Line path */}
                     <path
@@ -10656,7 +10643,7 @@ function GameBoard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {gameHistory.slice(0, 10).map((game, index) => {
+                    {gameHistory.slice(0, gamesToDisplay).map((game, index) => {
                       const isWin = game.winner_id === user?.id;
                       const opponent = game.player1_id === user?.id ? game.player2 : game.player1;
                       // Use ELO at game start (stored in database), not current ELO
@@ -10787,6 +10774,35 @@ function GameBoard() {
                     })}
                   </tbody>
                 </table>
+                
+                {/* Load More Button */}
+                {gameHistory.length > gamesToDisplay && (
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    marginTop: '24px'
+                  }}>
+                    <button
+                      onClick={() => setGamesToDisplay(prev => Math.min(prev + 10, gameHistory.length))}
+                      style={{
+                        padding: '12px 24px',
+                        background: '#ff751f',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '16px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.target.style.background = '#e6640f'}
+                      onMouseLeave={(e) => e.target.style.background = '#ff751f'}
+                    >
+                      Load More ({gameHistory.length - gamesToDisplay} remaining)
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

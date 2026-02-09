@@ -1351,10 +1351,11 @@ function GameBoard() {
 
         // Calculate percentile: percentage of players with lower ELO
         // Percentile = (players below / total players) * 100
+        // Minimum percentile is 1% (not 0%)
         const playersBelow = totalPlayers - (playersAbove || 0) - 1; // -1 to exclude self
         const percentileValue = totalPlayers > 0 
-          ? Math.round((playersBelow / totalPlayers) * 100) 
-          : 0;
+          ? Math.max(1, Math.round((playersBelow / totalPlayers) * 100))
+          : 1;
         setPercentile(percentileValue);
 
         console.log(`📊 Rank calculation: ELO=${userElo}, Rank=${rank}, Percentile=${percentileValue}%, Total Players=${totalPlayers}`);
@@ -10322,22 +10323,22 @@ function GameBoard() {
                 : (firstGame.player2_elo_before || 1000);
             }
 
-            // Add initial point
+            // Add initial point (game 0)
             if (sortedGames.length > 0) {
               eloData.push({
-                date: new Date(sortedGames[0].completed_at),
+                gameNumber: 0,
                 elo: currentElo
               });
             }
 
             // Calculate ELO after each game
-            sortedGames.forEach((game) => {
+            sortedGames.forEach((game, index) => {
               const eloChange = game.player1_id === user?.id 
                 ? (game.player1_elo_change || 0)
                 : (game.player2_elo_change || 0);
               currentElo += eloChange;
               eloData.push({
-                date: new Date(game.completed_at),
+                gameNumber: index + 1,
                 elo: currentElo
               });
             });
@@ -10345,7 +10346,7 @@ function GameBoard() {
             // If no games in period, show current ELO
             if (eloData.length === 0) {
               eloData.push({
-                date: new Date(),
+                gameNumber: 0,
                 elo: userProfile?.elo_rating || 1000
               });
             }
@@ -10365,15 +10366,15 @@ function GameBoard() {
             const eloMin = Math.max(0, minElo - eloRange * 0.1);
             const eloMax = maxElo + eloRange * 0.1;
 
-            // Date range
-            const dates = eloData.map(d => d.date);
-            const minDate = new Date(Math.min(...dates));
-            const maxDate = new Date(Math.max(...dates));
-            const dateRange = maxDate - minDate || 1;
+            // Game number range
+            const gameNumbers = eloData.map(d => d.gameNumber);
+            const minGame = Math.min(...gameNumbers);
+            const maxGame = Math.max(...gameNumbers);
+            const gameRange = maxGame - minGame || 1;
 
             // Convert to SVG coordinates
-            const toX = (date) => {
-              return padding.left + ((date - minDate) / dateRange) * chartWidth;
+            const toX = (gameNumber) => {
+              return padding.left + ((gameNumber - minGame) / gameRange) * chartWidth;
             };
             const toY = (elo) => {
               return padding.top + chartHeight - ((elo - eloMin) / (eloMax - eloMin)) * chartHeight;
@@ -10381,7 +10382,7 @@ function GameBoard() {
 
             // Generate path for line
             const pathData = eloData.map((point, i) => {
-              const x = toX(point.date);
+              const x = toX(point.gameNumber);
               const y = toY(point.elo);
               return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
             }).join(' ');
@@ -10389,27 +10390,27 @@ function GameBoard() {
             // Generate area path (line + bottom edge for fill)
             const areaPath = eloData.length > 0 ? 
               pathData + 
-              ` L ${toX(eloData[eloData.length - 1].date)} ${padding.top + chartHeight}` +
-              ` L ${toX(eloData[0].date)} ${padding.top + chartHeight} Z` :
+              ` L ${toX(eloData[eloData.length - 1].gameNumber)} ${padding.top + chartHeight}` +
+              ` L ${toX(eloData[0].gameNumber)} ${padding.top + chartHeight} Z` :
               '';
 
-            // Generate grid lines and labels in increments of 5
+            // Generate grid lines and labels in increments of 25
             const gridLines = [];
-            // Round min/max to nearest multiple of 5 for cleaner display
-            const roundedMin = Math.floor(eloMin / 5) * 5;
-            const roundedMax = Math.ceil(eloMax / 5) * 5;
-            for (let elo = roundedMin; elo <= roundedMax; elo += 5) {
+            // Round min/max to nearest multiple of 25 for cleaner display
+            const roundedMin = Math.floor(eloMin / 25) * 25;
+            const roundedMax = Math.ceil(eloMax / 25) * 25;
+            for (let elo = roundedMin; elo <= roundedMax; elo += 25) {
               const y = toY(elo);
               gridLines.push({ y, elo });
             }
 
-            // X-axis labels (dates)
-            const xTicks = 6;
-            const dateLabels = [];
+            // X-axis labels (game numbers)
+            const xTicks = Math.min(6, maxGame - minGame + 1); // Don't show more ticks than games
+            const gameLabels = [];
             for (let i = 0; i <= xTicks; i++) {
-              const date = new Date(minDate.getTime() + (dateRange * i / xTicks));
+              const gameNumber = Math.round(minGame + (gameRange * i / xTicks));
               const x = padding.left + (chartWidth * i / xTicks);
-              dateLabels.push({ x, date });
+              gameLabels.push({ x, gameNumber });
             }
 
             return (
@@ -10506,7 +10507,7 @@ function GameBoard() {
                     ))}
 
                     {/* X-axis labels */}
-                    {dateLabels.map((label, i) => (
+                    {gameLabels.map((label, i) => (
                       <text
                         key={i}
                         x={label.x}
@@ -10516,7 +10517,7 @@ function GameBoard() {
                         fill="#666"
                         fontFamily="Montserrat, Segoe UI, Verdana, Geneva, sans-serif"
                       >
-                        {label.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        Game {label.gameNumber}
                       </text>
                     ))}
 
@@ -10532,7 +10533,7 @@ function GameBoard() {
 
                     {/* Data points */}
                     {eloData.map((point, i) => {
-                      const x = toX(point.date);
+                      const x = toX(point.gameNumber);
                       const y = toY(point.elo);
                       return (
                         <circle

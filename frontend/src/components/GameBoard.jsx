@@ -3360,21 +3360,52 @@ function GameBoard() {
     return Array.from(moves);
   }
 
+  // Helper function to calculate base ELO change (same formula as backend)
+  function calculateBaseELOChange(playerELO, opponentELO, result) {
+    const K = 32; // K-factor (standard for chess.com)
+    const ratingDiff = opponentELO - playerELO;
+    const expectedScore = 1 / (1 + Math.pow(10, ratingDiff / 400));
+    const baseEloChange = K * (result - expectedScore);
+    return Math.round(baseEloChange);
+  }
+
   // Helper function to get resignation loss message
   function getResignationLossMessage(resigningPlayer, winningPlayer) {
     const winInfo = detectWinType(winningPlayer, resigningPlayer);
     const multiplier = winInfo.multiplier;
     const totalMultiplier = multiplier * Math.max(1, gameStakes || 1);
     
+    // Try to calculate base ELO wager if we have ELO ratings (for online ranked games)
+    let baseEloWager = null;
+    if (isOnlineGame && matchmakingType === 'ranked' && userProfile && opponentProfile) {
+      const resigningELO = (resigningPlayer === playerNumber ? userProfile.elo_rating : opponentProfile.elo_rating) || 1000;
+      const winningELO = (winningPlayer === playerNumber ? userProfile.elo_rating : opponentProfile.elo_rating) || 1000;
+      baseEloWager = Math.abs(calculateBaseELOChange(resigningELO, winningELO, 0)); // 0 = loss
+    }
+    
     if (multiplier === 1) {
+      if (baseEloWager !== null) {
+        return `You will lose ${baseEloWager} rating points`;
+      }
       return `You will lose rating points based on current ELO wager`;
     } else {
       const winTypeText = multiplier === 3 ? 'backgammon' : 'gammon';
-      let message = `You will lose rating points ×${multiplier} (${winTypeText})`;
-      if (gameStakes > 1) {
-        message += ` × ${gameStakes} (doubling cube)`;
+      if (baseEloWager !== null) {
+        // Format: "lose (current elo wager) x3 rating points"
+        let message = `You will lose ${baseEloWager} × ${multiplier} rating points (${winTypeText})`;
+        if (gameStakes > 1) {
+          const totalLoss = baseEloWager * totalMultiplier;
+          message += ` × ${gameStakes} (cube) = ${totalLoss} total`;
+        }
+        return message;
+      } else {
+        // For offline games, show multiplier format
+        let message = `You will lose rating points × ${multiplier} (${winTypeText})`;
+        if (gameStakes > 1) {
+          message += ` × ${gameStakes} (doubling cube)`;
+        }
+        return message;
       }
-      return message;
     }
   }
 
@@ -3436,7 +3467,9 @@ function GameBoard() {
       multiplier = winInfo.multiplier;
     }
     
-    setGameOver({ type, winner, loser, winType, multiplier });
+    const gameOverData = { type, winner, loser, winType, multiplier };
+    console.log(`🎯 Setting gameOver state:`, gameOverData);
+    setGameOver(gameOverData);
     setShowConfirmResign(false);
     setNoMoveOverlay(false);
     
@@ -5187,12 +5220,20 @@ function GameBoard() {
                 {gameOver.winner === 1 && (
                   <>
                     <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
-                    {gameOver.winType && gameOver.multiplier && (
-                      <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
-                        {gameOver.multiplier}x
-                        {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
-                      </div>
-                    )}
+                    {(() => {
+                      // Re-detect if not set (fallback)
+                      let displayMultiplier = gameOver.multiplier;
+                      if (!displayMultiplier || displayMultiplier === 1) {
+                        const winInfo = detectWinType(1, 2);
+                        displayMultiplier = winInfo.multiplier;
+                      }
+                      return displayMultiplier > 1 ? (
+                        <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
+                          {displayMultiplier}x
+                          {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
+                        </div>
+                      ) : null;
+                    })()}
                   </>
                 )}
               </div>
@@ -5211,12 +5252,20 @@ function GameBoard() {
                 {gameOver.winner === 2 && (
                   <>
                     <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
-                    {gameOver.winType && gameOver.multiplier && (
-                      <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
-                        {gameOver.multiplier}x
-                        {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
-                      </div>
-                    )}
+                    {(() => {
+                      // Re-detect if not set (fallback)
+                      let displayMultiplier = gameOver.multiplier;
+                      if (!displayMultiplier || displayMultiplier === 1) {
+                        const winInfo = detectWinType(2, 1);
+                        displayMultiplier = winInfo.multiplier;
+                      }
+                      return displayMultiplier > 1 ? (
+                        <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
+                          {displayMultiplier}x
+                          {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
+                        </div>
+                      ) : null;
+                    })()}
                   </>
                 )}
               </div>
@@ -7662,11 +7711,23 @@ function GameBoard() {
         console.log('🎮 Game over received:', data);
         console.log('🎮 Current matchmakingType:', matchmakingType);
         console.log('🎮 ELO changes in data:', data.eloChanges);
-        // Preserve winType and multiplier from server
+        
+        // If winType/multiplier not provided by server, detect it locally
+        let winType = data.gameOver?.winType || null;
+        let multiplier = data.gameOver?.multiplier || 1;
+        
+        if ((data.gameOver?.type === 'win' || data.gameOver?.type === 'resign') && !winType) {
+          // Detect win type locally if server didn't provide it
+          const winInfo = detectWinType(data.gameOver.winner, data.gameOver.loser);
+          winType = winInfo.winType;
+          multiplier = winInfo.multiplier;
+        }
+        
+        // Preserve winType and multiplier from server or local detection
         setGameOver({
           ...data.gameOver,
-          winType: data.gameOver?.winType || null,
-          multiplier: data.gameOver?.multiplier || 1
+          winType: winType,
+          multiplier: multiplier
         });
         // Update game stakes if provided
         if (data.gameStakes) {
@@ -8719,12 +8780,20 @@ function GameBoard() {
                   {gameOver.winner === 1 && (
                     <>
                       <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
-                      {gameOver.winType && gameOver.multiplier && (
-                        <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
-                          {gameOver.multiplier}x
-                          {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
-                        </div>
-                      )}
+                      {(() => {
+                        // Re-detect if not set (fallback)
+                        let displayMultiplier = gameOver.multiplier;
+                        if (!displayMultiplier || displayMultiplier === 1) {
+                          const winInfo = detectWinType(1, 2);
+                          displayMultiplier = winInfo.multiplier;
+                        }
+                        return displayMultiplier > 1 ? (
+                          <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
+                            {displayMultiplier}x
+                            {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
+                          </div>
+                        ) : null;
+                      })()}
                     </>
                   )}
                 </div>
@@ -8777,12 +8846,20 @@ function GameBoard() {
                   {gameOver.winner === 2 && (
                     <>
                       <div style={{ fontSize: 20, fontWeight: 'bold', color: '#28a745', textTransform: 'uppercase', letterSpacing: 1 }}>WINNER!</div>
-                      {gameOver.winType && gameOver.multiplier && (
-                        <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
-                          {gameOver.multiplier}x
-                          {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
-                        </div>
-                      )}
+                      {(() => {
+                        // Re-detect if not set (fallback)
+                        let displayMultiplier = gameOver.multiplier;
+                        if (!displayMultiplier || displayMultiplier === 1) {
+                          const winInfo = detectWinType(2, 1);
+                          displayMultiplier = winInfo.multiplier;
+                        }
+                        return displayMultiplier > 1 ? (
+                          <div style={{ fontSize: 16, fontWeight: 'bold', color: '#28a745', marginTop: 4 }}>
+                            {displayMultiplier}x
+                            {gameStakes > 1 && <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>× {gameStakes} (cube)</span>}
+                          </div>
+                        ) : null;
+                      })()}
                     </>
                   )}
                 </div>

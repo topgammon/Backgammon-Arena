@@ -2699,7 +2699,7 @@ function GameBoard() {
     // Detect win type locally
     const winInfo = detectWinType(winningPlayer, resigningPlayer);
     
-    // For online games: stop timers immediately, show overlay immediately, then update with ELO when server responds
+    // For online games: stop timers immediately, wait for server to broadcast to BOTH players simultaneously
     if (isOnlineGame && socketRef.current && matchId) {
       // STOP ALL TIMERS IMMEDIATELY
       if (timerRef.current) {
@@ -2713,25 +2713,21 @@ function GameBoard() {
       setTimer(0);
       setFirstRollTimer(0);
       setHasRolled(false);
-      
-      // Set gameOver immediately with data we know - overlay shows RIGHT AWAY
-      const gameOverData = { 
-        type: 'resign', 
-        winner: winningPlayer, 
-        loser: resigningPlayer, 
-        winType: winInfo.winType, 
-        multiplier: winInfo.multiplier 
-      };
-      console.log(`🎯 Setting gameOver state IMMEDIATELY (timer stopped, overlay showing):`, gameOverData);
-      setGameOver(gameOverData);
+      setShowConfirmResign(false);
       setNoMoveOverlay(false);
-      gameOverProcessedRef.current = true;
       
-      // Send to server - ELO changes will update smoothly when server responds
+      // Send to server - server will broadcast to BOTH players simultaneously
+      // DON'T set gameOver locally - wait for server broadcast so both players see it at the same time
       console.log(`📤 Sending resignation to server: type=resign, winner=${winningPlayer}, loser=${resigningPlayer}, winType=${winInfo.winType}, multiplier=${winInfo.multiplier}`);
       socketRef.current.emit('game:over', {
         matchId,
-        gameOver: gameOverData
+        gameOver: { 
+          type: 'resign', 
+          winner: winningPlayer, 
+          loser: resigningPlayer, 
+          winType: winInfo.winType, 
+          multiplier: winInfo.multiplier 
+        }
       });
       return;
     }
@@ -2827,20 +2823,15 @@ function GameBoard() {
         setTimer(0);
         setFirstRollTimer(0);
         setHasRolled(false);
-        
-        // Set gameOver immediately with data we know - overlay shows RIGHT AWAY
-        const gameOverData = { type: 'double', winner: fromPlayer, loser: toPlayer, winType: 'standard', multiplier: 1 };
-        console.log(`🎯 Setting gameOver state IMMEDIATELY (double decline, timer stopped, overlay showing):`, gameOverData);
-        setGameOver(gameOverData);
         setNoMoveOverlay(false);
-        gameOverProcessedRef.current = true;
         
-        // Send to server - ELO changes will update smoothly when server responds
+        // Send to server - server will broadcast to BOTH players simultaneously
+        // DON'T set gameOver locally - wait for server broadcast so both players see it at the same time
         socketRef.current.emit('game:double-response', {
           matchId,
           player: toPlayer,
           accepted: false,
-          gameOver: gameOverData
+          gameOver: { type: 'double', winner: fromPlayer, loser: toPlayer }
         });
         return;
       }

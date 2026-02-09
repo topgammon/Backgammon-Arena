@@ -703,61 +703,10 @@ io.on('connection', (socket) => {
         };
         
         match.eloChanges = eloChanges;
-        
-        // Update ELO in database
-        if (supabase) {
-          try {
-            const { error: error1 } = await supabase
-              .from('user_profiles')
-              .update({ elo_rating: newPlayer1ELO })
-              .eq('id', match.player1.userId);
-            
-            const { error: error2 } = await supabase
-              .from('user_profiles')
-              .update({ elo_rating: newPlayer2ELO })
-              .eq('id', match.player2.userId);
-            
-            if (error1) console.error('Error updating player 1 ELO:', error1);
-            if (error2) console.error('Error updating player 2 ELO:', error2);
-          } catch (err) {
-            console.error('Error updating ELO in database:', err);
-          }
-        }
-        
-        // Save game to database
-        if (supabase) {
-          try {
-            const winnerId = gameOver.winner === 1 ? match.player1.userId : match.player2.userId;
-            const { error: gameError } = await supabase
-              .from('games')
-              .insert({
-                player1_id: match.player1.userId,
-                player2_id: match.player2.userId,
-                game_type: 'online',
-                status: 'completed',
-                winner_id: winnerId,
-                elo_stake: gameStakes,
-                win_type: gameOver.winType || 'standard',
-                win_multiplier: winMultiplier,
-                completed_at: new Date().toISOString(),
-                player1_elo_change: player1Change,
-                player2_elo_change: player2Change,
-                player1_elo_before: player1ELO,
-                player2_elo_before: player2ELO
-              });
-            
-            if (gameError) {
-              console.error('Error saving game to database:', gameError);
-            } else {
-              console.log(`✅ Game saved to database for match ${matchId} (double decline)`);
-            }
-          } catch (err) {
-            console.error('Error saving game to database:', err);
-          }
-        }
       }
       
-      // Broadcast game over to both players with ELO changes
+      // CRITICAL: Broadcast IMMEDIATELY to both players BEFORE database operations
+      // This ensures both players see the overlay instantly with no delay
       const gameOverData = {
         matchId,
         gameOver: {
@@ -776,7 +725,56 @@ io.on('connection', (socket) => {
         io.to(match.player2.socketId).emit('game:over', gameOverData);
       }
       
-      console.log(`📤 Game over (double decline) broadcasted to both players for match ${matchId}`);
+      console.log(`📤 Game over (double decline) broadcasted IMMEDIATELY to both players for match ${matchId}`);
+      
+      // Now do database operations asynchronously (don't block)
+      if (supabase && match.isRanked && !match.player1.isGuest && !match.player2.isGuest && eloChanges) {
+        (async () => {
+          try {
+            // Update ELO in database
+            const { error: error1 } = await supabase
+              .from('user_profiles')
+              .update({ elo_rating: eloChanges.player1.newELO })
+              .eq('id', match.player1.userId);
+            
+            const { error: error2 } = await supabase
+              .from('user_profiles')
+              .update({ elo_rating: eloChanges.player2.newELO })
+              .eq('id', match.player2.userId);
+            
+            if (error1) console.error('Error updating player 1 ELO:', error1);
+            if (error2) console.error('Error updating player 2 ELO:', error2);
+            
+            // Save game to database
+            const winnerId = gameOver.winner === 1 ? match.player1.userId : match.player2.userId;
+            const { error: gameError } = await supabase
+              .from('games')
+              .insert({
+                player1_id: match.player1.userId,
+                player2_id: match.player2.userId,
+                game_type: 'online',
+                status: 'completed',
+                winner_id: winnerId,
+                elo_stake: gameStakes,
+                win_type: gameOver.winType || 'standard',
+                win_multiplier: winMultiplier,
+                completed_at: new Date().toISOString(),
+                player1_elo_change: eloChanges.player1.change,
+                player2_elo_change: eloChanges.player2.change,
+                player1_elo_before: eloChanges.player1.oldELO,
+                player2_elo_before: eloChanges.player2.oldELO
+              });
+            
+            if (gameError) {
+              console.error('Error saving game to database:', gameError);
+            } else {
+              console.log(`✅ Game saved to database for match ${matchId} (double decline)`);
+            }
+          } catch (err) {
+            console.error('Error in async database operations (double decline):', err);
+          }
+        })();
+      }
     }
   });
   
@@ -1195,9 +1193,47 @@ io.on('connection', (socket) => {
       
       // Store ELO changes in match object for potential resend (if client missed it)
       match.eloChanges = eloChanges;
-      
-      // Save game to database for ranked matches (for game history)
-      if (supabase && match.isRanked && !match.player1.isGuest && !match.player2.isGuest) {
+    } else {
+      console.log(`⚠️ ELO calculation skipped - not a ranked match or has guest players:`, {
+        isRanked: match.isRanked,
+        player1Guest: match.player1.isGuest,
+        player2Guest: match.player2.isGuest
+      });
+    }
+    
+    // Prepare game over data with ELO changes
+    const gameOverData = {
+      matchId,
+      gameOver: {
+        ...gameOver,
+        winType: gameOver.winType || null,
+        multiplier: gameOver.multiplier || 1
+      },
+      eloChanges: eloChanges || null, // Always include eloChanges (null if not ranked)
+      gameStakes: match.gameStakes || 1
+    };
+    
+    // CRITICAL: Broadcast IMMEDIATELY to both players BEFORE database operations
+    // This ensures both players see the overlay instantly with no delay
+    if (match.player1.socketId) {
+      io.to(match.player1.socketId).emit('game:over', gameOverData);
+    }
+    if (match.player2.socketId) {
+      io.to(match.player2.socketId).emit('game:over', gameOverData);
+    }
+    
+    console.log(`📤 Game over broadcasted IMMEDIATELY to both players for match ${matchId}`);
+    console.log(`   ELO changes included:`, eloChanges ? 'YES' : 'NO');
+    if (eloChanges) {
+      console.log(`   Player 1 ELO change: ${eloChanges.player1?.change || 'N/A'}`);
+      console.log(`   Player 2 ELO change: ${eloChanges.player2?.change || 'N/A'}`);
+    }
+    
+    // Now do database operations asynchronously (don't block)
+    // Save game to database for ranked matches (for game history)
+    if (supabase && match.isRanked && !match.player1.isGuest && !match.player2.isGuest && eloChanges) {
+      // Run database operations asynchronously - don't await
+      (async () => {
         try {
           // Map game over type to status
           let gameStatus = 'completed';
@@ -1221,47 +1257,24 @@ io.on('connection', (socket) => {
               game_type: 'online',
               status: gameStatus,
               winner_id: winnerId,
-              elo_stake: gameStakes,
+              elo_stake: match.gameStakes || 1,
               win_type: gameOver.winType || 'standard',
-              win_multiplier: winMultiplier,
+              win_multiplier: gameOver.multiplier || 1,
               completed_at: new Date().toISOString(),
-              player1_elo_change: player1Change,
-              player2_elo_change: player2Change,
-              player1_elo_before: player1ELO,
-              player2_elo_before: player2ELO
+              player1_elo_change: eloChanges.player1.change,
+              player2_elo_change: eloChanges.player2.change,
+              player1_elo_before: eloChanges.player1.oldELO,
+              player2_elo_before: eloChanges.player2.oldELO
             });
           
           if (gameError) {
             console.error('❌ Error saving game to database:', gameError);
-            console.error('   Game data:', {
-              player1_id: match.player1.userId,
-              player2_id: match.player2.userId,
-              winner_id: winnerId,
-              status: gameStatus
-            });
           } else {
             console.log(`✅ Game saved to database for match ${matchId}`);
-            console.log(`   Winner: Player ${gameOver.winner} (User ID: ${winnerId})`);
-            console.log(`   Status: ${gameStatus}, Win Type: ${gameOver.winType || 'standard'}, Multiplier: ${winMultiplier}x`);
           }
-        } catch (err) {
-          console.error('❌ Exception saving game to database:', err);
-        }
-      } else {
-        console.log(`⚠️ Game NOT saved - conditions:`, {
-          hasSupabase: !!supabase,
-          isRanked: match.isRanked,
-          player1Guest: match.player1.isGuest,
-          player2Guest: match.player2.isGuest
-        });
-      }
-      
-      // Update ELO in database
-      if (supabase) {
-        try {
+          
+          // Update ELO in database
           console.log(`🔄 Updating ELO in database for match ${matchId}...`);
-          console.log(`   Player 1: ${match.player1.userId}, ELO: ${player1ELO} → ${newPlayer1ELO} (${player1Change > 0 ? '+' : ''}${player1Change})`);
-          console.log(`   Player 2: ${match.player2.userId}, ELO: ${player2ELO} → ${newPlayer2ELO} (${player2Change > 0 ? '+' : ''}${player2Change})`);
           
           // Get current stats for player 1
           const { data: player1Data, error: fetchError1 } = await supabase
@@ -1271,37 +1284,23 @@ io.on('connection', (socket) => {
             .single();
           
           if (!fetchError1 && player1Data) {
+            const player1Result = gameOver.winner === 1 ? 1 : 0;
             // Update player 1
-            const { data: updatedPlayer1, error: error1 } = await supabase
+            const { error: error1 } = await supabase
               .from('users')
               .update({ 
-                elo_rating: newPlayer1ELO,
+                elo_rating: eloChanges.player1.newELO,
                 wins: (player1Data.wins || 0) + (player1Result === 1 ? 1 : 0),
                 losses: (player1Data.losses || 0) + (player1Result === 0 ? 1 : 0),
                 games_played: (player1Data.games_played || 0) + 1
               })
-              .eq('id', match.player1.userId)
-              .select();
+              .eq('id', match.player1.userId);
             
             if (error1) {
               console.error('❌ Error updating player 1 ELO:', error1);
             } else {
-              // Verify the update succeeded
-              const { data: verify1, error: verifyError1 } = await supabase
-                .from('users')
-                .select('elo_rating, wins, losses, games_played')
-                .eq('id', match.player1.userId)
-                .single();
-              
-              if (verifyError1) {
-                console.error('❌ Error verifying player 1 update:', verifyError1);
-              } else {
-                console.log(`✅ Player 1 ELO updated: ${player1ELO} → ${newPlayer1ELO} (${player1Change > 0 ? '+' : ''}${player1Change})`);
-                console.log(`   Verified in DB: ELO=${verify1.elo_rating}, Wins=${verify1.wins}, Losses=${verify1.losses}, Games=${verify1.games_played}`);
-              }
+              console.log(`✅ Player 1 ELO updated: ${eloChanges.player1.oldELO} → ${eloChanges.player1.newELO}`);
             }
-          } else if (fetchError1) {
-            console.error('❌ Error fetching player 1 data:', fetchError1);
           }
           
           // Get current stats for player 2
@@ -1312,76 +1311,28 @@ io.on('connection', (socket) => {
             .single();
           
           if (!fetchError2 && player2Data) {
+            const player2Result = gameOver.winner === 2 ? 1 : 0;
             // Update player 2
-            const { data: updatedPlayer2, error: error2 } = await supabase
+            const { error: error2 } = await supabase
               .from('users')
               .update({ 
-                elo_rating: newPlayer2ELO,
+                elo_rating: eloChanges.player2.newELO,
                 wins: (player2Data.wins || 0) + (player2Result === 1 ? 1 : 0),
                 losses: (player2Data.losses || 0) + (player2Result === 0 ? 1 : 0),
                 games_played: (player2Data.games_played || 0) + 1
               })
-              .eq('id', match.player2.userId)
-              .select();
+              .eq('id', match.player2.userId);
             
             if (error2) {
               console.error('❌ Error updating player 2 ELO:', error2);
             } else {
-              // Verify the update succeeded
-              const { data: verify2, error: verifyError2 } = await supabase
-                .from('users')
-                .select('elo_rating, wins, losses, games_played')
-                .eq('id', match.player2.userId)
-                .single();
-              
-              if (verifyError2) {
-                console.error('❌ Error verifying player 2 update:', verifyError2);
-              } else {
-                console.log(`✅ Player 2 ELO updated: ${player2ELO} → ${newPlayer2ELO} (${player2Change > 0 ? '+' : ''}${player2Change})`);
-                console.log(`   Verified in DB: ELO=${verify2.elo_rating}, Wins=${verify2.wins}, Losses=${verify2.losses}, Games=${verify2.games_played}`);
-              }
+              console.log(`✅ Player 2 ELO updated: ${eloChanges.player2.oldELO} → ${eloChanges.player2.newELO}`);
             }
-          } else if (fetchError2) {
-            console.error('❌ Error fetching player 2 data:', fetchError2);
           }
-          
-          console.log(`📊 ELO updated for ranked match ${matchId}:`, eloChanges);
         } catch (err) {
-          console.error('Error updating ELO in database:', err);
+          console.error('Error in async database operations:', err);
         }
-      } else {
-        console.error(`❌ CRITICAL: ELO calculation skipped - Supabase client is null!`);
-        console.error(`   Match ${matchId} - isRanked: ${match.isRanked}, player1Guest: ${match.player1.isGuest}, player2Guest: ${match.player2.isGuest}`);
-        console.error(`   ELO changes calculated but NOT saved to database:`, eloChanges);
-        console.error(`   Check backend environment variables: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set!`);
-      }
-    } else {
-      console.log(`⚠️ ELO calculation skipped - not a ranked match or has guest players:`, {
-        isRanked: match.isRanked,
-        player1Guest: match.player1.isGuest,
-        player2Guest: match.player2.isGuest
-      });
-    }
-    
-    // Prepare game over data with ELO changes
-    const gameOverData = {
-      matchId,
-      gameOver: {
-        ...gameOver,
-        winType: gameOver.winType || null,
-        multiplier: gameOver.multiplier || 1
-      },
-      eloChanges: eloChanges || null, // Always include eloChanges (null if not ranked)
-      gameStakes: match.gameStakes || 1
-    };
-    
-    // Broadcast game over to BOTH players with ELO changes
-    // This ensures both players receive the same data
-    if (match.player1.socketId) {
-      io.to(match.player1.socketId).emit('game:over', gameOverData);
-    }
-    if (match.player2.socketId) {
-      io.to(match.player2.socketId).emit('game:over', gameOverData);
+      })();
     }
     
     console.log(`📤 Game over broadcasted to both players for match ${matchId}`);

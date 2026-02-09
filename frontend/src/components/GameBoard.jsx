@@ -291,6 +291,8 @@ function GameBoard() {
   const [profileTab, setProfileTab] = useState('stats'); // Profile page tab: 'stats', 'achievements', 'friends'
   const [highestRatingLeaderboard, setHighestRatingLeaderboard] = useState([]); // Top 10 users by highest rating
   const [mostWinsLeaderboard, setMostWinsLeaderboard] = useState([]); // Top 10 users by most wins
+  const [globalRank, setGlobalRank] = useState(null); // User's global rank
+  const [percentile, setPercentile] = useState(null); // User's percentile
   const transitioningToGameRef = useRef(false);
   
   // Track window width for responsive design
@@ -1308,6 +1310,63 @@ function GameBoard() {
       fetchMostWinsLeaderboard();
     }
   }, [screen, supabase]);
+
+  // Calculate Global Rank and Percentile
+  useEffect(() => {
+    const calculateRankAndPercentile = async () => {
+      if (!supabase || !user?.id || !userProfile?.elo_rating || screen !== 'profile') {
+        setGlobalRank(null);
+        setPercentile(null);
+        return;
+      }
+
+      try {
+        const userElo = userProfile.elo_rating;
+        
+        // Fetch total count of users with ELO ratings
+        const { count: totalPlayers, error: countError } = await supabase
+          .from('users')
+          .select('*', { count: 'exact', head: true })
+          .not('elo_rating', 'is', null);
+
+        if (countError) {
+          console.error('Error counting players:', countError);
+          return;
+        }
+
+        // Fetch count of players with higher ELO (for rank calculation)
+        const { count: playersAbove, error: aboveError } = await supabase
+          .from('users')
+          .select('*', { count: 'exact', head: true })
+          .gt('elo_rating', userElo);
+
+        if (aboveError) {
+          console.error('Error counting players above:', aboveError);
+          return;
+        }
+
+        // Calculate rank: players with higher ELO + 1
+        const rank = (playersAbove || 0) + 1;
+        setGlobalRank(rank);
+
+        // Calculate percentile: percentage of players with lower ELO
+        // Percentile = (players below / total players) * 100
+        const playersBelow = totalPlayers - (playersAbove || 0) - 1; // -1 to exclude self
+        const percentileValue = totalPlayers > 0 
+          ? Math.round((playersBelow / totalPlayers) * 100) 
+          : 0;
+        setPercentile(percentileValue);
+
+        console.log(`📊 Rank calculation: ELO=${userElo}, Rank=${rank}, Percentile=${percentileValue}%, Total Players=${totalPlayers}`);
+      } catch (err) {
+        console.error('Error calculating rank and percentile:', err);
+        setGlobalRank(null);
+        setPercentile(null);
+      }
+    };
+
+    calculateRankAndPercentile();
+  }, [screen, user?.id, userProfile?.elo_rating, supabase]);
 
   // Sound effects - non-blocking, triggered by game actions
   const playSound = (soundName) => {
@@ -10205,7 +10264,7 @@ function GameBoard() {
                 }}>
                   <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Global Rank</div>
                   <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#6c757d' }}>
-                    N/A
+                    {globalRank !== null ? `#${globalRank}` : 'N/A'}
                   </div>
                 </div>
                 <div style={{
@@ -10216,7 +10275,7 @@ function GameBoard() {
                 }}>
                   <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Percentile</div>
                   <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#6c757d' }}>
-                    N/A
+                    {percentile !== null ? `${percentile}%` : 'N/A'}
                   </div>
                 </div>
               </div>

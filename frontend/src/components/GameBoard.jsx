@@ -295,6 +295,8 @@ function GameBoard() {
   const [percentile, setPercentile] = useState(null); // User's percentile
   const [gamesToDisplay, setGamesToDisplay] = useState(10); // Number of games to display in history
   const [hoveredPointIndex, setHoveredPointIndex] = useState(null); // Index of hovered point on ELO graph
+  const [viewingUserId, setViewingUserId] = useState(null); // User ID of profile being viewed (null = own profile)
+  const [viewingUserProfile, setViewingUserProfile] = useState(null); // Profile data of user being viewed
   const transitioningToGameRef = useRef(false);
   
   // Track window width for responsive design
@@ -1171,19 +1173,20 @@ function GameBoard() {
   }, [user, supabase]); // Removed userProfile from deps to prevent loops, but will always fetch fresh data
 
   // Fetch game history function (can be called manually for refresh)
-  const refreshGameHistory = async () => {
-    if (!supabase || !user?.id) {
+  const refreshGameHistory = async (targetUserId = null) => {
+    const userIdToFetch = targetUserId || viewingUserId || user?.id;
+    if (!supabase || !userIdToFetch) {
       setGameHistory([]);
       return;
     }
 
     try {
       // Fetch all games where user was player1 or player2 (for graph and history)
-      console.log(`📊 Fetching game history for user: ${user.id}`);
+      console.log(`📊 Fetching game history for user: ${userIdToFetch}`);
       const { data: games, error } = await supabase
         .from('games')
         .select('*')
-        .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
+        .or(`player1_id.eq.${userIdToFetch},player2_id.eq.${userIdToFetch}`)
         .eq('game_type', 'online')
         .not('completed_at', 'is', null)
         .order('completed_at', { ascending: false });
@@ -1238,14 +1241,51 @@ function GameBoard() {
     }
   };
 
+  // Fetch viewing user's profile when viewingUserId changes
+  useEffect(() => {
+    const fetchViewingUserProfile = async () => {
+      if (!supabase || !viewingUserId || viewingUserId === user?.id) {
+        setViewingUserProfile(null);
+        return;
+      }
+
+      try {
+        const { data: profile, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', viewingUserId)
+          .maybeSingle();
+
+        if (error && error.code !== 'PGRST116') {
+          console.error('Error fetching viewing user profile:', error);
+          setViewingUserProfile(null);
+        } else if (profile) {
+          setViewingUserProfile(profile);
+        } else {
+          setViewingUserProfile(null);
+        }
+      } catch (err) {
+        console.error('Error fetching viewing user profile:', err);
+        setViewingUserProfile(null);
+      }
+    };
+
+    fetchViewingUserProfile();
+  }, [viewingUserId, supabase, user?.id]);
+
   // Fetch game history when on profile page
   useEffect(() => {
-    if (screen === 'profile' && supabase && user?.id) {
-      refreshGameHistory();
+    if (screen === 'profile' && supabase) {
+      const userIdToFetch = viewingUserId || user?.id;
+      if (userIdToFetch) {
+        refreshGameHistory(userIdToFetch);
+      } else {
+        setGameHistory([]);
+      }
     } else {
       setGameHistory([]);
     }
-  }, [screen, user?.id, supabase]);
+  }, [screen, user?.id, viewingUserId, supabase]);
 
   // Reset games to display when navigating to profile or when game history changes
   useEffect(() => {
@@ -6340,7 +6380,7 @@ function GameBoard() {
                         fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
                         whiteSpace: isMobile ? 'normal' : 'nowrap'
                       }}>
-                        {userProfile?.elo_rating || 1000}
+                        {profileToDisplay?.elo_rating || 1000}
                       </span>
                       <span style={{ 
                         fontSize: '18px', 
@@ -9539,6 +9579,11 @@ function GameBoard() {
       return null;
     }
 
+    // Determine which profile to display
+    const isViewingOwnProfile = !viewingUserId || viewingUserId === user.id;
+    const profileToDisplay = isViewingOwnProfile ? userProfile : viewingUserProfile;
+    const profileUserId = isViewingOwnProfile ? user.id : viewingUserId;
+
     const handleSignOut = async () => {
       try {
         if (supabase) {
@@ -9762,26 +9807,30 @@ function GameBoard() {
                   // Show Google avatar
                   return (
                     <div
-                      onClick={() => setShowAvatarSelector(true)}
+                      onClick={() => isViewingOwnProfile && setShowAvatarSelector(true)}
                       style={{
                         position: 'relative',
                         width: '120px',
                         height: '120px',
                         borderRadius: '12px',
-                        cursor: 'pointer',
+                        cursor: isViewingOwnProfile ? 'pointer' : 'default',
                         border: '3px solid #ff751f',
                         overflow: 'hidden',
                         transition: 'all 0.2s'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'scale(1.05)';
-                        const icon = e.currentTarget.querySelector('.avatar-edit-icon');
-                        if (icon) icon.style.opacity = '1';
+                        if (isViewingOwnProfile) {
+                          e.currentTarget.style.transform = 'scale(1.05)';
+                          const icon = e.currentTarget.querySelector('.avatar-edit-icon');
+                          if (icon) icon.style.opacity = '1';
+                        }
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'scale(1)';
-                        const icon = e.currentTarget.querySelector('.avatar-edit-icon');
-                        if (icon) icon.style.opacity = '0.8';
+                        if (isViewingOwnProfile) {
+                          e.currentTarget.style.transform = 'scale(1)';
+                          const icon = e.currentTarget.querySelector('.avatar-edit-icon');
+                          if (icon) icon.style.opacity = '0.8';
+                        }
                       }}
                     >
                       <img 
@@ -9895,7 +9944,7 @@ function GameBoard() {
                           pointerEvents: 'none'
                         }}
                       >
-                        {userProfile?.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '👤'}
+                        {profileToDisplay?.username?.[0]?.toUpperCase() || (isViewingOwnProfile ? (user.email?.[0]?.toUpperCase() || '👤') : '👤')}
                       </div>
                       {/* Edit pencil icon overlay */}
                       <div
@@ -9943,26 +9992,28 @@ function GameBoard() {
                 color: '#000',
                 fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
               }}>
-                {userProfile?.username || user?.user_metadata?.username || user?.email?.split('@')[0] || 'User'}
+                {profileToDisplay?.username || (isViewingOwnProfile ? (user?.user_metadata?.username || user?.email?.split('@')[0] || 'User') : 'User')}
               </h1>
-              <p style={{ 
-                margin: '0 0 8px 0', 
-                fontSize: '16px', 
-                color: '#666',
-                fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-              }}>
+              {isViewingOwnProfile && (
+                <p style={{ 
+                  margin: '0 0 8px 0', 
+                  fontSize: '16px', 
+                  color: '#666',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                }}>
                 {user.email}
               </p>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ 
                   fontSize: '16px', 
                   color: '#666',
                   fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
                 }}>
-                  {editingCountry ? (
+                  {isViewingOwnProfile && editingCountry ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <select
-                        value={newCountry || userProfile?.country || 'US'}
+                        value={newCountry || profileToDisplay?.country || 'US'}
                         onChange={(e) => setNewCountry(e.target.value)}
                         style={{
                           padding: '6px 12px',
@@ -10019,43 +10070,47 @@ function GameBoard() {
                         fontSize: '20px',
                         fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif'
                       }}>
-                        {getCountryFlag(userProfile?.country || (user ? 'US' : null), !!user, !!userProfile) || ''}
+                        {getCountryFlag(profileToDisplay?.country || (isViewingOwnProfile && user ? 'US' : null), !!user, !!profileToDisplay) || ''}
                       </span>
-                      <button
-                        onClick={() => {
-                          setEditingCountry(true);
-                          setNewCountry(userProfile?.country || 'US');
-                        }}
-                        style={{
-                          marginLeft: '8px',
-                          padding: '4px 12px',
-                          background: 'transparent',
-                          color: '#666',
-                          border: '1px solid #ddd',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={handleSignOut}
-                        style={{
-                          marginLeft: '8px',
-                          padding: '4px 12px',
-                          background: '#dc3545',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-                        }}
-                      >
-                        Sign Out
-                      </button>
+                      {isViewingOwnProfile && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setEditingCountry(true);
+                              setNewCountry(profileToDisplay?.country || 'US');
+                            }}
+                            style={{
+                              marginLeft: '8px',
+                              padding: '4px 12px',
+                              background: 'transparent',
+                              color: '#666',
+                              border: '1px solid #ddd',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={handleSignOut}
+                            style={{
+                              marginLeft: '8px',
+                              padding: '4px 12px',
+                              background: '#dc3545',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                            }}
+                          >
+                            Sign Out
+                          </button>
+                        </>
+                      )}
                     </>
                   )}
                 </span>
@@ -10134,7 +10189,7 @@ function GameBoard() {
             // Calculate additional stats from gameHistory
             let bestWinStreak = 0;
             let currentStreak = 0;
-            let highestRating = userProfile?.elo_rating || 1000;
+            let highestRating = profileToDisplay?.elo_rating || 1000;
             let highestRatedWin = 0;
             
             if (gameHistory.length > 0) {
@@ -10145,8 +10200,8 @@ function GameBoard() {
               
               // Calculate win streak and highest rating
               sortedGames.forEach((game) => {
-                const isWin = game.winner_id === user?.id;
-                const playerEloAfter = game.player1_id === user?.id ? 
+                const isWin = game.winner_id === profileUserId;
+                const playerEloAfter = game.player1_id === profileUserId ? 
                   ((game.player1_elo_before || 1000) + (game.player1_elo_change || 0)) :
                   ((game.player2_elo_before || 1000) + (game.player2_elo_change || 0));
                 
@@ -10156,7 +10211,7 @@ function GameBoard() {
                   
                   // Check for highest rated win
                   // Use elo_before (opponent's ELO at game start) - this is the most accurate
-                  const opponentElo = game.player1_id === user?.id ? 
+                  const opponentElo = game.player1_id === profileUserId ? 
                     (game.player2_elo_before ?? (game.player2?.elo_rating ?? 0)) :
                     (game.player1_elo_before ?? (game.player1?.elo_rating ?? 0));
                   
@@ -10193,7 +10248,7 @@ function GameBoard() {
                 }}>
                   <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Rating</div>
                   <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ff751f' }}>
-                    {userProfile?.elo_rating || 1000}
+                    {profileToDisplay?.elo_rating || 1000}
                   </div>
                 </div>
                 <div style={{
@@ -10228,7 +10283,7 @@ function GameBoard() {
                 }}>
                   <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Games Played</div>
                   <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#6c757d' }}>
-                    {userProfile?.games_played || 0}
+                    {profileToDisplay?.games_played || 0}
                   </div>
                 </div>
                 <div style={{
@@ -10239,7 +10294,7 @@ function GameBoard() {
                 }}>
                   <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Wins</div>
                   <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>
-                    {userProfile?.wins || 0}
+                    {profileToDisplay?.wins || 0}
                   </div>
                 </div>
                 <div style={{
@@ -10250,7 +10305,7 @@ function GameBoard() {
                 }}>
                   <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Losses</div>
                   <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#dc3545' }}>
-                    {userProfile?.losses || 0}
+                    {profileToDisplay?.losses || 0}
                   </div>
                 </div>
                 
@@ -10683,18 +10738,19 @@ function GameBoard() {
                   </thead>
                   <tbody>
                     {gameHistory.slice(0, gamesToDisplay).map((game, index) => {
-                      const isWin = game.winner_id === user?.id;
-                      const opponent = game.player1_id === user?.id ? game.player2 : game.player1;
+                      const isWin = game.winner_id === profileUserId;
+                      const opponent = game.player1_id === profileUserId ? game.player2 : game.player1;
+                      const opponentId = game.player1_id === profileUserId ? game.player2_id : game.player1_id;
                       // Use ELO at game start (stored in database), not current ELO
-                      const opponentElo = game.player1_id === user?.id ? 
+                      const opponentElo = game.player1_id === profileUserId ? 
                         (game.player2_elo_before || game.player2?.elo_rating || 'N/A') : 
                         (game.player1_elo_before || game.player1?.elo_rating || 'N/A');
-                      const eloChange = game.player1_id === user?.id ? 
+                      const eloChange = game.player1_id === profileUserId ? 
                         (game.player1_elo_change || 0) : 
                         (game.player2_elo_change || 0);
                       
                       // Calculate player's ELO after the game
-                      const playerEloBefore = game.player1_id === user?.id ? 
+                      const playerEloBefore = game.player1_id === profileUserId ? 
                         (game.player1_elo_before || 1000) : 
                         (game.player2_elo_before || 1000);
                       const playerEloAfter = playerEloBefore + eloChange;
@@ -10738,7 +10794,34 @@ function GameBoard() {
                             textAlign: 'left'
                           }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
-                              <span>{opponent?.username || 'Unknown'}</span>
+                              <span
+                                onClick={() => {
+                                  if (opponentId && opponentId !== user?.id) {
+                                    setViewingUserId(opponentId);
+                                    if (supabase) {
+                                      setTimeout(() => refreshGameHistory(opponentId), 100);
+                                    }
+                                  }
+                                }}
+                                style={{
+                                  cursor: opponentId && opponentId !== user?.id ? 'pointer' : 'default',
+                                  color: opponentId && opponentId !== user?.id ? '#ff751f' : '#333',
+                                  textDecoration: opponentId && opponentId !== user?.id ? 'underline' : 'none',
+                                  fontWeight: '500'
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (opponentId && opponentId !== user?.id) {
+                                    e.target.style.color = '#e6640f';
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (opponentId && opponentId !== user?.id) {
+                                    e.target.style.color = '#ff751f';
+                                  }
+                                }}
+                              >
+                                {opponent?.username || 'Unknown'}
+                              </span>
                               <span style={{ 
                                 fontSize: '12px', 
                                 color: '#666',

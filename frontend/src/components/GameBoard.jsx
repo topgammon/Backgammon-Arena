@@ -1343,32 +1343,41 @@ function GameBoard() {
                   
                   if (!fetchError && currentProfile) {
                     const newViews = (currentProfile.views || 0) + 1;
-                    const { error: updateError } = await supabase
+                    console.log(`📊 Attempting to update views: ${currentProfile.views || 0} → ${newViews}`);
+                    const { data: updateData, error: updateError } = await supabase
                       .from('users')
                       .update({ views: newViews })
-                      .eq('id', viewingUserId);
+                      .eq('id', viewingUserId)
+                      .select(); // Select to verify update
                     
                     if (updateError) {
-                      console.error('Error incrementing views:', updateError);
+                      console.error('❌ Error incrementing views:', updateError);
+                      console.error('Error details:', JSON.stringify(updateError, null, 2));
                       if (updateError.code === 'PGRST204') {
-                        console.warn('Views column does not exist in database. Please run the SQL to add it.');
+                        console.warn('⚠️ Views column does not exist in database. Please run this SQL:');
+                        console.warn('ALTER TABLE public.users ADD COLUMN IF NOT EXISTS views INTEGER DEFAULT 0;');
                       }
                       hasIncrementedViewsRef.current = null; // Reset on error to retry
                     } else {
+                      console.log(`✅ Views update successful:`, updateData);
                       console.log(`✅ Views incremented: ${currentProfile.views || 0} → ${newViews}`);
                       // Wait a moment for database to update, then refresh profile
                       setTimeout(async () => {
-                        const { data: updatedProfile } = await supabase
+                        const { data: updatedProfile, error: refreshError } = await supabase
                           .from('users')
                           .select('*')
                           .eq('id', viewingUserId)
                           .maybeSingle();
-                        if (updatedProfile) {
+                        if (refreshError) {
+                          console.error('❌ Error refreshing profile:', refreshError);
+                        } else if (updatedProfile) {
                           setViewingUserProfile(updatedProfile);
                           console.log(`✅ Profile refreshed: ${updatedProfile.views || 0} views`);
                         }
                       }, 500);
                     }
+                  } else if (fetchError) {
+                    console.error('❌ Error fetching current views:', fetchError);
                   }
                 } else {
                   console.log(`✅ Views incremented (using RPC)`);

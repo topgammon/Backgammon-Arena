@@ -9691,21 +9691,60 @@ $$;
           return;
         }
         
-        // Create match via socket
-        if (socketRef.current) {
-          socketRef.current.emit('challenge:accept', {
-            challengeId: incomingChallenge.id,
-            challengerId: incomingChallenge.challengerId,
-            challengedId: user.id
-          });
-        }
+        // Store challenge data before clearing state
+        const challengeIdToAccept = incomingChallenge.id;
+        const challengerIdToAccept = incomingChallenge.challengerId;
+        
+        // Set up matchmaking state FIRST
+        setIsMatchmaking(true);
+        setMatchmakingType('ranked');
+        setMatchmakingStatus('Starting match...');
+        setScreen('matchmaking');
         
         // Clear incoming challenge
         setIncomingChallenge(null);
-        setScreen('matchmaking'); // Will transition to game when match is found
+        
+        // Ensure socket connection exists for matchmaking
+        // The matchmaking useEffect will set up the socket and listeners
+        // We need to wait for the socket to be connected, then emit accept
+        const emitAccept = () => {
+          // Check if socket exists and is connected
+          if (socketRef.current) {
+            if (socketRef.current.connected) {
+              // Socket is connected, emit accept
+              socketRef.current.emit('challenge:accept', {
+                challengeId: challengeIdToAccept,
+                challengerId: challengerIdToAccept,
+                challengedId: user.id
+              });
+              console.log('✅ Challenge accept emitted, waiting for match...');
+            } else {
+              // Socket exists but not connected yet, wait for connection
+              socketRef.current.once('connect', () => {
+                socketRef.current.emit('challenge:accept', {
+                  challengeId: challengeIdToAccept,
+                  challengerId: challengerIdToAccept,
+                  challengedId: user.id
+                });
+                console.log('✅ Challenge accept emitted (after connect), waiting for match...');
+              });
+            }
+          } else {
+            // Socket doesn't exist yet, wait a bit and try again
+            // The matchmaking useEffect should create it
+            setTimeout(emitAccept, 100);
+          }
+        };
+        
+        // Start trying to emit after a short delay to let useEffect set up socket
+        setTimeout(emitAccept, 300);
       } catch (err) {
         console.error('Error accepting challenge:', err);
         alert('Failed to accept challenge. Please try again.');
+        setIsMatchmaking(false);
+        setMatchmakingType(null);
+        setMatchmakingStatus('');
+        setScreen('home');
       }
     };
     

@@ -1638,6 +1638,10 @@ io.on('connection', (socket) => {
       matchmakingType: 'ranked'
     });
     
+    console.log(`✅ Challenge ${challengeId} accepted, match ${matchId} created`);
+    console.log(`📤 Emitting match-found to challenger (socket ${challenge.challengerSocketId})`);
+    console.log(`📤 Emitting match-found to challenged (socket ${challenge.challengedSocketId})`);
+    
     // Notify both players
     challengerSocket.emit('matchmaking:match-found', {
       matchId,
@@ -1657,7 +1661,7 @@ io.on('connection', (socket) => {
       }
     });
     
-    console.log(`✅ Challenge ${challengeId} accepted, match ${matchId} created`);
+    console.log(`✅ Match-found events emitted to both players`);
     
     // Remove from challenge queue
     challengeQueue.delete(challengeId);

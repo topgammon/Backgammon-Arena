@@ -12636,6 +12636,238 @@ $$;
             );
           })()}
 
+          {/* Win/Loss Type Donut Charts */}
+          {gameHistory.length > 0 && (() => {
+            // Calculate win and loss types
+            const winTypes = {
+              standard: 0,
+              gammon: 0,
+              backgammon: 0
+            };
+            
+            const lossTypes = {
+              standard: 0,
+              gammon: 0,
+              backgammon: 0
+            };
+            
+            gameHistory.forEach((game) => {
+              const isWin = game.winner_id === profileUserId;
+              const multiplier = game.win_multiplier || 1;
+              
+              if (isWin) {
+                if (multiplier === 1) winTypes.standard++;
+                else if (multiplier === 2) winTypes.gammon++;
+                else if (multiplier === 3) winTypes.backgammon++;
+              } else {
+                // For losses, we need to check the opponent's multiplier
+                // If opponent won with multiplier > 1, we lost by gammon/backgammon
+                if (multiplier === 1) lossTypes.standard++;
+                else if (multiplier === 2) lossTypes.gammon++;
+                else if (multiplier === 3) lossTypes.backgammon++;
+              }
+            });
+            
+            const totalWins = winTypes.standard + winTypes.gammon + winTypes.backgammon;
+            const totalLosses = lossTypes.standard + lossTypes.gammon + lossTypes.backgammon;
+            
+            // Donut chart component
+            const DonutChart = ({ data, total, title, colors }) => {
+              const size = 200;
+              const centerX = size / 2;
+              const centerY = size / 2;
+              const radius = 70;
+              const innerRadius = 50;
+              
+              let currentAngle = -Math.PI / 2; // Start at top
+              const segments = [];
+              
+              Object.entries(data).forEach(([key, value], index) => {
+                if (value === 0) return;
+                
+                const percentage = value / total;
+                const angle = percentage * 2 * Math.PI;
+                const startAngle = currentAngle;
+                const endAngle = currentAngle + angle;
+                
+                // Calculate path for outer arc
+                const x1 = centerX + radius * Math.cos(startAngle);
+                const y1 = centerY + radius * Math.sin(startAngle);
+                const x2 = centerX + radius * Math.cos(endAngle);
+                const y2 = centerY + radius * Math.sin(endAngle);
+                const largeArcFlag = angle > Math.PI ? 1 : 0;
+                
+                // Calculate path for inner arc (for donut effect)
+                const x3 = centerX + innerRadius * Math.cos(endAngle);
+                const y3 = centerY + innerRadius * Math.sin(endAngle);
+                const x4 = centerX + innerRadius * Math.cos(startAngle);
+                const y4 = centerY + innerRadius * Math.sin(startAngle);
+                
+                const pathData = [
+                  `M ${x1} ${y1}`,
+                  `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
+                  `L ${x3} ${y3}`,
+                  `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${x4} ${y4}`,
+                  'Z'
+                ].join(' ');
+                
+                segments.push({
+                  path: pathData,
+                  color: colors[index],
+                  label: key.charAt(0).toUpperCase() + key.slice(1),
+                  value: value,
+                  percentage: (percentage * 100).toFixed(1)
+                });
+                
+                currentAngle = endAngle;
+              });
+              
+              return (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '16px'
+                }}>
+                  <h3 style={{
+                    margin: 0,
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    color: '#333',
+                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                  }}>
+                    {title}
+                  </h3>
+                  <div style={{ position: 'relative' }}>
+                    <svg width={size} height={size}>
+                      {segments.map((segment, i) => (
+                        <g key={i}>
+                          <path
+                            d={segment.path}
+                            fill={segment.color}
+                            stroke="#fff"
+                            strokeWidth="2"
+                          />
+                        </g>
+                      ))}
+                      {/* Center text */}
+                      <text
+                        x={centerX}
+                        y={centerY - 8}
+                        textAnchor="middle"
+                        fontSize="28"
+                        fontWeight="bold"
+                        fill="#333"
+                        fontFamily="Montserrat, Segoe UI, Verdana, Geneva, sans-serif"
+                      >
+                        {total}
+                      </text>
+                      <text
+                        x={centerX}
+                        y={centerY + 12}
+                        textAnchor="middle"
+                        fontSize="12"
+                        fill="#666"
+                        fontFamily="Montserrat, Segoe UI, Verdana, Geneva, sans-serif"
+                      >
+                        {title.includes('Win') ? 'Wins' : 'Losses'}
+                      </text>
+                    </svg>
+                  </div>
+                  {/* Legend */}
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    width: '100%',
+                    maxWidth: '200px'
+                  }}>
+                    {segments.map((segment, i) => (
+                      <div key={i} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontSize: '14px',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                      }}>
+                        <div style={{
+                          width: '16px',
+                          height: '16px',
+                          borderRadius: '4px',
+                          background: segment.color
+                        }} />
+                        <span style={{ flex: 1, color: '#333' }}>{segment.label}</span>
+                        <span style={{ color: '#666', fontWeight: 'bold' }}>
+                          {segment.value} ({segment.percentage}%)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            };
+            
+            return (
+              <div style={{
+                background: '#fff',
+                borderRadius: '12px',
+                padding: '24px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                marginBottom: '24px'
+              }}>
+                <h2 style={{
+                  margin: '0 0 24px 0',
+                  fontSize: '24px',
+                  fontWeight: 'bold',
+                  color: '#333',
+                  textAlign: 'left',
+                  borderBottom: '2px solid #ff751f',
+                  paddingBottom: '12px',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                }}>
+                  Win & Loss Breakdown
+                </h2>
+                
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-around',
+                  alignItems: 'flex-start',
+                  gap: '40px',
+                  flexWrap: 'wrap'
+                }}>
+                  {totalWins > 0 && (
+                    <DonutChart
+                      data={winTypes}
+                      total={totalWins}
+                      title="Win Types"
+                      colors={['#28a745', '#ffc107', '#dc3545']}
+                    />
+                  )}
+                  {totalLosses > 0 && (
+                    <DonutChart
+                      data={lossTypes}
+                      total={totalLosses}
+                      title="Loss Types"
+                      colors={['#6c757d', '#ff9800', '#e91e63']}
+                    />
+                  )}
+                  {totalWins === 0 && totalLosses === 0 && (
+                    <div style={{
+                      textAlign: 'center',
+                      padding: '40px',
+                      color: '#666',
+                      fontSize: '16px',
+                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                      width: '100%'
+                    }}>
+                      No wins or losses to display
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Game History Section */}
           <div style={{
             background: '#fff',

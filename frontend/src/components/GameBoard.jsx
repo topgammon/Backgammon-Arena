@@ -2352,6 +2352,12 @@ $$;
       
       if (messageError) {
         console.error('Error sending challenge message:', messageError);
+        console.error('Error details:', {
+          code: messageError.code,
+          message: messageError.message,
+          details: messageError.details,
+          hint: messageError.hint
+        });
         console.error('Message data attempted:', {
           conversation_id: conversation.id,
           sender_id: user.id,
@@ -2359,13 +2365,16 @@ $$;
           content: challengeMessage,
           message_type: 'challenge'
         });
-        alert('Failed to send challenge. Please try again.');
+        
+        // Show more specific error message
+        const errorMsg = messageError.message || messageError.details || 'Unknown error';
+        alert(`Failed to send challenge: ${errorMsg}. Please check the console for details.`);
         return;
       }
       
       if (!messageData || !messageData.id) {
         console.error('No message data returned');
-        alert('Failed to send challenge. Please try again.');
+        alert('Failed to send challenge. No message data returned. Please try again.');
         return;
       }
       
@@ -2388,7 +2397,30 @@ $$;
       
       if (challengeError) {
         console.error('Error creating challenge:', challengeError);
-        alert('Failed to create challenge. Please try again.');
+        console.error('Error details:', {
+          code: challengeError.code,
+          message: challengeError.message,
+          details: challengeError.details,
+          hint: challengeError.hint
+        });
+        console.error('Challenge data attempted:', {
+          challenger_id: user.id,
+          challenged_id: otherUser.id,
+          conversation_id: conversation.id,
+          message_id: messageData.id,
+          status: 'pending',
+          expires_at: expiresAt.toISOString()
+        });
+        
+        // Show more specific error message
+        const errorMsg = challengeError.message || challengeError.details || 'Unknown error';
+        alert(`Failed to create challenge: ${errorMsg}. Please check the console for details.`);
+        return;
+      }
+      
+      if (!challengeData || !challengeData.id) {
+        console.error('No challenge data returned');
+        alert('Failed to create challenge. No challenge data returned. Please try again.');
         return;
       }
       

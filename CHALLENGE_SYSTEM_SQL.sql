@@ -1,13 +1,24 @@
 -- Challenge System Database Tables
 -- Run this SQL in your Supabase SQL Editor
+-- Safe to run multiple times - uses IF NOT EXISTS
 
--- Add message_type column to messages table (if not exists)
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS message_type TEXT DEFAULT 'text' CHECK (message_type IN ('text', 'challenge'));
+-- Step 1: Add message_type column to messages table (if not exists)
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS message_type TEXT DEFAULT 'text';
 
--- Add challenge_id column to messages table for challenge messages
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS challenge_id UUID REFERENCES public.challenges(id) ON DELETE SET NULL;
+-- Step 2: Add check constraint for message_type (if not exists)
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'messages_message_type_check'
+  ) THEN
+    ALTER TABLE public.messages 
+    ADD CONSTRAINT messages_message_type_check 
+    CHECK (message_type IN ('text', 'challenge'));
+  END IF;
+END $$;
 
--- Challenges Table
+-- Step 3: Create challenges table FIRST (before adding foreign key reference)
 CREATE TABLE IF NOT EXISTS public.challenges (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   challenger_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
@@ -22,6 +33,24 @@ CREATE TABLE IF NOT EXISTS public.challenges (
   UNIQUE(message_id) -- One challenge per message
 );
 
+-- Step 4: Add challenge_id column to messages table (AFTER challenges table exists)
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS challenge_id UUID;
+
+-- Step 5: Add foreign key constraint for challenge_id (if not exists)
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'messages_challenge_id_fkey'
+  ) THEN
+    ALTER TABLE public.messages 
+    ADD CONSTRAINT messages_challenge_id_fkey 
+    FOREIGN KEY (challenge_id) 
+    REFERENCES public.challenges(id) 
+    ON DELETE SET NULL;
+  END IF;
+END $$;
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_challenges_challenger ON public.challenges(challenger_id);
 CREATE INDEX IF NOT EXISTS idx_challenges_challenged ON public.challenges(challenged_id);
@@ -31,6 +60,11 @@ CREATE INDEX IF NOT EXISTS idx_challenges_conversation ON public.challenges(conv
 
 -- Enable Row Level Security
 ALTER TABLE public.challenges ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist (to avoid conflicts)
+DROP POLICY IF EXISTS "Users can view their challenges" ON public.challenges;
+DROP POLICY IF EXISTS "Users can create challenges" ON public.challenges;
+DROP POLICY IF EXISTS "Users can update received challenges" ON public.challenges;
 
 -- RLS Policies for challenges
 -- Users can view challenges they are involved in
@@ -69,4 +103,3 @@ $$;
 -- Grant execute permission
 GRANT EXECUTE ON FUNCTION expire_old_challenges() TO authenticated;
 GRANT EXECUTE ON FUNCTION expire_old_challenges() TO anon;
-

@@ -310,6 +310,8 @@ function GameBoard() {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const messagesEndRef = useRef(null); // Ref for scrolling to bottom of messages
   const messagesContainerRef = useRef(null); // Ref for messages container
+  const [pendingChallenge, setPendingChallenge] = useState(null); // Current pending challenge (for challenger)
+  const [challengeDeclinedMessage, setChallengeDeclinedMessage] = useState(null); // Message to show when challenge is declined
   const [highestRatingLeaderboard, setHighestRatingLeaderboard] = useState([]); // Top 10 users by highest rating
   const [mostWinsLeaderboard, setMostWinsLeaderboard] = useState([]); // Top 10 users by most wins
   const [globalRank, setGlobalRank] = useState(null); // User's global rank
@@ -1829,7 +1831,8 @@ $$;
             .from('messages')
             .select(`
               *,
-              sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
+              sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url),
+              challenge:challenges!messages_challenge_id_fkey(*)
             `)
             .eq('conversation_id', selectedConversation.id)
             .order('created_at', { ascending: true });
@@ -1912,7 +1915,8 @@ $$;
               .from('messages')
               .select(`
                 *,
-                sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
+                sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url),
+                challenge:challenges!messages_challenge_id_fkey(*)
               `)
               .eq('id', payload.new.id)
               .single();
@@ -2115,6 +2119,184 @@ $$;
     } catch (err) {
       console.error('Error sending message:', err);
       alert('Failed to send message. Please try again.');
+    }
+  };
+
+  // Handle sending challenge
+  const handleSendChallenge = async () => {
+    if (!supabase || !user?.id || !selectedConversation) return;
+    
+    try {
+      const otherUser = selectedConversation.otherUser;
+      if (!otherUser) {
+        alert('Error: Cannot send challenge. User information is missing.');
+        return;
+      }
+      
+      // Check if user already has a pending challenge with this user
+      const { data: existingChallenge } = await supabase
+        .from('challenges')
+        .select('*')
+        .eq('challenger_id', user.id)
+        .eq('challenged_id', otherUser.id)
+        .eq('status', 'pending')
+        .single();
+      
+      if (existingChallenge) {
+        alert('You already have a pending challenge with this player. Please wait for them to respond.');
+        return;
+      }
+      
+      // Create or get conversation
+      let conversation = selectedConversation;
+      if (!conversation.id) {
+        // Create new conversation if it doesn't exist
+        const user1Id = user.id < otherUser.id ? user.id : otherUser.id;
+        const user2Id = user.id < otherUser.id ? otherUser.id : user.id;
+        
+        const { data: newConv, error: convError } = await supabase
+          .from('conversations')
+          .insert({
+            user1_id: user1Id,
+            user2_id: user2Id
+          })
+          .select()
+          .single();
+        
+        if (convError) {
+          console.error('Error creating conversation:', convError);
+          alert('Failed to create conversation. Please try again.');
+          return;
+        }
+        
+        conversation = {
+          ...newConv,
+          otherUser: otherUser
+        };
+        setSelectedConversation(conversation);
+      }
+      
+      // Create challenge message
+      const challengeMessage = `${userProfile?.username || user?.user_metadata?.username || 'You'} is challenging you to a match`;
+      
+      const { data: messageData, error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversation.id,
+          sender_id: user.id,
+          recipient_id: otherUser.id,
+          content: challengeMessage,
+          message_type: 'challenge'
+        })
+        .select()
+        .single();
+      
+      if (messageError) {
+        console.error('Error sending challenge message:', messageError);
+        alert('Failed to send challenge. Please try again.');
+        return;
+      }
+      
+      // Create challenge record
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + 5); // 5 minutes expiration
+      
+      const { data: challengeData, error: challengeError } = await supabase
+        .from('challenges')
+        .insert({
+          challenger_id: user.id,
+          challenged_id: otherUser.id,
+          conversation_id: conversation.id,
+          message_id: messageData.id,
+          status: 'pending',
+          expires_at: expiresAt.toISOString()
+        })
+        .select()
+        .single();
+      
+      if (challengeError) {
+        console.error('Error creating challenge:', challengeError);
+        alert('Failed to create challenge. Please try again.');
+        return;
+      }
+      
+      // Update message with challenge_id
+      await supabase
+        .from('messages')
+        .update({ challenge_id: challengeData.id })
+        .eq('id', messageData.id);
+      
+      // Update conversation last_message_at
+      await supabase
+        .from('conversations')
+        .update({ last_message_at: new Date().toISOString() })
+        .eq('id', conversation.id);
+      
+      // Set pending challenge state (for challenger)
+      setPendingChallenge(challengeData);
+      
+      // Enter private matchmaking queue
+      setIsMatchmaking(true);
+      setMatchmakingType('ranked');
+      setMatchmakingStatus('Waiting for opponent to accept challenge...');
+      setScreen('matchmaking');
+      
+      // Join private challenge queue via socket
+      if (socketRef.current) {
+        socketRef.current.emit('challenge:join-queue', {
+          challengeId: challengeData.id,
+          userId: user.id,
+          opponentId: otherUser.id
+        });
+      }
+      
+      // Refresh conversation messages
+      const { data: messagesData } = await supabase
+        .from('messages')
+        .select(`
+          *,
+          sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url),
+          challenge:challenges!messages_challenge_id_fkey(*)
+        `)
+        .eq('conversation_id', conversation.id)
+        .order('created_at', { ascending: true });
+      
+      if (messagesData) {
+        setConversationMessages(messagesData);
+        setTimeout(() => {
+          if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 100);
+      }
+      
+      // Refresh conversations list
+      if (screen === 'profile' && (!viewingUserId || viewingUserId === user.id)) {
+        const { data: convsData } = await supabase
+          .from('conversations')
+          .select(`
+            *,
+            user1:users!conversations_user1_id_fkey(id, username, avatar, google_avatar_url, country),
+            user2:users!conversations_user2_id_fkey(id, username, avatar, google_avatar_url, country)
+          `)
+          .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+          .order('last_message_at', { ascending: false });
+        
+        if (convsData) {
+          const convsList = convsData.map(conv => {
+            const otherUser = conv.user1_id === user.id ? conv.user2 : conv.user1;
+            return {
+              ...conv,
+              otherUser: otherUser
+            };
+          });
+          setConversations(convsList);
+        }
+      }
+      
+    } catch (err) {
+      console.error('Error sending challenge:', err);
+      alert('Failed to send challenge. Please try again.');
     }
   };
 
@@ -8349,6 +8531,14 @@ $$;
             </div>
           </div>
         )}
+        {/* Challenge declined message */}
+        {challengeDeclinedMessage && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+            <div style={{ background: '#fff', padding: 30, borderRadius: 10, textAlign: 'center', maxWidth: 400 }}>
+              <h3 style={{ marginBottom: 16, color: '#f44336' }}>{challengeDeclinedMessage}</h3>
+            </div>
+          </div>
+        )}
         {showConfirmResign && (() => {
           const resigningPlayer = isOnlineGame ? playerNumber : currentPlayer;
           const winningPlayer = resigningPlayer === 1 ? 2 : 1;
@@ -8594,6 +8784,39 @@ $$;
         setMatchmakingType(null);
         setScreen('home');
       }, 2000);
+    });
+    
+    // Challenge system handlers
+    socket.on('challenge:declined-notification', (data) => {
+      const { challengeId } = data;
+      if (pendingChallenge && pendingChallenge.id === challengeId) {
+        setChallengeDeclinedMessage('Challenge declined');
+        setPendingChallenge(null);
+        setIsMatchmaking(false);
+        setMatchmakingType(null);
+        setMatchmakingStatus('');
+        
+        // Show message for 2 seconds then redirect to home
+        setTimeout(() => {
+          setChallengeDeclinedMessage(null);
+          setScreen('home');
+        }, 2000);
+      }
+    });
+    
+    socket.on('challenge:expired', (data) => {
+      const { challengeId } = data;
+      if (pendingChallenge && pendingChallenge.id === challengeId) {
+        setPendingChallenge(null);
+        setIsMatchmaking(false);
+        setMatchmakingType(null);
+        setMatchmakingStatus('');
+        alert('Challenge expired. The other player did not respond in time.');
+      }
+    });
+    
+    socket.on('challenge:queued', (data) => {
+      console.log('Challenge queued:', data);
     });
     
       socket.on('matchmaking:match-found', async (data) => {
@@ -13164,10 +13387,8 @@ $$;
                     
                     {/* Challenge Button */}
                     <button
-                      onClick={() => {
-                        // TODO: Implement challenge functionality
-                        alert('Challenge feature coming soon!');
-                      }}
+                      onClick={handleSendChallenge}
+                      disabled={pendingChallenge && pendingChallenge.status === 'pending'}
                       style={{
                         background: '#fff',
                         border: '1px solid #ddd',
@@ -13294,24 +13515,33 @@ $$;
                 ) : (
                   conversationMessages.map((msg) => {
                     const isOwnMessage = msg.sender_id === user.id;
+                    const isChallenge = msg.message_type === 'challenge';
+                    const challenge = msg.challenge;
+                    const isChallenger = challenge && challenge.challenger_id === user.id;
+                    const isChallenged = challenge && challenge.challenged_id === user.id;
+                    const canRespond = isChallenged && challenge.status === 'pending';
+                    
                     return (
                       <div
                         key={msg.id}
                         style={{
                           display: 'flex',
                           justifyContent: isOwnMessage ? 'flex-end' : 'flex-start',
-                          marginBottom: '8px'
+                          marginBottom: '8px',
+                          flexDirection: 'column',
+                          alignItems: isOwnMessage ? 'flex-end' : 'flex-start'
                         }}
                       >
                         <div style={{
                           maxWidth: '70%',
                           padding: '10px 14px',
-                          background: isOwnMessage ? '#ff751f' : '#e0e0e0',
-                          color: isOwnMessage ? '#fff' : '#333',
+                          background: isChallenge ? (isOwnMessage ? '#fff4e6' : '#e8f4f8') : (isOwnMessage ? '#ff751f' : '#e0e0e0'),
+                          color: isChallenge ? '#333' : (isOwnMessage ? '#fff' : '#333'),
                           borderRadius: '12px',
                           wordBreak: 'break-word',
                           fontSize: '14px',
-                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                          border: isChallenge ? '2px solid #ff751f' : 'none'
                         }}>
                           {!isOwnMessage && (
                             <div style={{
@@ -13324,6 +13554,200 @@ $$;
                             </div>
                           )}
                           <div>{msg.content}</div>
+                          {isChallenge && challenge && (
+                            <div style={{
+                              marginTop: '8px',
+                              paddingTop: '8px',
+                              borderTop: '1px solid rgba(0,0,0,0.1)'
+                            }}>
+                              {challenge.status === 'pending' && canRespond && (
+                                <div style={{
+                                  display: 'flex',
+                                  gap: '8px',
+                                  marginTop: '8px'
+                                }}>
+                                  <button
+                                    onClick={async () => {
+                                      // Handle challenge acceptance
+                                      if (!supabase || !user?.id || !challenge) return;
+                                      
+                                      try {
+                                        // Update challenge status
+                                        const { error: updateError } = await supabase
+                                          .from('challenges')
+                                          .update({
+                                            status: 'accepted',
+                                            responded_at: new Date().toISOString()
+                                          })
+                                          .eq('id', challenge.id);
+                                        
+                                        if (updateError) {
+                                          console.error('Error accepting challenge:', updateError);
+                                          alert('Failed to accept challenge. Please try again.');
+                                          return;
+                                        }
+                                        
+                                        // Create match via socket
+                                        if (socketRef.current) {
+                                          socketRef.current.emit('challenge:accept', {
+                                            challengeId: challenge.id,
+                                            challengerId: challenge.challenger_id,
+                                            challengedId: challenge.challenged_id
+                                          });
+                                        }
+                                        
+                                        // Clear pending challenge if we were the challenger
+                                        if (pendingChallenge && pendingChallenge.id === challenge.id) {
+                                          setPendingChallenge(null);
+                                          setIsMatchmaking(false);
+                                          setMatchmakingType(null);
+                                          setMatchmakingStatus('');
+                                        }
+                                        
+                                        // Refresh messages to show updated status
+                                        const { data: messagesData } = await supabase
+                                          .from('messages')
+                                          .select(`
+                                            *,
+                                            sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url),
+                                            challenge:challenges!messages_challenge_id_fkey(*)
+                                          `)
+                                          .eq('conversation_id', selectedConversation.id)
+                                          .order('created_at', { ascending: true });
+                                        
+                                        if (messagesData) {
+                                          setConversationMessages(messagesData);
+                                        }
+                                      } catch (err) {
+                                        console.error('Error accepting challenge:', err);
+                                        alert('Failed to accept challenge. Please try again.');
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '8px 16px',
+                                      background: '#4caf50',
+                                      color: '#fff',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer',
+                                      fontSize: '14px',
+                                      fontWeight: 'bold',
+                                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                                    }}
+                                    onMouseEnter={(e) => e.target.style.background = '#45a049'}
+                                    onMouseLeave={(e) => e.target.style.background = '#4caf50'}
+                                  >
+                                    Accept
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      // Handle challenge decline
+                                      if (!supabase || !user?.id || !challenge) return;
+                                      
+                                      try {
+                                        // Update challenge status
+                                        const { error: updateError } = await supabase
+                                          .from('challenges')
+                                          .update({
+                                            status: 'declined',
+                                            responded_at: new Date().toISOString()
+                                          })
+                                          .eq('id', challenge.id);
+                                        
+                                        if (updateError) {
+                                          console.error('Error declining challenge:', updateError);
+                                          alert('Failed to decline challenge. Please try again.');
+                                          return;
+                                        }
+                                        
+                                        // Send decline message to challenger
+                                        const declineMessage = `Challenge declined`;
+                                        await supabase
+                                          .from('messages')
+                                          .insert({
+                                            conversation_id: selectedConversation.id,
+                                            sender_id: user.id,
+                                            recipient_id: challenge.challenger_id,
+                                            content: declineMessage,
+                                            message_type: 'text'
+                                          });
+                                        
+                                        // Notify challenger via socket
+                                        if (socketRef.current) {
+                                          socketRef.current.emit('challenge:declined', {
+                                            challengeId: challenge.id
+                                          });
+                                        }
+                                        
+                                        // Refresh messages
+                                        const { data: messagesData } = await supabase
+                                          .from('messages')
+                                          .select(`
+                                            *,
+                                            sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url),
+                                            challenge:challenges!messages_challenge_id_fkey(*)
+                                          `)
+                                          .eq('conversation_id', selectedConversation.id)
+                                          .order('created_at', { ascending: true });
+                                        
+                                        if (messagesData) {
+                                          setConversationMessages(messagesData);
+                                        }
+                                      } catch (err) {
+                                        console.error('Error declining challenge:', err);
+                                        alert('Failed to decline challenge. Please try again.');
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '8px 16px',
+                                      background: '#f44336',
+                                      color: '#fff',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer',
+                                      fontSize: '14px',
+                                      fontWeight: 'bold',
+                                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                                    }}
+                                    onMouseEnter={(e) => e.target.style.background = '#da190b'}
+                                    onMouseLeave={(e) => e.target.style.background = '#f44336'}
+                                  >
+                                    Decline
+                                  </button>
+                                </div>
+                              )}
+                              {challenge.status === 'accepted' && (
+                                <div style={{
+                                  color: '#4caf50',
+                                  fontWeight: 'bold',
+                                  fontSize: '12px',
+                                  marginTop: '4px'
+                                }}>
+                                  ✓ Challenge Accepted
+                                </div>
+                              )}
+                              {challenge.status === 'declined' && (
+                                <div style={{
+                                  color: '#f44336',
+                                  fontWeight: 'bold',
+                                  fontSize: '12px',
+                                  marginTop: '4px'
+                                }}>
+                                  ✗ Challenge Declined
+                                </div>
+                              )}
+                              {challenge.status === 'expired' && (
+                                <div style={{
+                                  color: '#999',
+                                  fontWeight: 'bold',
+                                  fontSize: '12px',
+                                  marginTop: '4px'
+                                }}>
+                                  ⏱ Challenge Expired
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <div style={{
                             fontSize: '10px',
                             opacity: 0.7,

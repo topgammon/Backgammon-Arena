@@ -106,6 +106,7 @@ app.post('/api/evaluate', async (req, res) => {
 // Matchmaking queues
 const guestQueue = []; // Simple queue for guest matchmaking
 const rankedQueue = []; // Array of { socketId, userId, elo, timestamp } for ranked matchmaking
+const challengeQueue = new Map(); // challengeId -> { challengerSocketId, challengedSocketId, challengerUserId, challengedUserId }
 
 // Track online users: userId -> Set of socketIds (users can have multiple tabs)
 const onlineUsers = new Map();
@@ -270,6 +271,26 @@ io.on('connection', (socket) => {
     if (rankedIndex !== -1) {
       rankedQueue.splice(rankedIndex, 1);
       console.log('👤 Removed from ranked queue, new size:', rankedQueue.length);
+    }
+    
+    // Clean up challenges where this socket was involved
+    for (const [challengeId, challenge] of challengeQueue.entries()) {
+      if (challenge.challengerSocketId === socket.id || challenge.challengedSocketId === socket.id) {
+        // Notify the other player if they exist
+        const otherSocketId = challenge.challengerSocketId === socket.id 
+          ? challenge.challengedSocketId 
+          : challenge.challengerSocketId;
+        
+        if (otherSocketId) {
+          const otherSocket = io.sockets.sockets.get(otherSocketId);
+          if (otherSocket) {
+            otherSocket.emit('challenge:expired', { challengeId });
+          }
+        }
+        
+        challengeQueue.delete(challengeId);
+        console.log(`🗑️ Challenge ${challengeId} removed due to disconnect`);
+      }
     }
     
     // Clean up active matches where this socket was a player
@@ -1486,6 +1507,123 @@ io.on('connection', (socket) => {
       console.error('❌ Error handling message:send:', error);
     }
   });
+  
+  // Challenge system handlers
+  // Handle challenge join queue (when challenger sends challenge)
+  socket.on('challenge:join-queue', (data) => {
+    const { challengeId, userId, opponentId } = data;
+    
+    if (socket.userId !== userId) {
+      console.error('❌ Unauthorized challenge join attempt');
+      return;
+    }
+    
+    challengeQueue.set(challengeId, {
+      challengerSocketId: socket.id,
+      challengedSocketId: null, // Will be set when challenged player accepts
+      challengerUserId: userId,
+      challengedUserId: opponentId
+    });
+    
+    console.log(`⚔️ Challenge ${challengeId} queued: ${userId} challenging ${opponentId}`);
+    
+    // Notify challenger they're in queue
+    socket.emit('challenge:queued', { challengeId });
+  });
+  
+  // Handle challenge acceptance
+  socket.on('challenge:accept', async (data) => {
+    const { challengeId, challengerId, challengedId } = data;
+    
+    if (socket.userId !== challengedId) {
+      console.error('❌ Unauthorized challenge accept attempt');
+      return;
+    }
+    
+    const challenge = challengeQueue.get(challengeId);
+    if (!challenge) {
+      console.error('❌ Challenge not found in queue:', challengeId);
+      return;
+    }
+    
+    // Update challenge with challenged socket
+    challenge.challengedSocketId = socket.id;
+    
+    // Find challenger socket
+    const challengerSocket = io.sockets.sockets.get(challenge.challengerSocketId);
+    if (!challengerSocket) {
+      console.error('❌ Challenger socket not found');
+      return;
+    }
+    
+    // Create match
+    const matchId = `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Create match entry
+    activeMatches.set(matchId, {
+      player1: {
+        socketId: challenge.challengerSocketId,
+        userId: challenge.challengerUserId,
+        isGuest: false
+      },
+      player2: {
+        socketId: challenge.challengedSocketId,
+        userId: challenge.challengedUserId,
+        isGuest: false
+      },
+      gameState: null,
+      matchmakingType: 'ranked'
+    });
+    
+    // Notify both players
+    challengerSocket.emit('matchmaking:match-found', {
+      matchId,
+      playerNumber: 1,
+      opponent: {
+        userId: challenge.challengedUserId,
+        isGuest: false
+      }
+    });
+    
+    socket.emit('matchmaking:match-found', {
+      matchId,
+      playerNumber: 2,
+      opponent: {
+        userId: challenge.challengerUserId,
+        isGuest: false
+      }
+    });
+    
+    console.log(`✅ Challenge ${challengeId} accepted, match ${matchId} created`);
+    
+    // Remove from challenge queue
+    challengeQueue.delete(challengeId);
+  });
+  
+  // Handle challenge decline
+  socket.on('challenge:declined', (data) => {
+    const { challengeId } = data;
+    
+    const challenge = challengeQueue.get(challengeId);
+    if (!challenge) {
+      console.error('❌ Challenge not found in queue:', challengeId);
+      return;
+    }
+    
+    // Find challenger socket
+    const challengerSocket = io.sockets.sockets.get(challenge.challengerSocketId);
+    if (challengerSocket) {
+      challengerSocket.emit('challenge:declined-notification', {
+        challengeId
+      });
+    }
+    
+    console.log(`❌ Challenge ${challengeId} declined`);
+    
+    // Remove from challenge queue
+    challengeQueue.delete(challengeId);
+  });
+  
 });
 
 const PORT = process.env.PORT || 3001;

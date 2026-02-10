@@ -3016,7 +3016,9 @@ $$;
                       triggerGameOver('timeout', timeoutWinner, timedOutPlayer);
                     }
                     // If player has rolled AND (all dice used OR no valid moves): auto-end turn
-                    else {
+                    // This handles both cases: all dice used OR no valid moves remaining
+                    else if (currentHasRolled && (allUsed || !hasValid)) {
+                      console.log(`⏰ Timeout: Player ${timedOutPlayer} timed out (no moves or all dice used), ending turn`);
                       handleEndTurn();
                     }
                     return currentHasRolled;
@@ -6279,7 +6281,7 @@ $$;
                         ))
                   )}
                 </div>
-                {hasRolled && !isRolling && !hasAnyValidMoves() && usedDice.length === 0 && (
+                {hasRolled && !isRolling && !hasAnyValidMoves() && (
                   <div style={{ fontSize: 16, color: '#ff6b35', fontWeight: 'bold', marginTop: 4 }}>
                     No valid moves
                   </div>
@@ -6320,7 +6322,7 @@ $$;
                 </>
               )}
               {/* Timer beside the text */}
-              <div style={{ fontSize: 20, fontWeight: 700, color: timer <= 5 ? '#dc3545' : '#fff', letterSpacing: 1, textShadow: timer <= 5 ? '0 0 8px #fff, 0 0 16px #fff' : 'none', marginLeft: screen === 'onlineGame' && hasRolled && !isRolling ? 12 : 0 }}>
+              <div style={{ fontSize: 28, fontWeight: 700, color: timer <= 5 ? '#dc3545' : '#fff', letterSpacing: 1, textShadow: timer <= 5 ? '0 0 8px #fff, 0 0 16px #fff' : 'none', marginLeft: screen === 'onlineGame' && hasRolled && !isRolling ? 12 : 0 }}>
                 <span style={{ color: '#fff', marginRight: 4, textShadow: 'none' }}>⏰</span>
                 <span style={timer <= 5 ? { color: '#dc3545', textShadow: '0 0 8px #fff, 0 0 16px #fff' } : { color: '#fff', textShadow: 'none' }}>{timer}</span>
                 <span style={timer <= 5 ? { color: '#dc3545' } : { color: '#fff' }}>s</span>

@@ -1273,7 +1273,11 @@ function GameBoard() {
     if (!user?.id) return;
     
     const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
-    const socket = io(backendUrl);
+    // Use socketRef if it exists (for matchmaking), otherwise create a new socket
+    const socket = socketRef.current || io(backendUrl);
+    if (!socketRef.current) {
+      socketRef.current = socket;
+    }
     
     socket.on('connect', () => {
       // Register user as online when socket connects
@@ -1291,6 +1295,106 @@ function GameBoard() {
     });
     
     // Listen for new messages
+    // Listen for matchmaking:match-found globally (for challenges accepted from profile/conversation)
+    socket.on('matchmaking:match-found', async (data) => {
+      console.log('Match found (global listener):', data);
+      setMatchmakingStatus('Match found! Starting game...');
+      
+      // Mark that we're transitioning to game (don't disconnect socket)
+      transitioningToGameRef.current = true;
+      
+      // Set online game state
+      setMatchId(data.matchId);
+      setPlayerNumber(data.playerNumber);
+      setOpponent(data.opponent);
+      setIsOnlineGame(true);
+      
+      // Fetch opponent's profile if they're a registered user
+      if (!data.opponent?.isGuest && data.opponent?.userId && supabase) {
+        try {
+          const { data: profile, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', data.opponent.userId)
+            .maybeSingle();
+          
+          if (!error && profile) {
+            console.log('Fetched opponent profile:', profile);
+            setOpponentProfile(profile);
+          } else if (error && error.code !== 'PGRST116') {
+            console.error('Error fetching opponent profile:', error);
+          }
+        } catch (err) {
+          console.error('Error fetching opponent profile:', err);
+        }
+      } else {
+        setOpponentProfile(null);
+      }
+      
+      // Store match state in localStorage for reconnection on refresh
+      localStorage.setItem('activeMatch', JSON.stringify({
+        matchId: data.matchId,
+        playerNumber: data.playerNumber,
+        opponent: data.opponent,
+        matchmakingType: 'ranked',
+        timestamp: Date.now()
+      }));
+      
+      // Don't reset if game is abandoned
+      if (isAbandonedRef.current || gameOver?.type === 'abandoned') {
+        console.log('⚠️ Ignoring game state reset - game is abandoned');
+        return;
+      }
+      
+      // Initialize game state for online play
+      setCheckers(getInitialCheckers());
+      setBar({ 1: [], 2: [] });
+      setBorneOff({ 1: 0, 2: 0 });
+      setDice([0, 0]);
+      setUsedDice([]);
+      setCurrentPlayer(1);
+      setHasRolled(false);
+      if (!isAbandonedRef.current) {
+        setFirstRollPhase(true);
+      }
+      setFirstRolls([null, null]);
+      setFirstRollTurn(1);
+      setFirstRollResult(null);
+      gameOverProcessedRef.current = false; // Reset flag for new match
+      setGameOver(null);
+      setDoubleOffer(null);
+      setCanDouble({ 1: true, 2: true });
+      setLastDoubleOfferer(null);
+      setDoubleOfferedThisTurn({ 1: false, 2: false });
+      setGameStakes(1);
+      setMessage('');
+      setSelected(null);
+      setLegalMoves([]);
+      setUndoStack([]);
+      setMoveMade(false);
+      setAwaitingEndTurn(false);
+      setIsCpuGame(false);
+      
+      // Clear pending challenge if we were the challenger
+      if (pendingChallenge) {
+        setPendingChallenge(null);
+      }
+      
+      // Clear matchmaking state
+      setIsMatchmaking(false);
+      setMatchmakingType(null);
+      setMatchmakingStatus('');
+      
+      // Close any open overlays
+      setShowConversationOverlay(false);
+      setSelectedConversation(null);
+      
+      // Transition to online game screen
+      setTimeout(() => {
+        setScreen('onlineGame');
+      }, 500);
+    });
+    
     socket.on('message:new', async (data) => {
       if (data.recipient_id === user.id) {
         // If the conversation is currently open, refresh messages immediately
@@ -14088,7 +14192,7 @@ $$;
                                   </button>
                                 </div>
                               )}
-                              {challenge.status === 'accepted' && (
+                              {challenge && challenge.status === 'accepted' && (
                                 <div style={{
                                   color: '#4caf50',
                                   fontWeight: 'bold',
@@ -14098,7 +14202,7 @@ $$;
                                   ✓ Challenge Accepted
                                 </div>
                               )}
-                              {challenge.status === 'declined' && (
+                              {challenge && challenge.status === 'declined' && (
                                 <div style={{
                                   color: '#f44336',
                                   fontWeight: 'bold',
@@ -14108,7 +14212,7 @@ $$;
                                   ✗ Challenge Declined
                                 </div>
                               )}
-                              {challenge.status === 'expired' && (
+                              {challenge && challenge.status === 'expired' && (
                                 <div style={{
                                   color: '#999',
                                   fontWeight: 'bold',

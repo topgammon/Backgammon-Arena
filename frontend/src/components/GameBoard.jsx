@@ -1747,6 +1747,84 @@ $$;
     }
   }, [selectedConversation, supabase, user?.id]);
 
+  // Handle sending message from chat view (accessible from both online game and profile)
+  const handleSendMessage = async () => {
+    if (!supabase || !user?.id || !selectedConversation || !messageInput.trim()) return;
+    
+    try {
+      const { error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: selectedConversation.id,
+          sender_id: user.id,
+          recipient_id: selectedConversation.otherUser.id,
+          content: messageInput.trim()
+        });
+      
+      if (messageError) {
+        console.error('Error sending message:', messageError);
+        alert('Failed to send message. Please try again.');
+      } else {
+        // Update conversation last_message_at
+        await supabase
+          .from('conversations')
+          .update({ last_message_at: new Date().toISOString() })
+          .eq('id', selectedConversation.id);
+        
+        // Emit socket event to notify recipient
+        if (socketRef.current) {
+          socketRef.current.emit('message:send', {
+            conversation_id: selectedConversation.id,
+            sender_id: user.id,
+            recipient_id: selectedConversation.otherUser.id,
+            content: messageInput.trim()
+          });
+        }
+        
+        // Refresh messages
+        const { data: messagesData } = await supabase
+          .from('messages')
+          .select(`
+            *,
+            sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
+          `)
+          .eq('conversation_id', selectedConversation.id)
+          .order('created_at', { ascending: true });
+        
+        if (messagesData) {
+          setConversationMessages(messagesData);
+        }
+        
+        // Refresh conversations list
+        const { data: convsData } = await supabase
+          .from('conversations')
+          .select(`
+            *,
+            user1:users!conversations_user1_id_fkey(id, username, avatar, google_avatar_url, country),
+            user2:users!conversations_user2_id_fkey(id, username, avatar, google_avatar_url, country)
+          `)
+          .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+          .order('last_message_at', { ascending: false });
+        
+        if (convsData) {
+          const convsList = convsData.map(conv => {
+            const otherUser = conv.user1_id === user.id ? conv.user2 : conv.user1;
+            return {
+              ...conv,
+              otherUser: otherUser
+            };
+          });
+          setConversations(convsList);
+        }
+        
+        setMessageInput('');
+      }
+    } catch (err) {
+      console.error('Error sending message:', err);
+      alert('Failed to send message. Please try again.');
+    }
+  };
+
   // Fetch game history when on profile page
   useEffect(() => {
     if (screen === 'profile' && supabase) {
@@ -9236,84 +9314,6 @@ $$;
     const boardContainerWidth = boardW + boardX * 2; // Board width + padding
     const isWideScreen = windowWidth > 1200;
     const commonEmojis = ['😊', '😂', '😎', '👍', '👎', '❤️', '🎉', '🔥', '💪', '😢', '😮', '🤔', '👏', '🎯', '🏆', '😴'];
-    
-  // Handle sending message from chat view
-  const handleSendMessage = async () => {
-    if (!supabase || !user?.id || !selectedConversation || !messageInput.trim()) return;
-    
-    try {
-      const { error: messageError } = await supabase
-        .from('messages')
-        .insert({
-          conversation_id: selectedConversation.id,
-          sender_id: user.id,
-          recipient_id: selectedConversation.otherUser.id,
-          content: messageInput.trim()
-        });
-      
-      if (messageError) {
-        console.error('Error sending message:', messageError);
-        alert('Failed to send message. Please try again.');
-      } else {
-        // Update conversation last_message_at
-        await supabase
-          .from('conversations')
-          .update({ last_message_at: new Date().toISOString() })
-          .eq('id', selectedConversation.id);
-        
-        // Emit socket event to notify recipient
-        if (socketRef.current) {
-          socketRef.current.emit('message:send', {
-            conversation_id: selectedConversation.id,
-            sender_id: user.id,
-            recipient_id: selectedConversation.otherUser.id,
-            content: messageInput.trim()
-          });
-        }
-        
-        // Refresh messages
-        const { data: messagesData } = await supabase
-          .from('messages')
-          .select(`
-            *,
-            sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
-          `)
-          .eq('conversation_id', selectedConversation.id)
-          .order('created_at', { ascending: true });
-        
-        if (messagesData) {
-          setConversationMessages(messagesData);
-        }
-        
-        // Refresh conversations list
-        const { data: convsData } = await supabase
-          .from('conversations')
-          .select(`
-            *,
-            user1:users!conversations_user1_id_fkey(id, username, avatar, google_avatar_url, country),
-            user2:users!conversations_user2_id_fkey(id, username, avatar, google_avatar_url, country)
-          `)
-          .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-          .order('last_message_at', { ascending: false });
-        
-        if (convsData) {
-          const convsList = convsData.map(conv => {
-            const otherUser = conv.user1_id === user.id ? conv.user2 : conv.user1;
-            return {
-              ...conv,
-              otherUser: otherUser
-            };
-          });
-          setConversations(convsList);
-        }
-        
-        setMessageInput('');
-      }
-    } catch (err) {
-      console.error('Error sending message:', err);
-      alert('Failed to send message. Please try again.');
-    }
-  };
 
     const handleEmojiClick = (emoji) => {
       setChatInput(prev => prev + emoji);

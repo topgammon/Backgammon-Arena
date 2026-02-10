@@ -312,6 +312,7 @@ function GameBoard() {
   const messagesContainerRef = useRef(null); // Ref for messages container
   const [pendingChallenge, setPendingChallenge] = useState(null); // Current pending challenge (for challenger)
   const [incomingChallenge, setIncomingChallenge] = useState(null); // Challenge received from another player
+  const [challengeCountdown, setChallengeCountdown] = useState(10); // Countdown timer for challenge (10 seconds)
   const [challengeError, setChallengeError] = useState(null); // Error message when challenge cannot be sent
   const [challengeDeclinedMessage, setChallengeDeclinedMessage] = useState(null); // Message to show when challenge is declined
   const [highestRatingLeaderboard, setHighestRatingLeaderboard] = useState([]); // Top 10 users by highest rating
@@ -1416,14 +1417,16 @@ function GameBoard() {
           id: challengeId,
           challengerId: challengerId,
           challenger: challengerData || { id: challengerId, username: challengerUsername },
-          challengerUsername: challengerUsername
+          challengerUsername: challengerUsername,
+          receivedAt: Date.now() // Track when challenge was received for auto-decline timer
         });
       } else {
         setIncomingChallenge({
           id: challengeId,
           challengerId: challengerId,
           challenger: { id: challengerId, username: challengerUsername },
-          challengerUsername: challengerUsername
+          challengerUsername: challengerUsername,
+          receivedAt: Date.now()
         });
       }
     });
@@ -2379,21 +2382,45 @@ $$;
       }
       
       // Check if user already has a pending challenge with this user
-      const { data: existingChallenge, error: challengeCheckError } = await supabase
+      // Also check for expired challenges and clean them up
+      const { data: existingChallenges, error: challengeCheckError } = await supabase
         .from('challenges')
         .select('*')
         .eq('challenger_id', user.id)
         .eq('challenged_id', otherUser.id)
-        .eq('status', 'pending')
-        .maybeSingle();
+        .eq('status', 'pending');
       
       if (challengeCheckError && challengeCheckError.code !== 'PGRST116') {
         console.error('Error checking for existing challenge:', challengeCheckError);
       }
       
-      if (existingChallenge) {
-        alert('You already have a pending challenge with this player. Please wait for them to respond.');
-        return;
+      // Clean up expired challenges
+      if (existingChallenges && existingChallenges.length > 0) {
+        const now = new Date();
+        const validChallenges = [];
+        
+        for (const challenge of existingChallenges) {
+          const expiresAt = challenge.expires_at ? new Date(challenge.expires_at) : null;
+          // Check if challenge is expired (older than 10 seconds or past expires_at)
+          const createdAt = challenge.created_at ? new Date(challenge.created_at) : null;
+          const isExpired = (createdAt && (now - createdAt) > 10000) || (expiresAt && now > expiresAt);
+          
+          if (isExpired) {
+            // Mark as expired in database
+            await supabase
+              .from('challenges')
+              .update({ status: 'expired', responded_at: new Date().toISOString() })
+              .eq('id', challenge.id);
+            console.log(`🗑️ Cleaned up expired challenge ${challenge.id}`);
+          } else {
+            validChallenges.push(challenge);
+          }
+        }
+        
+        if (validChallenges.length > 0) {
+          alert('You already have a pending challenge with this player. Please wait for them to respond.');
+          return;
+        }
       }
       
       // Ensure socket connection exists
@@ -2430,7 +2457,7 @@ $$;
           try {
             // Create challenge record (without message)
             const expiresAt = new Date();
-            expiresAt.setMinutes(expiresAt.getMinutes() + 5); // 5 minutes expiration
+            expiresAt.setSeconds(expiresAt.getSeconds() + 10); // 10 seconds expiration
             
             const { data: challengeData, error: challengeError } = await supabase
               .from('challenges')
@@ -2697,6 +2724,83 @@ $$;
   useEffect(() => {
     setAwaitingEndTurn(false);
   }, [currentPlayer, hasRolled]);
+
+  // Auto-decline challenge after 10 seconds if not responded to
+  useEffect(() => {
+    if (!incomingChallenge || !incomingChallenge.receivedAt) {
+      setChallengeCountdown(10);
+      return;
+    }
+    
+    const challengeId = incomingChallenge.id;
+    const challengerId = incomingChallenge.challengerId;
+    
+    // Reset countdown
+    setChallengeCountdown(10);
+    
+    // Countdown timer (updates every second)
+    const countdownInterval = setInterval(() => {
+      setChallengeCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownInterval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    // Auto-decline timer
+    const declineTimer = setTimeout(async () => {
+      // Auto-decline if challenge is still pending
+      if (supabase && user?.id) {
+        console.log('⏱️ Auto-declining challenge after 10 seconds:', challengeId);
+        
+        try {
+          // Update challenge status
+          await supabase
+            .from('challenges')
+            .update({
+              status: 'declined',
+              responded_at: new Date().toISOString()
+            })
+            .eq('id', challengeId);
+          
+          // Notify challenger via socket
+          // Try socketRef first, otherwise create a temporary socket
+          if (socketRef.current) {
+            socketRef.current.emit('challenge:declined', {
+              challengeId: challengeId,
+              challengerId: challengerId
+            });
+          } else {
+            // Create temporary socket if socketRef doesn't exist
+            const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+            const tempSocket = io(backendUrl);
+            tempSocket.on('connect', () => {
+              tempSocket.emit('challenge:declined', {
+                challengeId: challengeId,
+                challengerId: challengerId
+              });
+              setTimeout(() => tempSocket.disconnect(), 1000);
+            });
+          }
+          
+          // Clear incoming challenge
+          setIncomingChallenge(null);
+          setChallengeCountdown(10);
+        } catch (err) {
+          console.error('Error auto-declining challenge:', err);
+          setIncomingChallenge(null);
+          setChallengeCountdown(10);
+        }
+      }
+    }, 10000); // 10 seconds
+    
+    return () => {
+      clearTimeout(declineTimer);
+      clearInterval(countdownInterval);
+    };
+  }, [incomingChallenge?.id, incomingChallenge?.receivedAt, supabase, user?.id]);
 
   // Break the dice timer - start when phase begins and it's player's turn
   useEffect(() => {
@@ -8904,6 +9008,16 @@ $$;
                   fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
                 }}>
                   <strong style={{ color: '#ff751f' }}>{challenger?.username || incomingChallenge.challengerUsername}</strong> is challenging you to a ranked match!
+                </p>
+                
+                <p style={{
+                  fontSize: '14px',
+                  color: challengeCountdown <= 3 ? '#f44336' : '#999',
+                  marginBottom: '32px',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                  fontWeight: 'bold'
+                }}>
+                  Auto-decline in {challengeCountdown} seconds
                 </p>
                 
                 <div style={{

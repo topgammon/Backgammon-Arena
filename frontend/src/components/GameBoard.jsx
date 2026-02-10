@@ -1842,17 +1842,42 @@ $$;
           } else {
             // Fetch challenges separately for messages that have challenge_id
             const messagesWithChallenges = await Promise.all((messagesData || []).map(async (msg) => {
-              if (msg.challenge_id) {
-                try {
-                  const { data: challengeData } = await supabase
-                    .from('challenges')
-                    .select('*')
-                    .eq('id', msg.challenge_id)
-                    .single();
-                  return { ...msg, challenge: challengeData || null };
-                } catch (err) {
-                  console.error('Error fetching challenge for message:', err);
-                  return { ...msg, challenge: null };
+              // Check if message is a challenge (by message_type or challenge_id)
+              if (msg.challenge_id || msg.message_type === 'challenge') {
+                // If we have challenge_id, fetch the challenge
+                if (msg.challenge_id) {
+                  try {
+                    const { data: challengeData, error: challengeError } = await supabase
+                      .from('challenges')
+                      .select('*')
+                      .eq('id', msg.challenge_id)
+                      .single();
+                    
+                    if (challengeError) {
+                      console.error('Error fetching challenge for message:', challengeError);
+                      return { ...msg, challenge: null };
+                    }
+                    
+                    return { ...msg, challenge: challengeData || null };
+                  } catch (err) {
+                    console.error('Error fetching challenge for message:', err);
+                    return { ...msg, challenge: null };
+                  }
+                } else {
+                  // Message type is challenge but no challenge_id - try to find challenge by message_id
+                  try {
+                    const { data: challengeData } = await supabase
+                      .from('challenges')
+                      .select('*')
+                      .eq('message_id', msg.id)
+                      .maybeSingle();
+                    
+                    if (challengeData) {
+                      return { ...msg, challenge: challengeData, challenge_id: challengeData.id };
+                    }
+                  } catch (err) {
+                    console.error('Error finding challenge by message_id:', err);
+                  }
                 }
               }
               return { ...msg, challenge: null };
@@ -2075,6 +2100,55 @@ $$;
       }, 100);
     }
   }, [conversationMessages.length]);
+
+  // Fetch missing challenge data for messages that have challenge_id but no challenge object
+  useEffect(() => {
+    if (!supabase || !user?.id || !selectedConversation || conversationMessages.length === 0) return;
+    
+    const fetchMissingChallenges = async () => {
+      const messagesNeedingChallenges = conversationMessages.filter(
+        msg => msg.challenge_id && !msg.challenge
+      );
+      
+      if (messagesNeedingChallenges.length === 0) return;
+      
+      console.log(`Fetching ${messagesNeedingChallenges.length} missing challenge(s)...`);
+      
+      const updatedMessages = await Promise.all(conversationMessages.map(async (msg) => {
+        if (msg.challenge_id && !msg.challenge) {
+          try {
+            const { data: challengeData, error } = await supabase
+              .from('challenges')
+              .select('*')
+              .eq('id', msg.challenge_id)
+              .single();
+            
+            if (!error && challengeData) {
+              console.log('Fetched challenge data:', challengeData);
+              return { ...msg, challenge: challengeData };
+            } else if (error) {
+              console.error('Error fetching challenge:', error);
+            }
+          } catch (err) {
+            console.error('Error fetching challenge:', err);
+          }
+        }
+        return msg;
+      }));
+      
+      // Only update if we actually fetched any challenges
+      const hasNewChallenges = updatedMessages.some((msg, idx) => 
+        msg.challenge && !conversationMessages[idx]?.challenge
+      );
+      
+      if (hasNewChallenges) {
+        console.log('Updating messages with challenge data');
+        setConversationMessages(updatedMessages);
+      }
+    };
+    
+    fetchMissingChallenges();
+  }, [conversationMessages, selectedConversation, supabase, user?.id]);
 
   // Handle sending message from chat view (accessible from both online game and profile)
   const handleSendMessage = async () => {
@@ -13760,11 +13834,28 @@ $$;
                 ) : (
                   conversationMessages.map((msg) => {
                     const isOwnMessage = msg.sender_id === user.id;
-                    const isChallenge = msg.message_type === 'challenge';
+                    // Check if it's a challenge message - either by message_type or by having a challenge_id
+                    const isChallenge = msg.message_type === 'challenge' || msg.challenge_id;
                     const challenge = msg.challenge;
                     const isChallenger = challenge && challenge.challenger_id === user.id;
                     const isChallenged = challenge && challenge.challenged_id === user.id;
-                    const canRespond = isChallenged && challenge.status === 'pending';
+                    const canRespond = isChallenged && challenge && challenge.status === 'pending';
+                    
+                    // Debug logging
+                    if (isChallenge) {
+                      console.log('Challenge message detected:', {
+                        messageId: msg.id,
+                        challengeId: msg.challenge_id,
+                        messageType: msg.message_type,
+                        hasChallenge: !!challenge,
+                        challengeStatus: challenge?.status,
+                        isChallenged: isChallenged,
+                        canRespond: canRespond,
+                        userId: user.id,
+                        challengerId: challenge?.challenger_id,
+                        challengedId: challenge?.challenged_id
+                      });
+                    }
                     
                     return (
                       <div
@@ -13799,13 +13890,18 @@ $$;
                             </div>
                           )}
                           <div>{msg.content}</div>
-                          {isChallenge && challenge && (
+                          {isChallenge && (
                             <div style={{
                               marginTop: '8px',
                               paddingTop: '8px',
                               borderTop: '1px solid rgba(0,0,0,0.1)'
                             }}>
-                              {challenge.status === 'pending' && canRespond && (
+                              {!challenge && msg.challenge_id && (
+                                <div style={{ color: '#999', fontSize: '12px', fontStyle: 'italic' }}>
+                                  Loading challenge...
+                                </div>
+                              )}
+                              {challenge && challenge.status === 'pending' && canRespond && (
                                 <div style={{
                                   display: 'flex',
                                   gap: '8px',

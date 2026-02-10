@@ -1508,6 +1508,63 @@ io.on('connection', (socket) => {
     }
   });
   
+  // Check if user is in a game
+  socket.on('challenge:check-in-game', (data, callback) => {
+    const { userId } = data;
+    
+    if (!userId) {
+      if (callback) callback({ error: 'User ID required' });
+      return;
+    }
+    
+    // Check if user is in any active match
+    let isInGame = false;
+    for (const [matchId, match] of activeMatches.entries()) {
+      if (match.player1.userId === userId || match.player2.userId === userId) {
+        isInGame = true;
+        break;
+      }
+    }
+    
+    if (callback) callback({ isInGame });
+  });
+  
+  // Send challenge notification to opponent
+  socket.on('challenge:send-notification', (data) => {
+    const { challengeId, challengerId, challengedId, challengerUsername } = data;
+    
+    if (socket.userId !== challengerId) {
+      console.error('❌ Unauthorized challenge notification attempt');
+      return;
+    }
+    
+    // Find challenged player's socket(s) - they might have multiple tabs
+    const challengedSockets = [];
+    for (const [socketId, socketData] of io.sockets.sockets.entries()) {
+      if (socketData.userId === challengedId) {
+        challengedSockets.push(socketData);
+      }
+    }
+    
+    if (challengedSockets.length === 0) {
+      console.log(`⚠️ Challenged player ${challengedId} is not online`);
+      // Notify challenger that opponent is offline
+      socket.emit('challenge:opponent-offline', { challengeId });
+      return;
+    }
+    
+    // Send challenge notification to all of challenged player's sockets
+    challengedSockets.forEach(s => {
+      s.emit('challenge:received', {
+        challengeId,
+        challengerId,
+        challengerUsername
+      });
+    });
+    
+    console.log(`📬 Challenge ${challengeId} notification sent to ${challengedId}`);
+  });
+  
   // Challenge system handlers
   // Handle challenge join queue (when challenger sends challenge)
   socket.on('challenge:join-queue', (data) => {

@@ -311,6 +311,8 @@ function GameBoard() {
   const messagesEndRef = useRef(null); // Ref for scrolling to bottom of messages
   const messagesContainerRef = useRef(null); // Ref for messages container
   const [pendingChallenge, setPendingChallenge] = useState(null); // Current pending challenge (for challenger)
+  const [incomingChallenge, setIncomingChallenge] = useState(null); // Challenge received from another player
+  const [challengeError, setChallengeError] = useState(null); // Error message when challenge cannot be sent
   const [challengeDeclinedMessage, setChallengeDeclinedMessage] = useState(null); // Message to show when challenge is declined
   const [highestRatingLeaderboard, setHighestRatingLeaderboard] = useState([]); // Top 10 users by highest rating
   const [mostWinsLeaderboard, setMostWinsLeaderboard] = useState([]); // Top 10 users by most wins
@@ -1943,50 +1945,7 @@ $$;
             console.error('Error fetching messages:', messagesError);
             setConversationMessages([]);
           } else {
-            // Fetch challenges separately for messages that have challenge_id
-            const messagesWithChallenges = await Promise.all((messagesData || []).map(async (msg) => {
-              // Check if message is a challenge (by message_type or challenge_id)
-              if (msg.challenge_id || msg.message_type === 'challenge') {
-                // If we have challenge_id, fetch the challenge
-                if (msg.challenge_id) {
-                  try {
-                    const { data: challengeData, error: challengeError } = await supabase
-                      .from('challenges')
-                      .select('*')
-                      .eq('id', msg.challenge_id)
-                      .single();
-                    
-                    if (challengeError) {
-                      console.error('Error fetching challenge for message:', challengeError);
-                      return { ...msg, challenge: null };
-                    }
-                    
-                    return { ...msg, challenge: challengeData || null };
-                  } catch (err) {
-                    console.error('Error fetching challenge for message:', err);
-                    return { ...msg, challenge: null };
-                  }
-                } else {
-                  // Message type is challenge but no challenge_id - try to find challenge by message_id
-                  try {
-                    const { data: challengeData } = await supabase
-                      .from('challenges')
-                      .select('*')
-                      .eq('message_id', msg.id)
-                      .maybeSingle();
-                    
-                    if (challengeData) {
-                      return { ...msg, challenge: challengeData, challenge_id: challengeData.id };
-                    }
-                  } catch (err) {
-                    console.error('Error finding challenge by message_id:', err);
-                  }
-                }
-              }
-              return { ...msg, challenge: null };
-            }));
-            
-            setConversationMessages(messagesWithChallenges);
+            setConversationMessages(messagesData || []);
             
             // Auto-scroll to bottom after messages load - use multiple attempts for reliability
             const scrollToBottom = () => {
@@ -2405,226 +2364,6 @@ $$;
         return;
       }
       
-      // Create or get conversation
-      if (!conversation || !conversation.id) {
-        // First, try to find existing conversation
-        const user1Id = user.id < otherUser.id ? user.id : otherUser.id;
-        const user2Id = user.id < otherUser.id ? otherUser.id : user.id;
-        
-        const { data: existingConv, error: findError } = await supabase
-          .from('conversations')
-          .select('*')
-          .eq('user1_id', user1Id)
-          .eq('user2_id', user2Id)
-          .maybeSingle();
-        
-        if (findError && findError.code !== 'PGRST116') {
-          console.error('Error finding conversation:', findError);
-          alert('Failed to find conversation. Please try again.');
-          return;
-        }
-        
-        if (existingConv) {
-          // Use existing conversation
-          conversation = {
-            ...existingConv,
-            otherUser: otherUser
-          };
-          setSelectedConversation(conversation);
-        } else {
-          // Create new conversation if it doesn't exist
-          const { data: newConv, error: convError } = await supabase
-            .from('conversations')
-            .insert({
-              user1_id: user1Id,
-              user2_id: user2Id
-            })
-            .select()
-            .single();
-          
-          if (convError) {
-            console.error('Error creating conversation:', convError);
-            // If it's a conflict error, try to fetch the existing conversation again
-            if (convError.code === '23505' || convError.message?.includes('duplicate') || convError.message?.includes('unique')) {
-              const { data: retryConv } = await supabase
-                .from('conversations')
-                .select('*')
-                .eq('user1_id', user1Id)
-                .eq('user2_id', user2Id)
-                .maybeSingle();
-              
-              if (retryConv) {
-                conversation = {
-                  ...retryConv,
-                  otherUser: otherUser
-                };
-                setSelectedConversation(conversation);
-              } else {
-                alert('Failed to create conversation. Please try again.');
-                return;
-              }
-            } else {
-              alert('Failed to create conversation. Please try again.');
-              return;
-            }
-          } else {
-            conversation = {
-              ...newConv,
-              otherUser: otherUser
-            };
-            setSelectedConversation(conversation);
-          }
-        }
-      }
-      
-      // Verify conversation has an ID
-      if (!conversation || !conversation.id) {
-        console.error('Conversation missing ID:', conversation);
-        alert('Failed to send challenge. Conversation error. Please try again.');
-        return;
-      }
-      
-      // Create challenge message
-      const challengeMessage = `${userProfile?.username || user?.user_metadata?.username || user?.email?.split('@')[0] || 'You'} is challenging you to a match`;
-      
-      // Try inserting with message_type first
-      let { data: messageData, error: messageError } = await supabase
-        .from('messages')
-        .insert({
-          conversation_id: conversation.id,
-          sender_id: user.id,
-          recipient_id: otherUser.id,
-          content: challengeMessage,
-          message_type: 'challenge'
-        })
-        .select()
-        .single();
-      
-      // If message_type column doesn't exist or value is invalid, try without it
-      if (messageError && (messageError.message?.includes('message_type') || messageError.code === '42703' || messageError.code === '23514')) {
-        console.log('Retrying without message_type...');
-        const retryResult = await supabase
-          .from('messages')
-          .insert({
-            conversation_id: conversation.id,
-            sender_id: user.id,
-            recipient_id: otherUser.id,
-            content: challengeMessage
-          })
-          .select()
-          .single();
-        
-        if (retryResult.error) {
-          console.error('Retry also failed:', retryResult.error);
-          console.error('Message data attempted:', {
-            conversation_id: conversation.id,
-            sender_id: user.id,
-            recipient_id: otherUser.id,
-            content: challengeMessage
-          });
-          alert('Failed to send challenge. Please try again.');
-          return;
-        }
-        
-        messageData = retryResult.data;
-        messageError = null;
-      }
-      
-      if (messageError) {
-        console.error('Error sending challenge message:', messageError);
-        console.error('Error details:', {
-          code: messageError.code,
-          message: messageError.message,
-          details: messageError.details,
-          hint: messageError.hint
-        });
-        console.error('Message data attempted:', {
-          conversation_id: conversation.id,
-          sender_id: user.id,
-          recipient_id: otherUser.id,
-          content: challengeMessage,
-          message_type: 'challenge'
-        });
-        
-        // Show more specific error message
-        const errorMsg = messageError.message || messageError.details || 'Unknown error';
-        alert(`Failed to send challenge: ${errorMsg}. Please check the console for details.`);
-        return;
-      }
-      
-      if (!messageData || !messageData.id) {
-        console.error('No message data returned');
-        alert('Failed to send challenge. No message data returned. Please try again.');
-        return;
-      }
-      
-      // Create challenge record
-      const expiresAt = new Date();
-      expiresAt.setMinutes(expiresAt.getMinutes() + 5); // 5 minutes expiration
-      
-      const { data: challengeData, error: challengeError } = await supabase
-        .from('challenges')
-        .insert({
-          challenger_id: user.id,
-          challenged_id: otherUser.id,
-          conversation_id: conversation.id,
-          message_id: messageData.id,
-          status: 'pending',
-          expires_at: expiresAt.toISOString()
-        })
-        .select()
-        .single();
-      
-      if (challengeError) {
-        console.error('Error creating challenge:', challengeError);
-        console.error('Error details:', {
-          code: challengeError.code,
-          message: challengeError.message,
-          details: challengeError.details,
-          hint: challengeError.hint
-        });
-        console.error('Challenge data attempted:', {
-          challenger_id: user.id,
-          challenged_id: otherUser.id,
-          conversation_id: conversation.id,
-          message_id: messageData.id,
-          status: 'pending',
-          expires_at: expiresAt.toISOString()
-        });
-        
-        // Show more specific error message
-        const errorMsg = challengeError.message || challengeError.details || 'Unknown error';
-        alert(`Failed to create challenge: ${errorMsg}. Please check the console for details.`);
-        return;
-      }
-      
-      if (!challengeData || !challengeData.id) {
-        console.error('No challenge data returned');
-        alert('Failed to create challenge. No challenge data returned. Please try again.');
-        return;
-      }
-      
-      // Update message with challenge_id
-      await supabase
-        .from('messages')
-        .update({ challenge_id: challengeData.id })
-        .eq('id', messageData.id);
-      
-      // Update conversation last_message_at
-      await supabase
-        .from('conversations')
-        .update({ last_message_at: new Date().toISOString() })
-        .eq('id', conversation.id);
-      
-      // Set pending challenge state (for challenger)
-      setPendingChallenge(challengeData);
-      
-      // Enter private matchmaking queue immediately
-      setIsMatchmaking(true);
-      setMatchmakingType('ranked');
-      setMatchmakingStatus('Waiting for opponent...');
-      setScreen('matchmaking');
-      
       // Ensure socket connection exists
       if (!socketRef.current) {
         const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
@@ -2637,83 +2376,91 @@ $$;
         }
       }
       
-      // Join private challenge queue via socket
-      if (socketRef.current) {
-        socketRef.current.emit('challenge:join-queue', {
-          challengeId: challengeData.id,
-          userId: user.id,
-          opponentId: otherUser.id
+      // Check if opponent is in a game
+      return new Promise((resolve) => {
+        socketRef.current.emit('challenge:check-in-game', { userId: otherUser.id }, async (response) => {
+          if (response.error) {
+            console.error('Error checking if opponent is in game:', response.error);
+            alert('Failed to check opponent status. Please try again.');
+            resolve();
+            return;
+          }
+          
+          if (response.isInGame) {
+            // Opponent is in a game - show error overlay
+            setChallengeError(`${otherUser.username || 'This player'} is currently playing a game. Please try again later.`);
+            setTimeout(() => setChallengeError(null), 5000); // Clear error after 5 seconds
+            resolve();
+            return;
+          }
+          
+          // Opponent is not in game - proceed with challenge
+          try {
+            // Create challenge record (without message)
+            const expiresAt = new Date();
+            expiresAt.setMinutes(expiresAt.getMinutes() + 5); // 5 minutes expiration
+            
+            const { data: challengeData, error: challengeError } = await supabase
+              .from('challenges')
+              .insert({
+                challenger_id: user.id,
+                challenged_id: otherUser.id,
+                conversation_id: null, // No longer using conversations
+                message_id: null, // No longer using messages
+                status: 'pending',
+                expires_at: expiresAt.toISOString()
+              })
+              .select()
+              .single();
+            
+            if (challengeError) {
+              console.error('Error creating challenge:', challengeError);
+              alert(`Failed to create challenge: ${challengeError.message || 'Unknown error'}`);
+              resolve();
+              return;
+            }
+            
+            if (!challengeData || !challengeData.id) {
+              console.error('No challenge data returned');
+              alert('Failed to create challenge. No challenge data returned. Please try again.');
+              resolve();
+              return;
+            }
+            
+            // Set pending challenge state (for challenger)
+            setPendingChallenge(challengeData);
+            
+            // Enter private matchmaking queue immediately
+            setIsMatchmaking(true);
+            setMatchmakingType('ranked');
+            setMatchmakingStatus('Waiting for opponent...');
+            setScreen('matchmaking');
+            
+            // Join private challenge queue via socket
+            socketRef.current.emit('challenge:join-queue', {
+              challengeId: challengeData.id,
+              userId: user.id,
+              opponentId: otherUser.id
+            });
+            
+            // Send challenge notification to opponent
+            const challengerUsername = userProfile?.username || user?.user_metadata?.username || user?.email?.split('@')[0] || 'Unknown';
+            socketRef.current.emit('challenge:send-notification', {
+              challengeId: challengeData.id,
+              challengerId: user.id,
+              challengedId: otherUser.id,
+              challengerUsername: challengerUsername
+            });
+            
+            console.log(`✅ Challenge ${challengeData.id} sent to ${otherUser.id}`);
+          } catch (err) {
+            console.error('Error sending challenge:', err);
+            alert('Failed to send challenge. Please try again.');
+          }
+          
+          resolve();
         });
-      }
-      
-      // If we're in a conversation overlay, refresh the messages
-      if (selectedConversation && selectedConversation.id === conversation.id) {
-        const { data: messagesData } = await supabase
-          .from('messages')
-          .select(`
-            *,
-            sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
-          `)
-          .eq('conversation_id', conversation.id)
-          .order('created_at', { ascending: true });
-        
-        if (messagesData) {
-          // Fetch challenges separately for messages that have challenge_id
-          const messagesWithChallenges = await Promise.all(messagesData.map(async (msg) => {
-            if (msg.challenge_id) {
-              try {
-                const { data: challengeData } = await supabase
-                  .from('challenges')
-                  .select('*')
-                  .eq('id', msg.challenge_id)
-                  .single();
-                return { ...msg, challenge: challengeData || null };
-              } catch (err) {
-                console.error('Error fetching challenge for message:', err);
-                return { ...msg, challenge: null };
-              }
-            }
-            return { ...msg, challenge: null };
-          }));
-          
-          setConversationMessages(messagesWithChallenges);
-          
-          // Auto-scroll to bottom
-          const scrollToBottom = () => {
-            if (messagesEndRef.current) {
-              messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            } else if (messagesContainerRef.current) {
-              messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-            }
-          };
-          setTimeout(scrollToBottom, 100);
-          setTimeout(scrollToBottom, 300);
-        }
-      }
-      
-      // Refresh conversations list
-      if (screen === 'profile' && (!viewingUserId || viewingUserId === user.id)) {
-        const { data: convsData } = await supabase
-          .from('conversations')
-          .select(`
-            *,
-            user1:users!conversations_user1_id_fkey(id, username, avatar, google_avatar_url, country),
-            user2:users!conversations_user2_id_fkey(id, username, avatar, google_avatar_url, country)
-          `)
-          .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-          .order('last_message_at', { ascending: false });
-        
-        if (convsData) {
-          const convsList = convsData.map(conv => {
-            const otherUser = conv.user1_id === user.id ? conv.user2 : conv.user1;
-            return {
-              ...conv,
-              otherUser: otherUser
-            };
-          });
-          setConversations(convsList);
-        }
-      }
+      });
       
     } catch (err) {
       console.error('Error sending challenge:', err);
@@ -8983,6 +8730,270 @@ $$;
             </div>
           </div>
         )}
+        
+        {/* Challenge Error Overlay */}
+        {challengeError && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+            <div style={{ background: '#fff', padding: 30, borderRadius: 10, textAlign: 'center', maxWidth: 400 }}>
+              <h3 style={{ marginBottom: 16, color: '#f44336' }}>{challengeError}</h3>
+              <button
+                onClick={() => setChallengeError(null)}
+                style={{
+                  padding: '10px 20px',
+                  background: '#ff751f',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                }}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {/* Incoming Challenge Overlay */}
+        {incomingChallenge && (() => {
+          const challenger = incomingChallenge.challenger;
+          const renderAvatar = (userData, size = 60) => {
+            const googleAvatarUrl = userData?.google_avatar_url;
+            const avatarName = userData?.avatar || 'Barry';
+            const country = userData?.country;
+            
+            if (googleAvatarUrl) {
+              return (
+                <img
+                  src={googleAvatarUrl}
+                  alt={userData?.username || 'User'}
+                  style={{
+                    width: size,
+                    height: size,
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    border: '2px solid #ff751f'
+                  }}
+                />
+              );
+            }
+            
+            // Use avatar name to get emoji
+            const avatarEmojis = {
+              'Barry': '🧔', 'Bruce': '👨', 'Charles': '👴', 'Dennis': '👨‍🦱',
+              'Edward': '👨‍💼', 'Gregory': '👨‍🦳', 'Martin': '👨‍🦲', 'Milo': '🧓', 'Ronald': '👴'
+            };
+            const emoji = avatarEmojis[avatarName] || '👤';
+            
+            return (
+              <div style={{
+                width: size,
+                height: size,
+                borderRadius: '50%',
+                background: '#ff751f',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: size * 0.5,
+                border: '2px solid #ff751f',
+                position: 'relative'
+              }}>
+                {emoji}
+                {country && (
+                  <div style={{
+                    position: 'absolute',
+                    bottom: -2,
+                    right: -2,
+                    fontSize: size * 0.25,
+                    background: '#fff',
+                    borderRadius: '50%',
+                    width: size * 0.35,
+                    height: size * 0.35,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '1px solid #ddd'
+                  }}>
+                    {country}
+                  </div>
+                )}
+              </div>
+            );
+          };
+          
+          return (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 2000,
+              backdropFilter: 'blur(4px)'
+            }}>
+              <div style={{
+                background: '#fff',
+                borderRadius: '16px',
+                padding: '40px',
+                textAlign: 'center',
+                maxWidth: '450px',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+                animation: 'fadeIn 0.3s ease-in'
+              }}>
+                <style>{`
+                  @keyframes fadeIn {
+                    from { opacity: 0; transform: scale(0.9); }
+                    to { opacity: 1; transform: scale(1); }
+                  }
+                `}</style>
+                
+                <div style={{ marginBottom: '24px' }}>
+                  {renderAvatar(challenger, 80)}
+                </div>
+                
+                <h2 style={{
+                  fontSize: '24px',
+                  fontWeight: 'bold',
+                  color: '#333',
+                  marginBottom: '12px',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                }}>
+                  Challenge Received!
+                </h2>
+                
+                <p style={{
+                  fontSize: '18px',
+                  color: '#666',
+                  marginBottom: '32px',
+                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                }}>
+                  <strong style={{ color: '#ff751f' }}>{challenger?.username || incomingChallenge.challengerUsername}</strong> is challenging you to a ranked match!
+                </p>
+                
+                <div style={{
+                  display: 'flex',
+                  gap: '16px',
+                  justifyContent: 'center'
+                }}>
+                  <button
+                    onClick={async () => {
+                      if (!supabase || !user?.id || !incomingChallenge) return;
+                      
+                      try {
+                        // Update challenge status
+                        const { error: updateError } = await supabase
+                          .from('challenges')
+                          .update({
+                            status: 'accepted',
+                            responded_at: new Date().toISOString()
+                          })
+                          .eq('id', incomingChallenge.id);
+                        
+                        if (updateError) {
+                          console.error('Error accepting challenge:', updateError);
+                          alert('Failed to accept challenge. Please try again.');
+                          return;
+                        }
+                        
+                        // Create match via socket
+                        if (socketRef.current) {
+                          socketRef.current.emit('challenge:accept', {
+                            challengeId: incomingChallenge.id,
+                            challengerId: incomingChallenge.challengerId,
+                            challengedId: user.id
+                          });
+                        }
+                        
+                        // Clear incoming challenge
+                        setIncomingChallenge(null);
+                      } catch (err) {
+                        console.error('Error accepting challenge:', err);
+                        alert('Failed to accept challenge. Please try again.');
+                      }
+                    }}
+                    style={{
+                      padding: '14px 32px',
+                      background: '#4caf50',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '16px',
+                      fontWeight: 'bold',
+                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                      transition: 'background 0.2s',
+                      minWidth: '120px'
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = '#45a049'}
+                    onMouseLeave={(e) => e.target.style.background = '#4caf50'}
+                  >
+                    Accept
+                  </button>
+                  
+                  <button
+                    onClick={async () => {
+                      if (!supabase || !user?.id || !incomingChallenge) return;
+                      
+                      try {
+                        // Update challenge status
+                        const { error: updateError } = await supabase
+                          .from('challenges')
+                          .update({
+                            status: 'declined',
+                            responded_at: new Date().toISOString()
+                          })
+                          .eq('id', incomingChallenge.id);
+                        
+                        if (updateError) {
+                          console.error('Error declining challenge:', updateError);
+                          alert('Failed to decline challenge. Please try again.');
+                          return;
+                        }
+                        
+                        // Notify challenger via socket
+                        if (socketRef.current) {
+                          socketRef.current.emit('challenge:declined', {
+                            challengeId: incomingChallenge.id,
+                            challengerId: incomingChallenge.challengerId
+                          });
+                        }
+                        
+                        // Clear incoming challenge
+                        setIncomingChallenge(null);
+                      } catch (err) {
+                        console.error('Error declining challenge:', err);
+                        alert('Failed to decline challenge. Please try again.');
+                      }
+                    }}
+                    style={{
+                      padding: '14px 32px',
+                      background: '#f44336',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '16px',
+                      fontWeight: 'bold',
+                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                      transition: 'background 0.2s',
+                      minWidth: '120px'
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = '#da190b'}
+                    onMouseLeave={(e) => e.target.style.background = '#f44336'}
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
         {showConfirmResign && (() => {
           const resigningPlayer = isOnlineGame ? playerNumber : currentPlayer;
           const winningPlayer = resigningPlayer === 1 ? 2 : 1;
@@ -9267,6 +9278,48 @@ $$;
         setMatchmakingStatus('');
         alert('Challenge expired. The other player did not respond in time.');
       }
+      });
+      
+      // Listen for incoming challenge notifications
+      socket.on('challenge:received', async (data) => {
+        const { challengeId, challengerId, challengerUsername } = data;
+        console.log('📬 Challenge received:', data);
+        
+        // Fetch challenger's full profile data
+        if (supabase) {
+          const { data: challengerData } = await supabase
+            .from('users')
+            .select('id, username, avatar, google_avatar_url, country, elo_rating')
+            .eq('id', challengerId)
+            .single();
+          
+          setIncomingChallenge({
+            id: challengeId,
+            challengerId: challengerId,
+            challenger: challengerData || { id: challengerId, username: challengerUsername },
+            challengerUsername: challengerUsername
+          });
+        } else {
+          setIncomingChallenge({
+            id: challengeId,
+            challengerId: challengerId,
+            challenger: { id: challengerId, username: challengerUsername },
+            challengerUsername: challengerUsername
+          });
+        }
+      });
+      
+      // Listen for opponent offline notification
+      socket.on('challenge:opponent-offline', (data) => {
+        const { challengeId } = data;
+        if (pendingChallenge && pendingChallenge.id === challengeId) {
+          setPendingChallenge(null);
+          setIsMatchmaking(false);
+          setMatchmakingType(null);
+          setMatchmakingStatus('');
+          setChallengeError('The player you challenged is currently offline.');
+          setTimeout(() => setChallengeError(null), 5000);
+        }
       });
       
       socket.on('challenge:queued', (data) => {
@@ -14200,28 +14253,6 @@ $$;
                   conversationMessages.map((msg) => {
                     const isOwnMessage = msg.sender_id === user.id;
                     // Check if it's a challenge message - either by message_type or by having a challenge_id
-                    const isChallenge = msg.message_type === 'challenge' || msg.challenge_id;
-                    const challenge = msg.challenge;
-                    const isChallenger = challenge && challenge.challenger_id === user.id;
-                    const isChallenged = challenge && challenge.challenged_id === user.id;
-                    const canRespond = isChallenged && challenge && challenge.status === 'pending';
-                    
-                    // Debug logging
-                    if (isChallenge) {
-                      console.log('Challenge message detected:', {
-                        messageId: msg.id,
-                        challengeId: msg.challenge_id,
-                        messageType: msg.message_type,
-                        hasChallenge: !!challenge,
-                        challengeStatus: challenge?.status,
-                        isChallenged: isChallenged,
-                        canRespond: canRespond,
-                        userId: user.id,
-                        challengerId: challenge?.challenger_id,
-                        challengedId: challenge?.challenged_id
-                      });
-                    }
-                    
                     return (
                       <div
                         key={msg.id}
@@ -14236,13 +14267,12 @@ $$;
                         <div style={{
                           maxWidth: '70%',
                           padding: '10px 14px',
-                          background: isChallenge ? (isOwnMessage ? '#fff4e6' : '#e8f4f8') : (isOwnMessage ? '#ff751f' : '#e0e0e0'),
-                          color: isChallenge ? '#333' : (isOwnMessage ? '#fff' : '#333'),
+                          background: isOwnMessage ? '#ff751f' : '#e0e0e0',
+                          color: isOwnMessage ? '#fff' : '#333',
                           borderRadius: '12px',
                           wordBreak: 'break-word',
                           fontSize: '14px',
-                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
-                          border: isChallenge ? '2px solid #ff751f' : 'none'
+                          fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
                         }}>
                           {!isOwnMessage && (
                             <div style={{
@@ -14255,236 +14285,6 @@ $$;
                             </div>
                           )}
                           <div>{filterChatMessage(msg.content)}</div>
-                          {isChallenge && (
-                            <div style={{
-                              marginTop: '8px',
-                              paddingTop: '8px',
-                              borderTop: '1px solid rgba(0,0,0,0.1)'
-                            }}>
-                              {!challenge && msg.challenge_id && (
-                                <div style={{ color: '#999', fontSize: '12px', fontStyle: 'italic' }}>
-                                  Loading challenge...
-                                </div>
-                              )}
-                              {challenge && challenge.status === 'pending' && canRespond && (
-                                <div style={{
-                                  display: 'flex',
-                                  gap: '8px',
-                                  marginTop: '8px'
-                                }}>
-                                  <button
-                                    onClick={async () => {
-                                      // Handle challenge acceptance
-                                      if (!supabase || !user?.id || !challenge) return;
-                                      
-                                      try {
-                                        // Update challenge status
-                                        const { error: updateError } = await supabase
-                                          .from('challenges')
-                                          .update({
-                                            status: 'accepted',
-                                            responded_at: new Date().toISOString()
-                                          })
-                                          .eq('id', challenge.id);
-                                        
-                                        if (updateError) {
-                                          console.error('Error accepting challenge:', updateError);
-                                          alert('Failed to accept challenge. Please try again.');
-                                          return;
-                                        }
-                                        
-                                        // Create match via socket
-                                        if (socketRef.current) {
-                                          socketRef.current.emit('challenge:accept', {
-                                            challengeId: challenge.id,
-                                            challengerId: challenge.challenger_id,
-                                            challengedId: challenge.challenged_id
-                                          });
-                                        }
-                                        
-                                        // Clear pending challenge if we were the challenger
-                                        if (pendingChallenge && pendingChallenge.id === challenge.id) {
-                                          setPendingChallenge(null);
-                                          setIsMatchmaking(false);
-                                          setMatchmakingType(null);
-                                          setMatchmakingStatus('');
-                                        }
-                                        
-                                        // Refresh messages to show updated status
-                                        const { data: messagesData } = await supabase
-                                          .from('messages')
-                                          .select(`
-                                            *,
-                                            sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
-                                          `)
-                                          .eq('conversation_id', selectedConversation.id)
-                                          .order('created_at', { ascending: true });
-                                        
-                                        if (messagesData) {
-                                          // Fetch challenges separately
-                                          const messagesWithChallenges = await Promise.all(messagesData.map(async (msg) => {
-                                            if (msg.challenge_id) {
-                                              try {
-                                                const { data: challengeData } = await supabase
-                                                  .from('challenges')
-                                                  .select('*')
-                                                  .eq('id', msg.challenge_id)
-                                                  .single();
-                                                return { ...msg, challenge: challengeData || null };
-                                              } catch (err) {
-                                                return { ...msg, challenge: null };
-                                              }
-                                            }
-                                            return { ...msg, challenge: null };
-                                          }));
-                                          setConversationMessages(messagesWithChallenges);
-                                        }
-                                      } catch (err) {
-                                        console.error('Error accepting challenge:', err);
-                                        alert('Failed to accept challenge. Please try again.');
-                                      }
-                                    }}
-                                    style={{
-                                      padding: '8px 16px',
-                                      background: '#4caf50',
-                                      color: '#fff',
-                                      border: 'none',
-                                      borderRadius: '6px',
-                                      cursor: 'pointer',
-                                      fontSize: '14px',
-                                      fontWeight: 'bold',
-                                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-                                    }}
-                                    onMouseEnter={(e) => e.target.style.background = '#45a049'}
-                                    onMouseLeave={(e) => e.target.style.background = '#4caf50'}
-                                  >
-                                    Accept
-                                  </button>
-                                  <button
-                                    onClick={async () => {
-                                      // Handle challenge decline
-                                      if (!supabase || !user?.id || !challenge) return;
-                                      
-                                      try {
-                                        // Update challenge status
-                                        const { error: updateError } = await supabase
-                                          .from('challenges')
-                                          .update({
-                                            status: 'declined',
-                                            responded_at: new Date().toISOString()
-                                          })
-                                          .eq('id', challenge.id);
-                                        
-                                        if (updateError) {
-                                          console.error('Error declining challenge:', updateError);
-                                          alert('Failed to decline challenge. Please try again.');
-                                          return;
-                                        }
-                                        
-                                        // Send decline message to challenger
-                                        const declineMessage = `Challenge declined`;
-                                        await supabase
-                                          .from('messages')
-                                          .insert({
-                                            conversation_id: selectedConversation.id,
-                                            sender_id: user.id,
-                                            recipient_id: challenge.challenger_id,
-                                            content: declineMessage,
-                                            message_type: 'text'
-                                          });
-                                        
-                                        // Notify challenger via socket and remove them from queue
-                                        if (socketRef.current) {
-                                          socketRef.current.emit('challenge:declined', {
-                                            challengeId: challenge.id,
-                                            challengerId: challenge.challenger_id
-                                          });
-                                        }
-                                        
-                                        // Refresh messages
-                                        const { data: messagesData } = await supabase
-                                          .from('messages')
-                                          .select(`
-                                            *,
-                                            sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
-                                          `)
-                                          .eq('conversation_id', selectedConversation.id)
-                                          .order('created_at', { ascending: true });
-                                        
-                                        if (messagesData) {
-                                          // Fetch challenges separately
-                                          const messagesWithChallenges = await Promise.all(messagesData.map(async (msg) => {
-                                            if (msg.challenge_id) {
-                                              try {
-                                                const { data: challengeData } = await supabase
-                                                  .from('challenges')
-                                                  .select('*')
-                                                  .eq('id', msg.challenge_id)
-                                                  .single();
-                                                return { ...msg, challenge: challengeData || null };
-                                              } catch (err) {
-                                                return { ...msg, challenge: null };
-                                              }
-                                            }
-                                            return { ...msg, challenge: null };
-                                          }));
-                                          setConversationMessages(messagesWithChallenges);
-                                        }
-                                      } catch (err) {
-                                        console.error('Error declining challenge:', err);
-                                        alert('Failed to decline challenge. Please try again.');
-                                      }
-                                    }}
-                                    style={{
-                                      padding: '8px 16px',
-                                      background: '#f44336',
-                                      color: '#fff',
-                                      border: 'none',
-                                      borderRadius: '6px',
-                                      cursor: 'pointer',
-                                      fontSize: '14px',
-                                      fontWeight: 'bold',
-                                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-                                    }}
-                                    onMouseEnter={(e) => e.target.style.background = '#da190b'}
-                                    onMouseLeave={(e) => e.target.style.background = '#f44336'}
-                                  >
-                                    Decline
-                                  </button>
-                                </div>
-                              )}
-                              {challenge && challenge.status === 'accepted' && (
-                                <div style={{
-                                  color: '#4caf50',
-                                  fontWeight: 'bold',
-                                  fontSize: '12px',
-                                  marginTop: '4px'
-                                }}>
-                                  ✓ Challenge Accepted
-                                </div>
-                              )}
-                              {challenge && challenge.status === 'declined' && (
-                                <div style={{
-                                  color: '#f44336',
-                                  fontWeight: 'bold',
-                                  fontSize: '12px',
-                                  marginTop: '4px'
-                                }}>
-                                  ✗ Challenge Declined
-                                </div>
-                              )}
-                              {challenge && challenge.status === 'expired' && (
-                                <div style={{
-                                  color: '#999',
-                                  fontWeight: 'bold',
-                                  fontSize: '12px',
-                                  marginTop: '4px'
-                                }}>
-                                  ⏱ Challenge Expired
-                                </div>
-                              )}
-                            </div>
-                          )}
                           <div style={{
                             fontSize: '10px',
                             opacity: 0.7,

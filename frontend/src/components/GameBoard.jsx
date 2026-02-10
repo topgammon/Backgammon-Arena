@@ -137,9 +137,9 @@ function getMoveDistance(from, to, player) {
 
 // Dice component
 function Dice({ value, faded, shrunk, isRolling = false, frame = 0 }) {
-  const dotRadius = 5;
-  const size = 61;
-  const padding = 18;
+  const dotRadius = 3.5; // 30% smaller: 5 * 0.7
+  const size = 43; // 30% smaller: 61 * 0.7
+  const padding = 13; // 30% smaller: 18 * 0.7
   const positions = [padding, size / 2, size - padding];
   
   const dots = [
@@ -179,7 +179,7 @@ function Dice({ value, faded, shrunk, isRolling = false, frame = 0 }) {
         display: 'inline-block',
       }}
     >
-      <rect x={4} y={4} width={size - 8} height={size - 8} rx={14} fill="#fff" stroke="#222" strokeWidth={5} />
+      <rect x={3} y={3} width={size - 6} height={size - 6} rx={10} fill="#fff" stroke="#222" strokeWidth={3.5} />
       {dots[currentFrame.face]?.map(([r, c], i) => (
         <circle key={i} cx={positions[c]} cy={positions[r]} r={dotRadius} fill="#222" />
       ))}
@@ -6236,29 +6236,11 @@ $$;
                 <span style={{ color: '#ff6b35', marginLeft: 4 }}>2×</span>
               </div>
               <button 
-                style={{ ...buttonStyle, minWidth: 0, width: 110, fontSize: 22, padding: '14px 0', margin: 0, background: '#ff6b35', color: '#fff' }} 
+                style={{ ...buttonStyle, minWidth: 0, width: 77, fontSize: 15.4, padding: '9.8px 0', margin: 0, background: '#ff6b35', color: '#fff' }} 
                 onClick={offerDouble}
               >
                 Double
               </button>
-            </div>
-          </foreignObject>
-        )}
-        {/* Timer on left side */}
-        {!gameOver && (screen === 'passplay' || screen === 'onlineGame') && !firstRollPhase && (
-          <foreignObject
-            x={boardX + 20}
-            y={boardY + boardH / 2 - 40}
-            width={200}
-            height={60}
-            style={{ pointerEvents: 'none' }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', pointerEvents: 'auto', background: 'none', borderRadius: 0, boxShadow: 'none', padding: 0, minWidth: 0 }}>
-              <div style={{ fontSize: 28, fontWeight: 700, color: timer <= 5 ? '#dc3545' : '#fff', marginBottom: 6, letterSpacing: 1, textShadow: timer <= 5 ? '0 0 8px #fff, 0 0 16px #fff' : 'none' }}>
-                <span style={{ color: '#fff', marginRight: 4, textShadow: 'none' }}>⏰</span>
-                <span style={timer <= 5 ? { color: '#dc3545', textShadow: '0 0 8px #fff, 0 0 16px #fff' } : { color: '#fff', textShadow: 'none' }}>{timer}</span>
-                <span style={timer <= 5 ? { color: '#dc3545' } : { color: '#fff' }}>s</span>
-              </div>
             </div>
           </foreignObject>
         )}
@@ -6273,7 +6255,7 @@ $$;
             {(!hasRolled && !awaitingEndTurn && !isRolling && !gameOver) ? (
               <div style={{ display: 'flex', gap: 8 }}>
                 {(!isOnlineGame || (isOnlineGame && currentPlayer === playerNumber)) && (
-                  <button style={{ ...buttonStyle, minWidth: 0, width: 110, fontSize: 22, padding: '14px 0', margin: 0 }} onClick={rollDice}>Roll Dice</button>
+                  <button style={{ ...buttonStyle, minWidth: 0, width: 77, fontSize: 15.4, padding: '9.8px 0', margin: 0 }} onClick={rollDice}>Roll Dice</button>
                 )}
                 {isOnlineGame && currentPlayer !== playerNumber && (
                   <div style={{ fontSize: 18, color: '#fff', padding: '14px 0' }}>Waiting for opponent to roll...</div>
@@ -6305,34 +6287,44 @@ $$;
               </div>
             )}
             {showEndTurn && (!isCpuGame || currentPlayer !== cpuPlayer) && (screen !== 'onlineGame' || (screen === 'onlineGame' && currentPlayer === playerNumber)) && !gameOver && (
-              <button style={{ ...buttonStyle, minWidth: 0, width: 110, fontSize: 22, padding: '14px 0', margin: 0, background: '#007bff', color: '#fff' }} onClick={handleEndTurn}>End Turn</button>
+              <button style={{ ...buttonStyle, minWidth: 0, width: 77, fontSize: 15.4, padding: '9.8px 0', margin: 0, background: '#007bff', color: '#fff' }} onClick={handleEndTurn}>End Turn</button>
             )}
           </div>
         </foreignObject>
-        {/* Your move / Waiting text on left side */}
-        {!gameOver && !firstRollPhase && hasRolled && !isRolling && screen === 'onlineGame' && (
+        {/* Your move / Waiting text on left side with timer */}
+        {!gameOver && !firstRollPhase && (screen === 'passplay' || screen === 'onlineGame') && (
           <foreignObject
             x={boardX + 20}
             y={boardY + boardH / 2 - 10}
-            width={200}
-            height={30}
+            width={400}
+            height={40}
             style={{ pointerEvents: 'none' }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#fff', textAlign: 'left' }}>
-              <span style={{
-                display: 'inline-block',
-                width: 18,
-                height: 18,
-                borderRadius: '50%',
-                background: currentPlayer === 1 ? '#fff' : '#222',
-                border: '2px solid #b87333',
-                flexShrink: 0,
-              }} />
-              {currentPlayer === playerNumber ? (
-                <span>Your move</span>
-              ) : (
-                <span>Waiting for opponent</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 14, color: '#fff', textAlign: 'left' }}>
+              {screen === 'onlineGame' && hasRolled && !isRolling && (
+                <>
+                  <span style={{
+                    display: 'inline-block',
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    background: currentPlayer === 1 ? '#fff' : '#222',
+                    border: '2px solid #b87333',
+                    flexShrink: 0,
+                  }} />
+                  {currentPlayer === playerNumber ? (
+                    <span>Your move</span>
+                  ) : (
+                    <span>Waiting for opponent</span>
+                  )}
+                </>
               )}
+              {/* Timer beside the text */}
+              <div style={{ fontSize: 20, fontWeight: 700, color: timer <= 5 ? '#dc3545' : '#fff', letterSpacing: 1, textShadow: timer <= 5 ? '0 0 8px #fff, 0 0 16px #fff' : 'none', marginLeft: screen === 'onlineGame' && hasRolled && !isRolling ? 12 : 0 }}>
+                <span style={{ color: '#fff', marginRight: 4, textShadow: 'none' }}>⏰</span>
+                <span style={timer <= 5 ? { color: '#dc3545', textShadow: '0 0 8px #fff, 0 0 16px #fff' } : { color: '#fff', textShadow: 'none' }}>{timer}</span>
+                <span style={timer <= 5 ? { color: '#dc3545' } : { color: '#fff' }}>s</span>
+              </div>
             </div>
           </foreignObject>
         )}
@@ -6916,7 +6908,7 @@ $$;
           <div style={{ background: 'rgba(255,255,255,0.95)', border: '2px solid #28a745', borderRadius: 12, padding: 32, minWidth: 220, maxWidth: 340, textAlign: 'center', fontSize: 24, fontWeight: 'bold', color: '#222', boxShadow: '0 2px 16px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
             <div style={{ marginBottom: 16 }}>{noMoveOverlay === 'noMore' ? 'No More Moves' : 'No Moves :('}</div>
             {noMoveOverlay === 'noMore' && (
-              <button style={{ ...buttonStyle, minWidth: 0, width: 110, fontSize: 22, padding: '14px 0', margin: '12px 0 0 0', background: '#007bff', color: '#fff' }} onClick={handleEndTurn}>End Turn</button>
+              <button style={{ ...buttonStyle, minWidth: 0, width: 77, fontSize: 15.4, padding: '9.8px 0', margin: '8.4px 0 0 0', background: '#007bff', color: '#fff' }} onClick={handleEndTurn}>End Turn</button>
             )}
           </div>
         </div>
@@ -6931,8 +6923,8 @@ $$;
             <div style={{ marginBottom: 16, fontSize: 18, color: '#666' }}>Current stakes: {gameStakes} | New stakes: {gameStakes * 2}</div>
             <div style={{ marginBottom: 16, fontSize: 20, color: doubleTimer <= 3 ? '#dc3545' : '#333', fontWeight: 'bold' }}>⏰ {doubleTimer} seconds to decide</div>
             <div style={{ display: 'flex', gap: 12 }}>
-              <button style={{ ...buttonStyle, minWidth: 100, padding: '12px 20px', fontSize: 18, background: '#28a745', color: '#fff' }} onClick={() => handleDoubleResponse(true)}>Accept</button>
-              <button style={{ ...buttonStyle, minWidth: 100, padding: '12px 20px', fontSize: 18, background: '#dc3545', color: '#fff' }} onClick={() => handleDoubleResponse(false)}>Decline</button>
+              <button style={{ ...buttonStyle, minWidth: 70, padding: '8.4px 14px', fontSize: 12.6, background: '#28a745', color: '#fff' }} onClick={() => handleDoubleResponse(true)}>Accept</button>
+              <button style={{ ...buttonStyle, minWidth: 70, padding: '8.4px 14px', fontSize: 12.6, background: '#dc3545', color: '#fff' }} onClick={() => handleDoubleResponse(false)}>Decline</button>
             </div>
           </div>
         </div>
@@ -6955,8 +6947,8 @@ $$;
               <div style={{ marginBottom: 18 }}>Are you sure you want to resign?</div>
               <div style={{ marginBottom: 18, fontSize: 16, color: '#dc3545', fontWeight: 'normal' }}>{lossMessage}</div>
               <div style={{ display: 'flex', gap: 18, marginTop: 8 }}>
-                <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff', minWidth: 0, width: 90, fontSize: 20 }} onClick={doResign}>Yes</button>
-                <button style={{ ...buttonStyle, background: '#bbb', color: '#222', minWidth: 0, width: 90, fontSize: 20 }} onClick={cancelResign}>No</button>
+                <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff', minWidth: 0, width: 63, fontSize: 14 }} onClick={doResign}>Yes</button>
+                <button style={{ ...buttonStyle, background: '#bbb', color: '#222', minWidth: 0, width: 63, fontSize: 14 }} onClick={cancelResign}>No</button>
               </div>
             </div>
           </div>
@@ -6978,13 +6970,13 @@ $$;
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 22, marginTop: 8 }}>
-                  <button style={{ ...buttonStyle, background: '#28a745', color: '#fff', fontSize: 22 }} onClick={() => {
+                  <button style={{ ...buttonStyle, background: '#28a745', color: '#fff', fontSize: 15.4 }} onClick={() => {
                     // Reset abandonment ref for new game
                     isAbandonedRef.current = false;
                     gameOverProcessedRef.current = false;
                     handleRematch();
                   }}>New Game</button>
-                  <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', fontSize: 22 }} onClick={handleQuit}>Quit</button>
+                  <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', fontSize: 15.4 }} onClick={handleQuit}>Quit</button>
                 </div>
               </>
             ) : (
@@ -7108,7 +7100,7 @@ $$;
                 
                 <div style={{ display: 'flex', gap: 22, marginTop: 8 }}>
                   <button style={{ ...buttonStyle, background: '#28a745', color: '#fff', fontSize: 22 }} onClick={handleRematch}>Rematch</button>
-                  <button style={{ ...buttonStyle, background: '#bbb', color: '#222', minWidth: 0, width: 110, fontSize: 22 }} onClick={handleQuit}>Quit</button>
+                  <button style={{ ...buttonStyle, background: '#bbb', color: '#222', minWidth: 0, width: 77, fontSize: 15.4 }} onClick={handleQuit}>Quit</button>
                 </div>
               </>
             )}
@@ -9009,13 +9001,13 @@ $$;
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: 22, marginTop: 8 }}>
-                    <button style={{ ...buttonStyle, background: '#28a745', color: '#fff', fontSize: 22 }} onClick={() => {
+                    <button style={{ ...buttonStyle, background: '#28a745', color: '#fff', fontSize: 15.4 }} onClick={() => {
                       // Reset abandonment ref for new game
                       isAbandonedRef.current = false;
                       gameOverProcessedRef.current = false;
                       handleRematch();
                     }}>New Game</button>
-                    <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', fontSize: 22 }} onClick={handleQuit}>Quit</button>
+                    <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', fontSize: 15.4 }} onClick={handleQuit}>Quit</button>
                   </div>
                 </>
               ) : (
@@ -10790,8 +10782,8 @@ $$;
               <div style={{ marginBottom: 20, fontSize: 16, color: '#666' }}>Current stakes: {gameStakes} | New stakes: {gameStakes * 2}</div>
               <div style={{ marginBottom: 24, fontSize: 18, color: doubleTimer <= 3 ? '#dc3545' : '#333', fontWeight: 'bold' }}>⏰ {doubleTimer} seconds to decide</div>
               <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                <button style={{ ...buttonStyle, minWidth: 120, padding: '12px 24px', fontSize: 18, background: '#28a745', color: '#fff' }} onClick={() => handleDoubleResponse(true)}>Accept</button>
-                <button style={{ ...buttonStyle, minWidth: 120, padding: '12px 24px', fontSize: 18, background: '#dc3545', color: '#fff' }} onClick={() => handleDoubleResponse(false)}>Decline</button>
+                <button style={{ ...buttonStyle, minWidth: 84, padding: '8.4px 16.8px', fontSize: 12.6, background: '#28a745', color: '#fff' }} onClick={() => handleDoubleResponse(true)}>Accept</button>
+                <button style={{ ...buttonStyle, minWidth: 84, padding: '8.4px 16.8px', fontSize: 12.6, background: '#dc3545', color: '#fff' }} onClick={() => handleDoubleResponse(false)}>Decline</button>
               </div>
             </div>
           </div>
@@ -10841,8 +10833,8 @@ $$;
                 );
               })()}
               <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff', minWidth: 120, fontSize: 18, padding: '12px 24px' }} onClick={doResign}>Yes</button>
-                <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', minWidth: 120, fontSize: 18, padding: '12px 24px' }} onClick={cancelResign}>No</button>
+                <button style={{ ...buttonStyle, background: '#dc3545', color: '#fff', minWidth: 84, fontSize: 12.6, padding: '8.4px 16.8px' }} onClick={doResign}>Yes</button>
+                <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', minWidth: 84, fontSize: 12.6, padding: '8.4px 16.8px' }} onClick={cancelResign}>No</button>
               </div>
             </div>
           </div>
@@ -10895,7 +10887,7 @@ $$;
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: 22, marginTop: 8 }}>
-                    <button style={{ ...buttonStyle, background: '#007bff', color: '#fff', fontSize: 22 }} onClick={() => {
+                    <button style={{ ...buttonStyle, background: '#007bff', color: '#fff', fontSize: 15.4 }} onClick={() => {
                       if (isOnlineGame) {
                         // Disconnect from current match
                         if (socketRef.current) {
@@ -10921,7 +10913,7 @@ $$;
                         handleRematch();
                       }
                     }}>New Game</button>
-                    <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', fontSize: 22 }} onClick={handleQuit}>Quit</button>
+                    <button style={{ ...buttonStyle, background: '#6c757d', color: '#fff', fontSize: 15.4 }} onClick={handleQuit}>Quit</button>
                   </div>
                 </>
               ) : (

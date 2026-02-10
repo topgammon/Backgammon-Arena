@@ -304,6 +304,8 @@ function GameBoard() {
   const [showMessageOverlay, setShowMessageOverlay] = useState(false); // Show message overlay on profile
   const [messageOverlayText, setMessageOverlayText] = useState(''); // Text for message overlay
   const [showConversationOverlay, setShowConversationOverlay] = useState(false); // Show conversation chat overlay
+  const [showConversationEmojiPicker, setShowConversationEmojiPicker] = useState(false); // Show emoji picker in conversation overlay
+  const conversationEmojiPickerRef = useRef(null); // Ref for conversation emoji picker
   const [conversationsLoading, setConversationsLoading] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const messagesEndRef = useRef(null); // Ref for scrolling to bottom of messages
@@ -446,12 +448,15 @@ function GameBoard() {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
         setShowEmojiPicker(false);
       }
+      if (conversationEmojiPickerRef.current && !conversationEmojiPickerRef.current.contains(event.target)) {
+        setShowConversationEmojiPicker(false);
+      }
     };
-    if (showEmojiPicker) {
+    if (showEmojiPicker || showConversationEmojiPicker) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [showEmojiPicker]);
+  }, [showEmojiPicker, showConversationEmojiPicker]);
 
   // Auto-detect country based on browser locale when signup form opens
   useEffect(() => {
@@ -12930,21 +12935,31 @@ $$;
                           }}
                           disabled={isFriend || hasPendingRequest}
                           style={{
-                            background: 'transparent',
-                            border: 'none',
-                            fontSize: '20px',
+                            background: isFriend ? '#6c757d' : hasPendingRequest ? '#ffc107' : '#fff',
+                            border: '1px solid #ddd',
+                            fontSize: '18px',
                             cursor: isFriend || hasPendingRequest ? 'default' : 'pointer',
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            transition: 'background 0.2s'
+                            padding: '8px',
+                            width: '36px',
+                            height: '36px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '8px',
+                            transition: 'all 0.2s',
+                            color: isFriend ? '#fff' : hasPendingRequest ? '#000' : '#333'
                           }}
                           onMouseEnter={(e) => {
                             if (!isFriend && !hasPendingRequest) {
                               e.target.style.background = '#f0f0f0';
+                              e.target.style.borderColor = '#ff751f';
                             }
                           }}
                           onMouseLeave={(e) => {
-                            e.target.style.background = 'transparent';
+                            if (!isFriend && !hasPendingRequest) {
+                              e.target.style.background = '#fff';
+                              e.target.style.borderColor = '#ddd';
+                            }
                           }}
                           title={isFriend ? 'Friends' : hasPendingRequest ? 'Request Sent' : 'Add Friend'}
                         >
@@ -12960,19 +12975,27 @@ $$;
                         alert('Challenge feature coming soon!');
                       }}
                       style={{
-                        background: 'transparent',
-                        border: 'none',
-                        fontSize: '20px',
+                        background: '#fff',
+                        border: '1px solid #ddd',
+                        fontSize: '18px',
                         cursor: 'pointer',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        transition: 'background 0.2s'
+                        padding: '8px',
+                        width: '36px',
+                        height: '36px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '8px',
+                        transition: 'all 0.2s',
+                        color: '#333'
                       }}
                       onMouseEnter={(e) => {
                         e.target.style.background = '#f0f0f0';
+                        e.target.style.borderColor = '#ff751f';
                       }}
                       onMouseLeave={(e) => {
-                        e.target.style.background = 'transparent';
+                        e.target.style.background = '#fff';
+                        e.target.style.borderColor = '#ddd';
                       }}
                       title="Challenge"
                     >
@@ -12988,20 +13011,27 @@ $$;
                         }
                       }}
                       style={{
-                        background: 'transparent',
-                        border: 'none',
-                        fontSize: '20px',
+                        background: '#fff',
+                        border: '1px solid #ddd',
+                        fontSize: '18px',
                         cursor: 'pointer',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        transition: 'background 0.2s',
+                        padding: '8px',
+                        width: '36px',
+                        height: '36px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '8px',
+                        transition: 'all 0.2s',
                         color: '#dc3545'
                       }}
                       onMouseEnter={(e) => {
                         e.target.style.background = '#ffe0e0';
+                        e.target.style.borderColor = '#dc3545';
                       }}
                       onMouseLeave={(e) => {
-                        e.target.style.background = 'transparent';
+                        e.target.style.background = '#fff';
+                        e.target.style.borderColor = '#ddd';
                       }}
                       title="Report"
                     >
@@ -13119,8 +13149,53 @@ $$;
               {/* Message Input */}
               <div style={{
                 display: 'flex',
-                gap: '8px'
+                gap: '8px',
+                position: 'relative'
               }}>
+                {showConversationEmojiPicker && (
+                  <div
+                    ref={conversationEmojiPickerRef}
+                    style={{
+                      position: 'absolute',
+                      bottom: '100%',
+                      right: '60px',
+                      marginBottom: '8px',
+                      background: '#fff',
+                      border: '1px solid #ddd',
+                      borderRadius: '8px',
+                      padding: '8px',
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(4, 1fr)',
+                      gap: '4px',
+                      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                      zIndex: 1001,
+                      width: '160px'
+                    }}
+                  >
+                    {['😊', '😂', '😎', '👍', '👎', '❤️', '🎉', '🔥', '💪', '😢', '😮', '🤔', '👏', '🎯', '🏆', '😴'].map((emoji, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          setMessageInput(prev => prev + emoji);
+                          setShowConversationEmojiPicker(false);
+                        }}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          fontSize: '20px',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          borderRadius: '4px',
+                          transition: 'background 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.target.style.background = '#f0f0f0'}
+                        onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <input
                   type="text"
                   value={messageInput}
@@ -13140,6 +13215,30 @@ $$;
                     fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
                   }}
                 />
+                <button
+                  onClick={() => setShowConversationEmojiPicker(!showConversationEmojiPicker)}
+                  style={{
+                    padding: '10px 12px',
+                    background: '#e9ecef',
+                    color: '#333',
+                    border: '1px solid #ddd',
+                    borderRadius: '8px',
+                    fontSize: '18px',
+                    cursor: 'pointer',
+                    lineHeight: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = '#dee2e6';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = '#e9ecef';
+                  }}
+                >
+                  😊
+                </button>
                 <button
                   onClick={handleSendMessage}
                   disabled={!messageInput.trim()}

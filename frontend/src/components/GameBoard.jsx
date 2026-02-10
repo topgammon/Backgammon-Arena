@@ -1269,15 +1269,14 @@ function GameBoard() {
   };
 
   // Register logged-in user as online and fetch online users list
+  // NOTE: This uses a separate socket from matchmaking to avoid conflicts
   useEffect(() => {
     if (!user?.id) return;
     
     const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
-    // Use socketRef if it exists (for matchmaking), otherwise create a new socket
-    const socket = socketRef.current || io(backendUrl);
-    if (!socketRef.current) {
-      socketRef.current = socket;
-    }
+    // Create a separate socket for global events (online status, global match-found)
+    // This is separate from the matchmaking socket to avoid conflicts
+    const socket = io(backendUrl);
     
     socket.on('connect', () => {
       // Register user as online when socket connects
@@ -9134,27 +9133,31 @@ $$;
 
   // Socket.io connection for matchmaking
   useEffect(() => {
-    if (!isMatchmaking || socketRef.current) return;
+    if (!isMatchmaking) return;
     
-    // Backend URL: In production, this should be set to your Railway backend URL
-    // Example: https://your-backend-name.railway.app
-    // For local development, defaults to http://localhost:3001
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
-    const isGuest = matchmakingType === 'guest';
+    // Clean up any existing socket that's not connected
+    if (socketRef.current && !socketRef.current.connected) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
     
-    const socket = io(backendUrl);
-    socketRef.current = socket;
-    
-    socket.on('connect', () => {
-      console.log('Connected to matchmaking server');
-      setMatchmakingStatus('Searching for opponent...');
+    // Create new socket if needed
+    if (!socketRef.current) {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+      const isGuest = matchmakingType === 'guest';
+      const socket = io(backendUrl);
+      socketRef.current = socket;
       
-      // Mark current user as online
-      if (user?.id) {
-        setOnlineUsers(prev => new Set([...prev, user.id]));
-      }
-      
-      if (isGuest) {
+      socket.on('connect', () => {
+        console.log('Connected to matchmaking server');
+        setMatchmakingStatus('Searching for opponent...');
+        
+        // Mark current user as online
+        if (user?.id) {
+          setOnlineUsers(prev => new Set([...prev, user.id]));
+        }
+        
+        if (isGuest) {
         socket.emit('matchmaking:guest:join');
       } else {
         // Ranked matchmaking - requires login
@@ -9168,45 +9171,45 @@ $$;
           userId: user.id,
           elo: userProfile.elo_rating || 1000
         });
-      }
-    });
-    
-    socket.on('matchmaking:guest:queued', (data) => {
+        }
+      });
+      
+      socket.on('matchmaking:guest:queued', (data) => {
       setMatchmakingStatus(`Waiting for opponent... (Position: ${data.position})`);
     });
     
-    socket.on('matchmaking:ranked:queued', (data) => {
-      setMatchmakingStatus(`Waiting for opponent... (Position: ${data.position})`);
-    });
-    
-    // Listen for user online/offline events
-    socket.on('user:online', (data) => {
+      socket.on('matchmaking:ranked:queued', (data) => {
+        setMatchmakingStatus(`Waiting for opponent... (Position: ${data.position})`);
+      });
+      
+      // Listen for user online/offline events
+      socket.on('user:online', (data) => {
       if (data.userId) {
         setOnlineUsers(prev => new Set([...prev, data.userId]));
       }
-    });
-    
-    socket.on('user:offline', (data) => {
-      if (data.userId) {
-        setOnlineUsers(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(data.userId);
-          return newSet;
-        });
-      }
-    });
-    
-    socket.on('matchmaking:ranked:error', (data) => {
+      });
+      
+      socket.on('user:offline', (data) => {
+        if (data.userId) {
+          setOnlineUsers(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(data.userId);
+            return newSet;
+          });
+        }
+      });
+      
+      socket.on('matchmaking:ranked:error', (data) => {
       setMatchmakingStatus(data.message || 'Error joining ranked queue');
       setTimeout(() => {
         setIsMatchmaking(false);
         setMatchmakingType(null);
         setScreen('home');
       }, 2000);
-    });
-    
-    // Challenge system handlers
-    socket.on('challenge:declined-notification', (data) => {
+      });
+      
+      // Challenge system handlers
+      socket.on('challenge:declined-notification', (data) => {
       const { challengeId } = data;
       if (pendingChallenge && pendingChallenge.id === challengeId) {
         setChallengeDeclinedMessage('Challenge declined');
@@ -9221,15 +9224,15 @@ $$;
           setScreen('home');
         }, 2000);
       }
-    });
-    
-    socket.on('challenge:queued', (data) => {
+      });
+      
+      socket.on('challenge:queued', (data) => {
       console.log('✅ Challenge queued successfully:', data);
       // Update status to show we're waiting
       setMatchmakingStatus('Waiting for opponent...');
-    });
-    
-    socket.on('challenge:expired', (data) => {
+      });
+      
+      socket.on('challenge:expired', (data) => {
       const { challengeId } = data;
       if (pendingChallenge && pendingChallenge.id === challengeId) {
         setPendingChallenge(null);
@@ -9238,12 +9241,12 @@ $$;
         setMatchmakingStatus('');
         alert('Challenge expired. The other player did not respond in time.');
       }
-    });
-    
-    socket.on('challenge:queued', (data) => {
-      console.log('Challenge queued:', data);
-    });
-    
+      });
+      
+      socket.on('challenge:queued', (data) => {
+        console.log('Challenge queued:', data);
+      });
+      
       socket.on('matchmaking:match-found', async (data) => {
         console.log('Match found:', data);
         setMatchmakingStatus('Match found! Starting game...');
@@ -9331,8 +9334,8 @@ $$;
           setScreen('onlineGame');
         }, 500);
       });
-    
-    socket.on('disconnect', () => {
+      
+      socket.on('disconnect', () => {
       console.log('Disconnected from matchmaking server');
       // Mark current user as offline
       if (user?.id) {
@@ -9345,12 +9348,13 @@ $$;
       if (isMatchmaking) {
         setMatchmakingStatus('Disconnected. Please try again.');
       }
-    });
-    
-    socket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
-      setMatchmakingStatus('Error connecting to server. Please try again.');
-    });
+      });
+      
+      socket.on('connect_error', (error) => {
+        console.error('Socket connection error:', error);
+        setMatchmakingStatus('Error connecting to server. Please try again.');
+      });
+    }
     
     return () => {
       // Only cleanup/disconnect if we're canceling matchmaking, NOT when transitioning to game

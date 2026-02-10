@@ -226,7 +226,7 @@ function GameBoard() {
   const gameOverProcessedRef = useRef(false); // Prevent duplicate game over events
   const [abandoningPlayer, setAbandoningPlayer] = useState(null); // Track who abandoned (1 or 2)
   const isAbandonedRef = useRef(false); // Ref to track abandonment (more reliable than state for guards)
-  const [timer, setTimer] = useState(45);
+  const [timer, setTimer] = useState(60);
   const [rematchRequest, setRematchRequest] = useState(null); // { from: playerNumber, to: playerNumber }
   const firstRollIntervalRef = useRef(null);
   const firstRollTimerRef = useRef(null);
@@ -2981,7 +2981,7 @@ $$;
     }
     
     if (currentPlayer !== prevPlayerRef.current) {
-      setTimer(45);
+      setTimer(60);
       prevPlayerRef.current = currentPlayer;
     }
     
@@ -5188,11 +5188,11 @@ $$;
       return;
     }
     
-    // Detect win type (gammon/backgammon) for wins and resignations
+    // Detect win type (gammon/backgammon) for wins, resignations, and timeouts
     let winType = null;
     let multiplier = 1;
     
-    if (type === 'win' || type === 'resign') {
+    if (type === 'win' || type === 'resign' || type === 'timeout') {
       const winInfo = detectWinType(winner, loser);
       winType = winInfo.winType;
       multiplier = winInfo.multiplier;
@@ -5281,7 +5281,7 @@ $$;
     setBar({ 1: [], 2: [] });
     setBorneOff({ 1: 0, 2: 0 });
     setMessage('');
-    setTimer(45);
+    setTimer(60);
     setUndoStack([]);
     setMoveMade(false);
     setAwaitingEndTurn(false);
@@ -6269,7 +6269,7 @@ $$;
                 )}
               </div>
             ) : null}
-            {(hasRolled || isRolling) && !showEndTurn && !gameOver && (
+            {(hasRolled || isRolling) && !gameOver && (
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '0 0 4px 0', gap: 7 }}>
                 {isRolling ? (
                   [0, 1].map(i => (
@@ -9637,7 +9637,7 @@ $$;
         if (data.timer !== undefined) {
           setTimer(data.timer);
         } else {
-          setTimer(45);
+          setTimer(60);
         }
         // Reset "offered this turn" flag when turn changes
         setDoubleOfferedThisTurn({ 1: false, 2: false });
@@ -10127,7 +10127,7 @@ $$;
           setFirstRollResult(null);
         }
         setFirstRollTimer(10);
-        setTimer(45);
+        setTimer(60);
         setDoubleOffer(null);
         setGameStakes(1);
         setCanDouble({ 1: true, 2: true });

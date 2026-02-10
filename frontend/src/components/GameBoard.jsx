@@ -1284,7 +1284,31 @@ function GameBoard() {
     // Listen for new messages
     socket.on('message:new', async (data) => {
       if (data.recipient_id === user.id) {
-        // Refresh conversations and unread count
+        // If the conversation is currently open, refresh messages immediately
+        if (selectedConversation && selectedConversation.id === data.conversation_id) {
+          const { data: messagesData } = await supabase
+            .from('messages')
+            .select(`
+              *,
+              sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
+            `)
+            .eq('conversation_id', selectedConversation.id)
+            .order('created_at', { ascending: true });
+          
+          if (messagesData) {
+            setConversationMessages(messagesData);
+          }
+          
+          // Mark the message as read since user is viewing the conversation
+          await supabase
+            .from('messages')
+            .update({ is_read: true })
+            .eq('conversation_id', data.conversation_id)
+            .eq('recipient_id', user.id)
+            .eq('is_read', false);
+        }
+        
+        // Refresh conversations and unread count (only if on profile screen viewing own profile)
         if (screen === 'profile' && (!viewingUserId || viewingUserId === user.id)) {
           const { data: convsData } = await supabase
             .from('conversations')
@@ -1316,22 +1340,6 @@ function GameBoard() {
           
           if (unreadData !== null) {
             setUnreadMessageCount(unreadData.length || 0);
-          }
-          
-          // If the conversation is currently open, refresh messages
-          if (selectedConversation && selectedConversation.id === data.conversation_id) {
-            const { data: messagesData } = await supabase
-              .from('messages')
-              .select(`
-                *,
-                sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
-              `)
-              .eq('conversation_id', selectedConversation.id)
-              .order('created_at', { ascending: true });
-            
-            if (messagesData) {
-              setConversationMessages(messagesData);
-            }
           }
         }
       }

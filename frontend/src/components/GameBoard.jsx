@@ -1405,6 +1405,33 @@ function GameBoard() {
       console.log('📬 Current user ID:', user.id);
       console.log('📬 Challenger ID:', challengerId);
       
+      // Check if user is in a game - if so, don't show challenge
+      if (isOnlineGame || screen === 'onlineGame' || screen === 'cpu' || screen === 'passplay') {
+        console.log('⚠️ User is in a game, cannot receive challenge');
+        // Auto-decline since user is in game
+        if (supabase && user?.id) {
+          try {
+            await supabase
+              .from('challenges')
+              .update({
+                status: 'declined',
+                responded_at: new Date().toISOString()
+              })
+              .eq('id', challengeId);
+            
+            if (socketRef.current) {
+              socketRef.current.emit('challenge:declined', {
+                challengeId: challengeId,
+                challengerId: challengerId
+              });
+            }
+          } catch (err) {
+            console.error('Error auto-declining challenge (user in game):', err);
+          }
+        }
+        return;
+      }
+      
       // Fetch challenger's full profile data
       if (supabase) {
         const { data: challengerData } = await supabase
@@ -1429,6 +1456,9 @@ function GameBoard() {
           receivedAt: Date.now()
         });
       }
+      
+      // Navigate to challenge request screen
+      setScreen('challengeRequest');
     });
     
     socket.on('message:new', async (data) => {
@@ -8890,8 +8920,8 @@ $$;
           </div>
         )}
         
-        {/* Incoming Challenge Overlay */}
-        {incomingChallenge && (() => {
+        {/* Incoming Challenge Overlay - REMOVED: Now using full screen (challengeRequest) */}
+        {false && incomingChallenge && (() => {
           const challenger = incomingChallenge.challenger;
           const renderAvatar = (userData, size = 60) => {
             const googleAvatarUrl = userData?.google_avatar_url;
@@ -9570,6 +9600,245 @@ $$;
   }, [isMatchmaking, matchmakingType, user, userProfile]);
 
   // Matchmaking Screen
+  const renderChallengeRequest = () => {
+    if (!incomingChallenge) {
+      // If challenge was cleared, go back to home
+      setScreen('home');
+      return null;
+    }
+    
+    const challenger = incomingChallenge.challenger;
+    const renderAvatar = (userData, size = 80) => {
+      const googleAvatarUrl = userData?.google_avatar_url;
+      const avatarName = userData?.avatar || 'Barry';
+      const country = userData?.country;
+      
+      if (googleAvatarUrl) {
+        return (
+          <img
+            src={googleAvatarUrl}
+            alt={userData?.username || 'User'}
+            style={{
+              width: size,
+              height: size,
+              borderRadius: '50%',
+              objectFit: 'cover',
+              border: '3px solid #ff751f'
+            }}
+          />
+        );
+      }
+      
+      // Use avatar name to get emoji
+      const avatarEmojis = {
+        'Barry': '🧔', 'Bruce': '👨', 'Charles': '👴', 'Dennis': '👨‍🦱',
+        'Edward': '👨‍💼', 'Gregory': '👨‍🦳', 'Martin': '👨‍🦲', 'Milo': '🧓', 'Ronald': '👴'
+      };
+      const emoji = avatarEmojis[avatarName] || '👤';
+      
+      return (
+        <div style={{
+          width: size,
+          height: size,
+          borderRadius: '50%',
+          background: '#ff751f',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: size * 0.5,
+          border: '3px solid #ff751f',
+          position: 'relative'
+        }}>
+          {emoji}
+          {country && (
+            <div style={{
+              position: 'absolute',
+              bottom: -2,
+              right: -2,
+              fontSize: size * 0.25,
+              background: '#fff',
+              borderRadius: '50%',
+              width: size * 0.35,
+              height: size * 0.35,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1px solid #ddd'
+            }}>
+              {country}
+            </div>
+          )}
+        </div>
+      );
+    };
+    
+    const handleAccept = async () => {
+      if (!supabase || !user?.id || !incomingChallenge) return;
+      
+      try {
+        // Update challenge status
+        const { error: updateError } = await supabase
+          .from('challenges')
+          .update({
+            status: 'accepted',
+            responded_at: new Date().toISOString()
+          })
+          .eq('id', incomingChallenge.id);
+        
+        if (updateError) {
+          console.error('Error accepting challenge:', updateError);
+          alert('Failed to accept challenge. Please try again.');
+          return;
+        }
+        
+        // Create match via socket
+        if (socketRef.current) {
+          socketRef.current.emit('challenge:accept', {
+            challengeId: incomingChallenge.id,
+            challengerId: incomingChallenge.challengerId,
+            challengedId: user.id
+          });
+        }
+        
+        // Clear incoming challenge
+        setIncomingChallenge(null);
+        setScreen('matchmaking'); // Will transition to game when match is found
+      } catch (err) {
+        console.error('Error accepting challenge:', err);
+        alert('Failed to accept challenge. Please try again.');
+      }
+    };
+    
+    const handleDecline = async () => {
+      if (!supabase || !user?.id || !incomingChallenge) return;
+      
+      try {
+        // Update challenge status
+        const { error: updateError } = await supabase
+          .from('challenges')
+          .update({
+            status: 'declined',
+            responded_at: new Date().toISOString()
+          })
+          .eq('id', incomingChallenge.id);
+        
+        if (updateError) {
+          console.error('Error declining challenge:', updateError);
+          alert('Failed to decline challenge. Please try again.');
+          return;
+        }
+        
+        // Notify challenger via socket
+        if (socketRef.current) {
+          socketRef.current.emit('challenge:declined', {
+            challengeId: incomingChallenge.id,
+            challengerId: incomingChallenge.challengerId
+          });
+        }
+        
+        // Clear incoming challenge and return to home
+        setIncomingChallenge(null);
+        setScreen('home');
+      } catch (err) {
+        console.error('Error declining challenge:', err);
+        alert('Failed to decline challenge. Please try again.');
+      }
+    };
+    
+    return (
+      <div style={{ 
+        textAlign: 'center', 
+        marginTop: 30, 
+        paddingBottom: 40, 
+        background: '#a8a7a8', 
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{
+          ...sectionStyle,
+          maxWidth: 600,
+          width: '100%',
+          padding: '60px 40px',
+          textAlign: 'center'
+        }}>
+          <div style={{ marginBottom: '32px' }}>
+            <img src="/logo.svg" alt="Backgammon Arena Logo" style={{ height: '120px', marginBottom: '24px' }} />
+          </div>
+          
+          {/* Challenger Avatar */}
+          <div style={{ marginBottom: '24px' }}>
+            {renderAvatar(challenger, 100)}
+          </div>
+          
+          <h1 style={{ 
+            fontSize: '32px', 
+            fontWeight: 'bold', 
+            color: '#000',
+            marginBottom: '16px',
+            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+          }}>
+            Challenge Received!
+          </h1>
+          
+          <div style={{
+            fontSize: '20px',
+            color: '#666',
+            marginBottom: '16px',
+            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+          }}>
+            <strong style={{ color: '#ff751f' }}>{challenger?.username || incomingChallenge.challengerUsername}</strong> is challenging you to a ranked match!
+          </div>
+          
+          <div style={{
+            fontSize: '16px',
+            color: challengeCountdown <= 3 ? '#f44336' : '#999',
+            marginBottom: '40px',
+            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+            fontWeight: 'bold'
+          }}>
+            Auto-decline in {challengeCountdown} seconds
+          </div>
+          
+          <div style={{
+            display: 'flex',
+            gap: '16px',
+            justifyContent: 'center',
+            marginBottom: '20px'
+          }}>
+            <button
+              onClick={handleAccept}
+              style={{
+                ...buttonStyle,
+                background: '#4caf50',
+                minWidth: '150px',
+                fontSize: '18px',
+                padding: '14px 28px'
+              }}
+            >
+              Accept
+            </button>
+            
+            <button
+              onClick={handleDecline}
+              style={{
+                ...buttonStyle,
+                background: '#f44336',
+                minWidth: '150px',
+                fontSize: '18px',
+                padding: '14px 28px'
+              }}
+            >
+              Decline
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderMatchmaking = () => {
     const isGuest = matchmakingType === 'guest';
     
@@ -14684,6 +14953,7 @@ $$;
   };
 
   if (screen === 'home') return renderHome();
+  if (screen === 'challengeRequest') return renderChallengeRequest();
   if (screen === 'matchmaking') return renderMatchmaking();
   if (screen === 'onlineGame') return renderOnlineGame();
   if (screen === 'passplay') return renderPassPlay();

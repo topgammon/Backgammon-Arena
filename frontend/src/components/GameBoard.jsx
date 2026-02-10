@@ -1831,8 +1831,7 @@ $$;
             .from('messages')
             .select(`
               *,
-              sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url),
-              challenge:challenges!messages_challenge_id_fkey(*)
+              sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
             `)
             .eq('conversation_id', selectedConversation.id)
             .order('created_at', { ascending: true });
@@ -1841,7 +1840,25 @@ $$;
             console.error('Error fetching messages:', messagesError);
             setConversationMessages([]);
           } else {
-            setConversationMessages(messagesData || []);
+            // Fetch challenges separately for messages that have challenge_id
+            const messagesWithChallenges = await Promise.all((messagesData || []).map(async (msg) => {
+              if (msg.challenge_id) {
+                try {
+                  const { data: challengeData } = await supabase
+                    .from('challenges')
+                    .select('*')
+                    .eq('id', msg.challenge_id)
+                    .single();
+                  return { ...msg, challenge: challengeData || null };
+                } catch (err) {
+                  console.error('Error fetching challenge for message:', err);
+                  return { ...msg, challenge: null };
+                }
+              }
+              return { ...msg, challenge: null };
+            }));
+            
+            setConversationMessages(messagesWithChallenges);
             
             // Auto-scroll to bottom after messages load
             setTimeout(() => {
@@ -1915,21 +1932,36 @@ $$;
               .from('messages')
               .select(`
                 *,
-                sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url),
-                challenge:challenges!messages_challenge_id_fkey(*)
+                sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
               `)
               .eq('id', payload.new.id)
               .single();
             
             if (!error && newMessage) {
               console.log('📨 New message received via Realtime:', newMessage);
+              
+              // Fetch challenge if message has challenge_id
+              let messageWithChallenge = { ...newMessage, challenge: null };
+              if (newMessage.challenge_id) {
+                try {
+                  const { data: challengeData } = await supabase
+                    .from('challenges')
+                    .select('*')
+                    .eq('id', newMessage.challenge_id)
+                    .single();
+                  messageWithChallenge.challenge = challengeData || null;
+                } catch (err) {
+                  console.error('Error fetching challenge for new message:', err);
+                }
+              }
+              
               // Add the new message to the conversation
               setConversationMessages(prev => {
                 // Check if message already exists (avoid duplicates)
-                if (prev.some(m => m.id === newMessage.id)) {
+                if (prev.some(m => m.id === messageWithChallenge.id)) {
                   return prev;
                 }
-                const updated = [...prev, newMessage];
+                const updated = [...prev, messageWithChallenge];
                 // Auto-scroll to bottom when new message arrives
                 setTimeout(() => {
                   if (messagesEndRef.current) {
@@ -1940,11 +1972,11 @@ $$;
               });
               
               // If this message is for the current user, mark it as read and update unread count
-              if (newMessage.recipient_id === user.id) {
+              if (messageWithChallenge.recipient_id === user.id) {
                 await supabase
                   .from('messages')
                   .update({ is_read: true })
-                  .eq('id', newMessage.id);
+                  .eq('id', messageWithChallenge.id);
                 
                 // Refresh unread count
                 const { data: unreadData } = await supabase
@@ -2073,12 +2105,28 @@ $$;
         
         if (newMessageData) {
           console.log('📤 Message sent, adding to conversation:', newMessageData);
+          
+          // Fetch challenge if message has challenge_id
+          let messageWithChallenge = { ...newMessageData, challenge: null };
+          if (newMessageData.challenge_id) {
+            try {
+              const { data: challengeData } = await supabase
+                .from('challenges')
+                .select('*')
+                .eq('id', newMessageData.challenge_id)
+                .single();
+              messageWithChallenge.challenge = challengeData || null;
+            } catch (err) {
+              console.error('Error fetching challenge for sent message:', err);
+            }
+          }
+          
           // Add the message immediately for the sender
           setConversationMessages(prev => {
-            if (prev.some(m => m.id === newMessageData.id)) {
+            if (prev.some(m => m.id === messageWithChallenge.id)) {
               return prev;
             }
-            const updated = [...prev, newMessageData];
+            const updated = [...prev, messageWithChallenge];
             // Auto-scroll to bottom after sending
             setTimeout(() => {
               if (messagesEndRef.current) {
@@ -2255,14 +2303,31 @@ $$;
         .from('messages')
         .select(`
           *,
-          sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url),
-          challenge:challenges!messages_challenge_id_fkey(*)
+          sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
         `)
         .eq('conversation_id', conversation.id)
         .order('created_at', { ascending: true });
       
       if (messagesData) {
-        setConversationMessages(messagesData);
+        // Fetch challenges separately for messages that have challenge_id
+        const messagesWithChallenges = await Promise.all(messagesData.map(async (msg) => {
+          if (msg.challenge_id) {
+            try {
+              const { data: challengeData } = await supabase
+                .from('challenges')
+                .select('*')
+                .eq('id', msg.challenge_id)
+                .single();
+              return { ...msg, challenge: challengeData || null };
+            } catch (err) {
+              console.error('Error fetching challenge for message:', err);
+              return { ...msg, challenge: null };
+            }
+          }
+          return { ...msg, challenge: null };
+        }));
+        
+        setConversationMessages(messagesWithChallenges);
         setTimeout(() => {
           if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -13609,14 +13674,29 @@ $$;
                                           .from('messages')
                                           .select(`
                                             *,
-                                            sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url),
-                                            challenge:challenges!messages_challenge_id_fkey(*)
+                                            sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
                                           `)
                                           .eq('conversation_id', selectedConversation.id)
                                           .order('created_at', { ascending: true });
                                         
                                         if (messagesData) {
-                                          setConversationMessages(messagesData);
+                                          // Fetch challenges separately
+                                          const messagesWithChallenges = await Promise.all(messagesData.map(async (msg) => {
+                                            if (msg.challenge_id) {
+                                              try {
+                                                const { data: challengeData } = await supabase
+                                                  .from('challenges')
+                                                  .select('*')
+                                                  .eq('id', msg.challenge_id)
+                                                  .single();
+                                                return { ...msg, challenge: challengeData || null };
+                                              } catch (err) {
+                                                return { ...msg, challenge: null };
+                                              }
+                                            }
+                                            return { ...msg, challenge: null };
+                                          }));
+                                          setConversationMessages(messagesWithChallenges);
                                         }
                                       } catch (err) {
                                         console.error('Error accepting challenge:', err);
@@ -13684,14 +13764,29 @@ $$;
                                           .from('messages')
                                           .select(`
                                             *,
-                                            sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url),
-                                            challenge:challenges!messages_challenge_id_fkey(*)
+                                            sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
                                           `)
                                           .eq('conversation_id', selectedConversation.id)
                                           .order('created_at', { ascending: true });
                                         
                                         if (messagesData) {
-                                          setConversationMessages(messagesData);
+                                          // Fetch challenges separately
+                                          const messagesWithChallenges = await Promise.all(messagesData.map(async (msg) => {
+                                            if (msg.challenge_id) {
+                                              try {
+                                                const { data: challengeData } = await supabase
+                                                  .from('challenges')
+                                                  .select('*')
+                                                  .eq('id', msg.challenge_id)
+                                                  .single();
+                                                return { ...msg, challenge: challengeData || null };
+                                              } catch (err) {
+                                                return { ...msg, challenge: null };
+                                              }
+                                            }
+                                            return { ...msg, challenge: null };
+                                          }));
+                                          setConversationMessages(messagesWithChallenges);
                                         }
                                       } catch (err) {
                                         console.error('Error declining challenge:', err);

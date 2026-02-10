@@ -1540,14 +1540,19 @@ io.on('connection', (socket) => {
     
     // Find challenged player's socket(s) - they might have multiple tabs
     const challengedSockets = [];
+    console.log(`🔍 Looking for challenged player ${challengedId}...`);
+    console.log(`🔍 Total sockets connected: ${io.sockets.sockets.size}`);
+    
     for (const [socketId, socketData] of io.sockets.sockets.entries()) {
+      console.log(`  Socket ${socketId}: userId=${socketData.userId}`);
       if (socketData.userId === challengedId) {
         challengedSockets.push(socketData);
+        console.log(`  ✅ Found socket for challenged player: ${socketId}`);
       }
     }
     
     if (challengedSockets.length === 0) {
-      console.log(`⚠️ Challenged player ${challengedId} is not online`);
+      console.log(`⚠️ Challenged player ${challengedId} is not online (no sockets found with this userId)`);
       // Notify challenger that opponent is offline
       socket.emit('challenge:opponent-offline', { challengeId });
       return;
@@ -1555,6 +1560,7 @@ io.on('connection', (socket) => {
     
     // Send challenge notification to all of challenged player's sockets
     challengedSockets.forEach(s => {
+      console.log(`📤 Sending challenge notification to socket ${s.id}`);
       s.emit('challenge:received', {
         challengeId,
         challengerId,
@@ -1562,7 +1568,7 @@ io.on('connection', (socket) => {
       });
     });
     
-    console.log(`📬 Challenge ${challengeId} notification sent to ${challengedId}`);
+    console.log(`📬 Challenge ${challengeId} notification sent to ${challengedId} (${challengedSockets.length} socket(s))`);
   });
   
   // Challenge system handlers

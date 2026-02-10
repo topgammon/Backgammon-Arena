@@ -1282,6 +1282,7 @@ function GameBoard() {
     
     socket.on('connect', () => {
       // Register user as online when socket connects
+      console.log('🌐 Global socket connected, registering user as online:', user.id);
       socket.emit('user:register-online', { userId: user.id });
       setOnlineUsers(prev => new Set([...prev, user.id]));
     });
@@ -1394,6 +1395,37 @@ function GameBoard() {
       setTimeout(() => {
         setScreen('onlineGame');
       }, 500);
+    });
+    
+    // Listen for incoming challenge notifications (global - not just in matchmaking)
+    socket.on('challenge:received', async (data) => {
+      const { challengeId, challengerId, challengerUsername } = data;
+      console.log('📬 Challenge received (global listener):', data);
+      console.log('📬 Current user ID:', user.id);
+      console.log('📬 Challenger ID:', challengerId);
+      
+      // Fetch challenger's full profile data
+      if (supabase) {
+        const { data: challengerData } = await supabase
+          .from('users')
+          .select('id, username, avatar, google_avatar_url, country, elo_rating')
+          .eq('id', challengerId)
+          .single();
+        
+        setIncomingChallenge({
+          id: challengeId,
+          challengerId: challengerId,
+          challenger: challengerData || { id: challengerId, username: challengerUsername },
+          challengerUsername: challengerUsername
+        });
+      } else {
+        setIncomingChallenge({
+          id: challengeId,
+          challengerId: challengerId,
+          challenger: { id: challengerId, username: challengerUsername },
+          challengerUsername: challengerUsername
+        });
+      }
     });
     
     socket.on('message:new', async (data) => {
@@ -2405,8 +2437,6 @@ $$;
               .insert({
                 challenger_id: user.id,
                 challenged_id: otherUser.id,
-                conversation_id: null, // No longer using conversations
-                message_id: null, // No longer using messages
                 status: 'pending',
                 expires_at: expiresAt.toISOString()
               })
@@ -9278,35 +9308,6 @@ $$;
         setMatchmakingStatus('');
         alert('Challenge expired. The other player did not respond in time.');
       }
-      });
-      
-      // Listen for incoming challenge notifications
-      socket.on('challenge:received', async (data) => {
-        const { challengeId, challengerId, challengerUsername } = data;
-        console.log('📬 Challenge received:', data);
-        
-        // Fetch challenger's full profile data
-        if (supabase) {
-          const { data: challengerData } = await supabase
-            .from('users')
-            .select('id, username, avatar, google_avatar_url, country, elo_rating')
-            .eq('id', challengerId)
-            .single();
-          
-          setIncomingChallenge({
-            id: challengeId,
-            challengerId: challengerId,
-            challenger: challengerData || { id: challengerId, username: challengerUsername },
-            challengerUsername: challengerUsername
-          });
-        } else {
-          setIncomingChallenge({
-            id: challengeId,
-            challengerId: challengerId,
-            challenger: { id: challengerId, username: challengerUsername },
-            challengerUsername: challengerUsername
-          });
-        }
       });
       
       // Listen for opponent offline notification

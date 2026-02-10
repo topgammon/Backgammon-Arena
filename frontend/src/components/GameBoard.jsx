@@ -6244,6 +6244,24 @@ $$;
             </div>
           </foreignObject>
         )}
+        {/* Timer on left side */}
+        {!gameOver && (screen === 'passplay' || screen === 'onlineGame') && !firstRollPhase && (
+          <foreignObject
+            x={boardX + 20}
+            y={boardY + boardH / 2 - 40}
+            width={200}
+            height={60}
+            style={{ pointerEvents: 'none' }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', pointerEvents: 'auto', background: 'none', borderRadius: 0, boxShadow: 'none', padding: 0, minWidth: 0 }}>
+              <div style={{ fontSize: 28, fontWeight: 700, color: timer <= 5 ? '#dc3545' : '#fff', marginBottom: 6, letterSpacing: 1, textShadow: timer <= 5 ? '0 0 8px #fff, 0 0 16px #fff' : 'none' }}>
+                <span style={{ color: '#fff', marginRight: 4, textShadow: 'none' }}>⏰</span>
+                <span style={timer <= 5 ? { color: '#dc3545', textShadow: '0 0 8px #fff, 0 0 16px #fff' } : { color: '#fff', textShadow: 'none' }}>{timer}</span>
+                <span style={timer <= 5 ? { color: '#dc3545' } : { color: '#fff' }}>s</span>
+              </div>
+            </div>
+          </foreignObject>
+        )}
         <foreignObject
           x={boardX + triangleW * 6.875}
           y={boardY + boardH / 2 - 40}
@@ -6252,13 +6270,6 @@ $$;
           style={{ pointerEvents: 'none' }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pointerEvents: 'auto', background: 'none', borderRadius: 0, boxShadow: 'none', padding: 0, minWidth: 0 }}>
-            {!gameOver && (screen === 'passplay' || screen === 'onlineGame') && !firstRollPhase && (
-              <div style={{ fontSize: 28, fontWeight: 700, color: timer <= 5 ? '#dc3545' : '#fff', marginBottom: 6, letterSpacing: 1, textShadow: timer <= 5 ? '0 0 8px #fff, 0 0 16px #fff' : 'none' }}>
-                <span style={{ color: '#fff', marginRight: 4, textShadow: 'none' }}>⏰</span>
-                <span style={timer <= 5 ? { color: '#dc3545', textShadow: '0 0 8px #fff, 0 0 16px #fff' } : { color: '#fff', textShadow: 'none' }}>{timer}</span>
-                <span style={timer <= 5 ? { color: '#dc3545' } : { color: '#fff' }}>s</span>
-              </div>
-            )}
             {(!hasRolled && !awaitingEndTurn && !isRolling && !gameOver) ? (
               <div style={{ display: 'flex', gap: 8 }}>
                 {(!isOnlineGame || (isOnlineGame && currentPlayer === playerNumber)) && (
@@ -6270,19 +6281,26 @@ $$;
               </div>
             ) : null}
             {(hasRolled || isRolling) && !gameOver && (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '0 0 4px 0', gap: 7 }}>
-                {isRolling ? (
-                  [0, 1].map(i => (
-                    <Dice key={i} value={isRolling ? rollingDice[i] : (dice[i] || 1)} faded={false} shrunk={false} isRolling={true} frame={animationFrame} />
-                  ))
-                ) : (
-                  (dice[0] === dice[1] && dice[0] !== 0)
-                    ? [0, 1, 2, 3].map(i => (
-                        <Dice key={i} value={dice[0]} faded={usedDice.includes(i)} shrunk={usedDice.includes(i)} />
-                      ))
-                    : [0, 1].map(i => (
-                        <Dice key={i} value={dice[i]} faded={usedDice.includes(i)} shrunk={usedDice.includes(i)} />
-                      ))
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', margin: '0 0 4px 0', gap: 7 }}>
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 7 }}>
+                  {isRolling ? (
+                    [0, 1].map(i => (
+                      <Dice key={i} value={isRolling ? rollingDice[i] : (dice[i] || 1)} faded={false} shrunk={false} isRolling={true} frame={animationFrame} />
+                    ))
+                  ) : (
+                    (dice[0] === dice[1] && dice[0] !== 0)
+                      ? [0, 1, 2, 3].map(i => (
+                          <Dice key={i} value={dice[0]} faded={usedDice.includes(i)} shrunk={usedDice.includes(i)} />
+                        ))
+                      : [0, 1].map(i => (
+                          <Dice key={i} value={dice[i]} faded={usedDice.includes(i)} shrunk={usedDice.includes(i)} />
+                        ))
+                  )}
+                </div>
+                {hasRolled && !isRolling && !hasAnyValidMoves() && usedDice.length === 0 && (
+                  <div style={{ fontSize: 16, color: '#ff6b35', fontWeight: 'bold', marginTop: 4 }}>
+                    No valid moves
+                  </div>
                 )}
               </div>
             )}

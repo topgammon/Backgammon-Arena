@@ -2297,10 +2297,18 @@ $$;
         }
       }
       
-      // Create challenge message
-      const challengeMessage = `${userProfile?.username || user?.user_metadata?.username || 'You'} is challenging you to a match`;
+      // Verify conversation has an ID
+      if (!conversation || !conversation.id) {
+        console.error('Conversation missing ID:', conversation);
+        alert('Failed to send challenge. Conversation error. Please try again.');
+        return;
+      }
       
-      const { data: messageData, error: messageError } = await supabase
+      // Create challenge message
+      const challengeMessage = `${userProfile?.username || user?.user_metadata?.username || user?.email?.split('@')[0] || 'You'} is challenging you to a match`;
+      
+      // Try inserting with message_type first
+      let { data: messageData, error: messageError } = await supabase
         .from('messages')
         .insert({
           conversation_id: conversation.id,
@@ -2312,8 +2320,51 @@ $$;
         .select()
         .single();
       
+      // If message_type column doesn't exist or value is invalid, try without it
+      if (messageError && (messageError.message?.includes('message_type') || messageError.code === '42703' || messageError.code === '23514')) {
+        console.log('Retrying without message_type...');
+        const retryResult = await supabase
+          .from('messages')
+          .insert({
+            conversation_id: conversation.id,
+            sender_id: user.id,
+            recipient_id: otherUser.id,
+            content: challengeMessage
+          })
+          .select()
+          .single();
+        
+        if (retryResult.error) {
+          console.error('Retry also failed:', retryResult.error);
+          console.error('Message data attempted:', {
+            conversation_id: conversation.id,
+            sender_id: user.id,
+            recipient_id: otherUser.id,
+            content: challengeMessage
+          });
+          alert('Failed to send challenge. Please try again.');
+          return;
+        }
+        
+        messageData = retryResult.data;
+        messageError = null;
+      }
+      
       if (messageError) {
         console.error('Error sending challenge message:', messageError);
+        console.error('Message data attempted:', {
+          conversation_id: conversation.id,
+          sender_id: user.id,
+          recipient_id: otherUser.id,
+          content: challengeMessage,
+          message_type: 'challenge'
+        });
+        alert('Failed to send challenge. Please try again.');
+        return;
+      }
+      
+      if (!messageData || !messageData.id) {
+        console.error('No message data returned');
         alert('Failed to send challenge. Please try again.');
         return;
       }

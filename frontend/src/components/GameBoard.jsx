@@ -2811,14 +2811,25 @@ $$;
   // Calculate Global Rank and Percentile
   useEffect(() => {
     const calculateRankAndPercentile = async () => {
-      if (!supabase || !user?.id || !userProfile?.elo_rating || screen !== 'profile') {
+      if (screen !== 'profile') {
+        setGlobalRank(null);
+        setPercentile(null);
+        return;
+      }
+
+      // Determine which profile to calculate rank for
+      const isViewingOwnProfile = !viewingUserId || viewingUserId === user?.id;
+      const profileToUse = isViewingOwnProfile ? userProfile : viewingUserProfile;
+      const profileElo = profileToUse?.elo_rating;
+
+      if (!supabase || !profileElo) {
         setGlobalRank(null);
         setPercentile(null);
         return;
       }
 
       try {
-        const userElo = userProfile.elo_rating;
+        const userElo = profileElo;
         
         // Fetch total count of users with ELO ratings
         const { count: totalPlayers, error: countError } = await supabase
@@ -2855,7 +2866,7 @@ $$;
           : 1;
         setPercentile(percentileValue);
 
-        console.log(`📊 Rank calculation: ELO=${userElo}, Rank=${rank}, Percentile=${percentileValue}%, Total Players=${totalPlayers}`);
+        console.log(`📊 Rank calculation: ELO=${userElo}, Rank=${rank}, Percentile=${percentileValue}%, Total Players=${totalPlayers}, Viewing: ${isViewingOwnProfile ? 'own profile' : 'other profile'}`);
       } catch (err) {
         console.error('Error calculating rank and percentile:', err);
         setGlobalRank(null);
@@ -2864,7 +2875,7 @@ $$;
     };
 
     calculateRankAndPercentile();
-  }, [screen, user?.id, userProfile?.elo_rating, supabase]);
+  }, [screen, user?.id, userProfile?.elo_rating, viewingUserId, viewingUserProfile?.elo_rating, supabase]);
 
   // Sound effects - non-blocking, triggered by game actions
   const playSound = (soundName) => {
@@ -12384,7 +12395,7 @@ $$;
             // If we have games, start from the first game's before ELO
             if (sortedGames.length > 0) {
               const firstGame = sortedGames[0];
-              currentElo = firstGame.player1_id === user?.id 
+              currentElo = firstGame.player1_id === profileUserId 
                 ? (firstGame.player1_elo_before || 1000)
                 : (firstGame.player2_elo_before || 1000);
             }
@@ -12399,7 +12410,7 @@ $$;
 
             // Calculate ELO after each game
             sortedGames.forEach((game, index) => {
-              const eloChange = game.player1_id === user?.id 
+              const eloChange = game.player1_id === profileUserId 
                 ? (game.player1_elo_change || 0)
                 : (game.player2_elo_change || 0);
               currentElo += eloChange;
@@ -12413,7 +12424,7 @@ $$;
             if (eloData.length === 0) {
               eloData.push({
                 gameNumber: 0,
-                elo: userProfile?.elo_rating || 1000
+                elo: profileToDisplay?.elo_rating || 1000
               });
             }
 

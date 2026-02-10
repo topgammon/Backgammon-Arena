@@ -12388,42 +12388,38 @@ $$;
               new Date(a.completed_at) - new Date(b.completed_at)
             );
 
-            // Build ELO data points
+            // Build ELO data points - each point represents ELO after a game was played
             const eloData = [];
-            let currentElo = 1000; // Starting ELO
             
-            // If we have games, start from the first game's before ELO
             if (sortedGames.length > 0) {
-              const firstGame = sortedGames[0];
-              currentElo = firstGame.player1_id === profileUserId 
-                ? (firstGame.player1_elo_before || 1000)
-                : (firstGame.player2_elo_before || 1000);
-            }
-
-            // Add initial point (game 0)
-            if (sortedGames.length > 0) {
-              eloData.push({
-                gameNumber: 0,
-                elo: currentElo
+              // Calculate ELO after each game
+              sortedGames.forEach((game, index) => {
+                const eloBefore = game.player1_id === profileUserId 
+                  ? (game.player1_elo_before || 1000)
+                  : (game.player2_elo_before || 1000);
+                const eloChange = game.player1_id === profileUserId 
+                  ? (game.player1_elo_change || 0)
+                  : (game.player2_elo_change || 0);
+                const eloAfter = eloBefore + eloChange;
+                
+                eloData.push({
+                  gameNumber: index + 1, // Game number (1, 2, 3, ...)
+                  elo: eloAfter,
+                  game: game // Store game reference for tooltip if needed
+                });
               });
-            }
-
-            // Calculate ELO after each game
-            sortedGames.forEach((game, index) => {
-              const eloChange = game.player1_id === profileUserId 
-                ? (game.player1_elo_change || 0)
-                : (game.player2_elo_change || 0);
-              currentElo += eloChange;
+              
+              // Ensure the last point shows the current rating (most recent game should match current rating)
+              if (eloData.length > 0) {
+                const currentRating = profileToDisplay?.elo_rating;
+                if (currentRating) {
+                  eloData[eloData.length - 1].elo = currentRating;
+                }
+              }
+            } else {
+              // If no games in period, show current ELO as a single point
               eloData.push({
-                gameNumber: index + 1,
-                elo: currentElo
-              });
-            });
-
-            // If no games in period, show current ELO
-            if (eloData.length === 0) {
-              eloData.push({
-                gameNumber: 0,
+                gameNumber: 1,
                 elo: profileToDisplay?.elo_rating || 1000
               });
             }

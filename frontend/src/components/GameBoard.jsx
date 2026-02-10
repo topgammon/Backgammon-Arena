@@ -1698,7 +1698,7 @@ $$;
     }
   }, [screen, user?.id, viewingUserId, supabase]);
 
-  // Fetch messages for selected conversation
+  // Fetch messages for selected conversation and subscribe to real-time updates
   useEffect(() => {
     if (selectedConversation && supabase && user?.id) {
       const fetchMessages = async () => {
@@ -1750,10 +1750,99 @@ $$;
       };
       
       fetchMessages();
+      
+      // Subscribe to real-time updates for new messages in this conversation
+      const channel = supabase
+        .channel(`conversation:${selectedConversation.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `conversation_id=eq.${selectedConversation.id}`
+          },
+          async (payload) => {
+            // Fetch the new message with sender info
+            const { data: newMessage, error } = await supabase
+              .from('messages')
+              .select(`
+                *,
+                sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
+              `)
+              .eq('id', payload.new.id)
+              .single();
+            
+            if (!error && newMessage) {
+              // Add the new message to the conversation
+              setConversationMessages(prev => {
+                // Check if message already exists (avoid duplicates)
+                if (prev.some(m => m.id === newMessage.id)) {
+                  return prev;
+                }
+                return [...prev, newMessage];
+              });
+              
+              // If this message is for the current user, mark it as read and update unread count
+              if (newMessage.recipient_id === user.id) {
+                await supabase
+                  .from('messages')
+                  .update({ is_read: true })
+                  .eq('id', newMessage.id);
+                
+                // Refresh unread count
+                const { data: unreadData } = await supabase
+                  .from('messages')
+                  .select('id')
+                  .eq('recipient_id', user.id)
+                  .eq('is_read', false);
+                
+                if (unreadData !== null) {
+                  setUnreadMessageCount(unreadData.length || 0);
+                }
+              }
+              
+              // Update conversation last_message_at
+              await supabase
+                .from('conversations')
+                .update({ last_message_at: new Date().toISOString() })
+                .eq('id', selectedConversation.id);
+              
+              // Refresh conversations list if on profile screen
+              if (screen === 'profile' && (!viewingUserId || viewingUserId === user.id)) {
+                const { data: convsData } = await supabase
+                  .from('conversations')
+                  .select(`
+                    *,
+                    user1:users!conversations_user1_id_fkey(id, username, avatar, google_avatar_url, country),
+                    user2:users!conversations_user2_id_fkey(id, username, avatar, google_avatar_url, country)
+                  `)
+                  .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+                  .order('last_message_at', { ascending: false });
+                
+                if (convsData) {
+                  const convsList = convsData.map(conv => {
+                    const otherUser = conv.user1_id === user.id ? conv.user2 : conv.user1;
+                    return {
+                      ...conv,
+                      otherUser: otherUser
+                    };
+                  });
+                  setConversations(convsList);
+                }
+              }
+            }
+          }
+        )
+        .subscribe();
+      
+      return () => {
+        supabase.removeChannel(channel);
+      };
     } else {
       setConversationMessages([]);
     }
-  }, [selectedConversation, supabase, user?.id]);
+  }, [selectedConversation, supabase, user?.id, screen, viewingUserId]);
 
   // Handle sending message from chat view (accessible from both online game and profile)
   const handleSendMessage = async () => {
@@ -1779,50 +1868,31 @@ $$;
           .update({ last_message_at: new Date().toISOString() })
           .eq('id', selectedConversation.id);
         
-        // Emit socket event to notify recipient
-        if (socketRef.current) {
-          socketRef.current.emit('message:send', {
-            conversation_id: selectedConversation.id,
-            sender_id: user.id,
-            recipient_id: selectedConversation.otherUser.id,
-            content: messageInput.trim()
-          });
-        }
+        // Supabase Realtime subscription will automatically add the new message to the conversation
+        // No need to manually refresh - the subscription handles it for both sender and receiver
         
-        // Refresh messages
-        const { data: messagesData } = await supabase
-          .from('messages')
-          .select(`
-            *,
-            sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
-          `)
-          .eq('conversation_id', selectedConversation.id)
-          .order('created_at', { ascending: true });
-        
-        if (messagesData) {
-          setConversationMessages(messagesData);
-        }
-        
-        // Refresh conversations list
-        const { data: convsData } = await supabase
-          .from('conversations')
-          .select(`
-            *,
-            user1:users!conversations_user1_id_fkey(id, username, avatar, google_avatar_url, country),
-            user2:users!conversations_user2_id_fkey(id, username, avatar, google_avatar_url, country)
-          `)
-          .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-          .order('last_message_at', { ascending: false });
-        
-        if (convsData) {
-          const convsList = convsData.map(conv => {
-            const otherUser = conv.user1_id === user.id ? conv.user2 : conv.user1;
-            return {
-              ...conv,
-              otherUser: otherUser
-            };
-          });
-          setConversations(convsList);
+        // Refresh conversations list to update order (only if on profile screen)
+        if (screen === 'profile' && (!viewingUserId || viewingUserId === user.id)) {
+          const { data: convsData } = await supabase
+            .from('conversations')
+            .select(`
+              *,
+              user1:users!conversations_user1_id_fkey(id, username, avatar, google_avatar_url, country),
+              user2:users!conversations_user2_id_fkey(id, username, avatar, google_avatar_url, country)
+            `)
+            .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+            .order('last_message_at', { ascending: false });
+          
+          if (convsData) {
+            const convsList = convsData.map(conv => {
+              const otherUser = conv.user1_id === user.id ? conv.user2 : conv.user1;
+              return {
+                ...conv,
+                otherUser: otherUser
+              };
+            });
+            setConversations(convsList);
+          }
         }
         
         setMessageInput('');
@@ -12697,12 +12767,32 @@ $$;
                     {renderAvatar(false, false, null, 40, selectedConversation.otherUser, null)}
                   </div>
                   <div>
-                    <div style={{
-                      fontSize: '18px',
-                      fontWeight: 'bold',
-                      color: '#333',
-                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
-                    }}>
+                    <div 
+                      onClick={() => {
+                        if (selectedConversation.otherUser?.id) {
+                          setShowConversationOverlay(false);
+                          setSelectedConversation(null);
+                          setConversationMessages([]);
+                          setViewingUserId(selectedConversation.otherUser.id);
+                          setScreen('profile');
+                        }
+                      }}
+                      style={{
+                        fontSize: '18px',
+                        fontWeight: 'bold',
+                        color: '#333',
+                        fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                        cursor: 'pointer',
+                        textDecoration: 'none',
+                        transition: 'color 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.color = '#ff751f';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.color = '#333';
+                      }}
+                    >
                       {selectedConversation.otherUser?.username || 'Unknown'}
                     </div>
                     <div style={{

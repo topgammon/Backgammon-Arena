@@ -1602,7 +1602,7 @@ io.on('connection', (socket) => {
   
   // Handle challenge decline
   socket.on('challenge:declined', (data) => {
-    const { challengeId } = data;
+    const { challengeId, challengerId } = data;
     
     const challenge = challengeQueue.get(challengeId);
     if (!challenge) {
@@ -1610,18 +1610,26 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Find challenger socket
+    // Verify the decline is from the challenged player
+    if (socket.userId !== challenge.challengedUserId) {
+      console.error('❌ Unauthorized challenge decline attempt');
+      return;
+    }
+    
+    // Find challenger socket and notify them
     const challengerSocket = io.sockets.sockets.get(challenge.challengerSocketId);
     if (challengerSocket) {
       challengerSocket.emit('challenge:declined-notification', {
         challengeId
       });
+      console.log(`❌ Challenge ${challengeId} declined, notifying challenger`);
+    } else {
+      console.log(`❌ Challenge ${challengeId} declined, but challenger socket not found`);
     }
     
-    console.log(`❌ Challenge ${challengeId} declined`);
-    
-    // Remove from challenge queue
+    // Remove from challenge queue (this cancels the matchmaking)
     challengeQueue.delete(challengeId);
+    console.log(`🗑️ Challenge ${challengeId} removed from queue`);
   });
   
 });

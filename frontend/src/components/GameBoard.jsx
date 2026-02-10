@@ -1860,12 +1860,21 @@ $$;
             
             setConversationMessages(messagesWithChallenges);
             
-            // Auto-scroll to bottom after messages load
-            setTimeout(() => {
+            // Auto-scroll to bottom after messages load - use multiple attempts for reliability
+            const scrollToBottom = () => {
               if (messagesEndRef.current) {
-                messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+              } else if (messagesContainerRef.current) {
+                messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
               }
-            }, 100);
+            };
+            
+            // Try immediately
+            scrollToBottom();
+            // Try after a short delay
+            setTimeout(scrollToBottom, 100);
+            // Try after a longer delay (in case messages are still loading)
+            setTimeout(scrollToBottom, 300);
             
             // Mark messages as read
             const unreadMessages = (messagesData || []).filter(m => !m.is_read && m.recipient_id === user.id);
@@ -2170,13 +2179,30 @@ $$;
     }
   };
 
-  // Handle sending challenge
-  const handleSendChallenge = async () => {
-    if (!supabase || !user?.id || !selectedConversation) return;
+  // Handle sending challenge (works from both profile page and conversation overlay)
+  const handleSendChallenge = async (targetUser = null) => {
+    if (!supabase || !user?.id) return;
     
     try {
-      const otherUser = selectedConversation.otherUser;
+      // Determine the target user - either from parameter (profile page) or selectedConversation (chat overlay)
+      let otherUser = targetUser;
+      let conversation = selectedConversation;
+      
       if (!otherUser) {
+        // Try to get from selectedConversation (chat overlay context)
+        if (selectedConversation && selectedConversation.otherUser) {
+          otherUser = selectedConversation.otherUser;
+          conversation = selectedConversation;
+        } else if (viewingUserProfile && !isViewingOwnProfile) {
+          // Profile page context - viewing another user's profile
+          otherUser = viewingUserProfile;
+        } else {
+          alert('Error: Cannot send challenge. User information is missing.');
+          return;
+        }
+      }
+      
+      if (!otherUser || !otherUser.id) {
         alert('Error: Cannot send challenge. User information is missing.');
         return;
       }
@@ -2196,8 +2222,7 @@ $$;
       }
       
       // Create or get conversation
-      let conversation = selectedConversation;
-      if (!conversation.id) {
+      if (!conversation || !conversation.id) {
         // Create new conversation if it doesn't exist
         const user1Id = user.id < otherUser.id ? user.id : otherUser.id;
         const user2Id = user.id < otherUser.id ? otherUser.id : user.id;
@@ -2283,11 +2308,23 @@ $$;
       // Set pending challenge state (for challenger)
       setPendingChallenge(challengeData);
       
-      // Enter private matchmaking queue
+      // Enter private matchmaking queue immediately
       setIsMatchmaking(true);
       setMatchmakingType('ranked');
-      setMatchmakingStatus('Waiting for opponent to accept challenge...');
+      setMatchmakingStatus('Waiting for opponent...');
       setScreen('matchmaking');
+      
+      // Ensure socket connection exists
+      if (!socketRef.current) {
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+        const socket = io(backendUrl);
+        socketRef.current = socket;
+        
+        // Mark user as online
+        if (user?.id) {
+          socket.emit('user:register-online', { userId: user.id });
+        }
+      }
       
       // Join private challenge queue via socket
       if (socketRef.current) {
@@ -2298,41 +2335,49 @@ $$;
         });
       }
       
-      // Refresh conversation messages
-      const { data: messagesData } = await supabase
-        .from('messages')
-        .select(`
-          *,
-          sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
-        `)
-        .eq('conversation_id', conversation.id)
-        .order('created_at', { ascending: true });
-      
-      if (messagesData) {
-        // Fetch challenges separately for messages that have challenge_id
-        const messagesWithChallenges = await Promise.all(messagesData.map(async (msg) => {
-          if (msg.challenge_id) {
-            try {
-              const { data: challengeData } = await supabase
-                .from('challenges')
-                .select('*')
-                .eq('id', msg.challenge_id)
-                .single();
-              return { ...msg, challenge: challengeData || null };
-            } catch (err) {
-              console.error('Error fetching challenge for message:', err);
-              return { ...msg, challenge: null };
-            }
-          }
-          return { ...msg, challenge: null };
-        }));
+      // If we're in a conversation overlay, refresh the messages
+      if (selectedConversation && selectedConversation.id === conversation.id) {
+        const { data: messagesData } = await supabase
+          .from('messages')
+          .select(`
+            *,
+            sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
+          `)
+          .eq('conversation_id', conversation.id)
+          .order('created_at', { ascending: true });
         
-        setConversationMessages(messagesWithChallenges);
-        setTimeout(() => {
-          if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-          }
-        }, 100);
+        if (messagesData) {
+          // Fetch challenges separately for messages that have challenge_id
+          const messagesWithChallenges = await Promise.all(messagesData.map(async (msg) => {
+            if (msg.challenge_id) {
+              try {
+                const { data: challengeData } = await supabase
+                  .from('challenges')
+                  .select('*')
+                  .eq('id', msg.challenge_id)
+                  .single();
+                return { ...msg, challenge: challengeData || null };
+              } catch (err) {
+                console.error('Error fetching challenge for message:', err);
+                return { ...msg, challenge: null };
+              }
+            }
+            return { ...msg, challenge: null };
+          }));
+          
+          setConversationMessages(messagesWithChallenges);
+          
+          // Auto-scroll to bottom
+          const scrollToBottom = () => {
+            if (messagesEndRef.current) {
+              messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            } else if (messagesContainerRef.current) {
+              messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+            }
+          };
+          setTimeout(scrollToBottom, 100);
+          setTimeout(scrollToBottom, 300);
+        }
       }
       
       // Refresh conversations list
@@ -8869,6 +8914,12 @@ $$;
       }
     });
     
+    socket.on('challenge:queued', (data) => {
+      console.log('✅ Challenge queued successfully:', data);
+      // Update status to show we're waiting
+      setMatchmakingStatus('Waiting for opponent...');
+    });
+    
     socket.on('challenge:expired', (data) => {
       const { challengeId } = data;
       if (pendingChallenge && pendingChallenge.id === challengeId) {
@@ -11510,10 +11561,8 @@ $$;
                     </button>
                     
                     <button
-                      onClick={() => {
-                        // TODO: Implement challenge functionality
-                        console.log('Challenge clicked for:', profileToDisplay.username);
-                      }}
+                      onClick={() => handleSendChallenge(viewingUserProfile)}
+                      disabled={pendingChallenge && pendingChallenge.status === 'pending'}
                       style={{
                         padding: '8px 16px',
                         background: '#007bff',
@@ -13452,7 +13501,7 @@ $$;
                     
                     {/* Challenge Button */}
                     <button
-                      onClick={handleSendChallenge}
+                      onClick={() => handleSendChallenge(selectedConversation?.otherUser)}
                       disabled={pendingChallenge && pendingChallenge.status === 'pending'}
                       style={{
                         background: '#fff',
@@ -13752,10 +13801,11 @@ $$;
                                             message_type: 'text'
                                           });
                                         
-                                        // Notify challenger via socket
+                                        // Notify challenger via socket and remove them from queue
                                         if (socketRef.current) {
                                           socketRef.current.emit('challenge:declined', {
-                                            challengeId: challenge.id
+                                            challengeId: challenge.id,
+                                            challengerId: challenge.challenger_id
                                           });
                                         }
                                         

@@ -8,8 +8,7 @@ CREATE TABLE IF NOT EXISTS public.conversations (
   user2_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
   last_message_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(user1_id, user2_id),
-  CHECK (user1_id < user2_id) -- Ensures consistent ordering (smaller ID first)
+  UNIQUE(user1_id, user2_id)
 );
 
 -- Messages Table

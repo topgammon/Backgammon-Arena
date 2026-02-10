@@ -306,6 +306,8 @@ function GameBoard() {
   const [showConversationOverlay, setShowConversationOverlay] = useState(false); // Show conversation chat overlay
   const [conversationsLoading, setConversationsLoading] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const messagesEndRef = useRef(null); // Ref for scrolling to bottom of messages
+  const messagesContainerRef = useRef(null); // Ref for messages container
   const [highestRatingLeaderboard, setHighestRatingLeaderboard] = useState([]); // Top 10 users by highest rating
   const [mostWinsLeaderboard, setMostWinsLeaderboard] = useState([]); // Top 10 users by most wins
   const [globalRank, setGlobalRank] = useState(null); // User's global rank
@@ -1720,6 +1722,13 @@ $$;
           } else {
             setConversationMessages(messagesData || []);
             
+            // Auto-scroll to bottom after messages load
+            setTimeout(() => {
+              if (messagesEndRef.current) {
+                messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+              }
+            }, 100);
+            
             // Mark messages as read
             const unreadMessages = (messagesData || []).filter(m => !m.is_read && m.recipient_id === user.id);
             if (unreadMessages.length > 0) {
@@ -1752,8 +1761,13 @@ $$;
       fetchMessages();
       
       // Subscribe to real-time updates for new messages in this conversation
+      console.log('🔔 Setting up Realtime subscription for conversation:', selectedConversation.id);
       const channel = supabase
-        .channel(`conversation:${selectedConversation.id}`)
+        .channel(`conversation:${selectedConversation.id}`, {
+          config: {
+            broadcast: { self: true }
+          }
+        })
         .on(
           'postgres_changes',
           {
@@ -1763,6 +1777,7 @@ $$;
             filter: `conversation_id=eq.${selectedConversation.id}`
           },
           async (payload) => {
+            console.log('🔔 Realtime event received:', payload);
             // Fetch the new message with sender info
             const { data: newMessage, error } = await supabase
               .from('messages')
@@ -1774,13 +1789,21 @@ $$;
               .single();
             
             if (!error && newMessage) {
+              console.log('📨 New message received via Realtime:', newMessage);
               // Add the new message to the conversation
               setConversationMessages(prev => {
                 // Check if message already exists (avoid duplicates)
                 if (prev.some(m => m.id === newMessage.id)) {
                   return prev;
                 }
-                return [...prev, newMessage];
+                const updated = [...prev, newMessage];
+                // Auto-scroll to bottom when new message arrives
+                setTimeout(() => {
+                  if (messagesEndRef.current) {
+                    messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }, 50);
+                return updated;
               });
               
               // If this message is for the current user, mark it as read and update unread count
@@ -1834,7 +1857,9 @@ $$;
             }
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log('🔔 Subscription status:', status);
+        });
       
       return () => {
         supabase.removeChannel(channel);
@@ -1843,6 +1868,17 @@ $$;
       setConversationMessages([]);
     }
   }, [selectedConversation, supabase, user?.id, screen, viewingUserId]);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (conversationMessages.length > 0 && messagesEndRef.current) {
+      setTimeout(() => {
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    }
+  }, [conversationMessages.length]);
 
   // Handle sending message from chat view (accessible from both online game and profile)
   const handleSendMessage = async () => {
@@ -1868,9 +1904,37 @@ $$;
           .update({ last_message_at: new Date().toISOString() })
           .eq('id', selectedConversation.id);
         
-        // Supabase Realtime subscription will automatically add the new message to the conversation
-        // No need to manually refresh - the subscription handles it for both sender and receiver
+        // Fetch the newly inserted message to add it immediately (for sender)
+        const { data: newMessageData } = await supabase
+          .from('messages')
+          .select(`
+            *,
+            sender:users!messages_sender_id_fkey(id, username, avatar, google_avatar_url)
+          `)
+          .eq('conversation_id', selectedConversation.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
         
+        if (newMessageData) {
+          console.log('📤 Message sent, adding to conversation:', newMessageData);
+          // Add the message immediately for the sender
+          setConversationMessages(prev => {
+            if (prev.some(m => m.id === newMessageData.id)) {
+              return prev;
+            }
+            const updated = [...prev, newMessageData];
+            // Auto-scroll to bottom after sending
+            setTimeout(() => {
+              if (messagesEndRef.current) {
+                messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+              }
+            }, 50);
+            return updated;
+          });
+        }
+        
+        // Supabase Realtime subscription will handle updates for the receiver
         // Refresh conversations list to update order (only if on profile screen)
         if (screen === 'profile' && (!viewingUserId || viewingUserId === user.id)) {
           const { data: convsData } = await supabase
@@ -12803,6 +12867,147 @@ $$;
                       {selectedConversation.otherUser?.id && onlineUsers.has(selectedConversation.otherUser.id) ? 'Online' : 'Offline'}
                     </div>
                   </div>
+                  {/* Action Buttons */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginLeft: 'auto',
+                    marginRight: '40px'
+                  }}>
+                    {/* Add Friend Button */}
+                    {(() => {
+                      const otherUserId = selectedConversation.otherUser?.id;
+                      const isFriend = friends.some(f => 
+                        (f.user1_id === user.id && f.user2_id === otherUserId) ||
+                        (f.user2_id === user.id && f.user1_id === otherUserId)
+                      );
+                      const hasPendingRequest = friendRequests.some(r => 
+                        (r.from_user_id === user.id && r.to_user_id === otherUserId && r.status === 'pending') ||
+                        (r.from_user_id === otherUserId && r.to_user_id === user.id && r.status === 'pending')
+                      );
+                      
+                      return (
+                        <button
+                          onClick={async () => {
+                            if (!supabase || !user?.id || !otherUserId) return;
+                            
+                            if (isFriend) {
+                              alert('You are already friends!');
+                              return;
+                            }
+                            
+                            if (hasPendingRequest) {
+                              alert('Friend request already pending!');
+                              return;
+                            }
+                            
+                            try {
+                              const { error } = await supabase
+                                .from('friend_requests')
+                                .insert({
+                                  from_user_id: user.id,
+                                  to_user_id: otherUserId,
+                                  status: 'pending'
+                                });
+                              
+                              if (error) {
+                                console.error('Error sending friend request:', error);
+                                alert('Failed to send friend request.');
+                              } else {
+                                alert('Friend request sent!');
+                                // Refresh friend requests
+                                const { data: requests } = await supabase
+                                  .from('friend_requests')
+                                  .select('*')
+                                  .or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`);
+                                if (requests) setFriendRequests(requests);
+                              }
+                            } catch (err) {
+                              console.error('Error:', err);
+                              alert('Failed to send friend request.');
+                            }
+                          }}
+                          disabled={isFriend || hasPendingRequest}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            fontSize: '20px',
+                            cursor: isFriend || hasPendingRequest ? 'default' : 'pointer',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            transition: 'background 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isFriend && !hasPendingRequest) {
+                              e.target.style.background = '#f0f0f0';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.background = 'transparent';
+                          }}
+                          title={isFriend ? 'Friends' : hasPendingRequest ? 'Request Sent' : 'Add Friend'}
+                        >
+                          {isFriend ? '✓' : hasPendingRequest ? '⏳' : '👤'}
+                        </button>
+                      );
+                    })()}
+                    
+                    {/* Challenge Button */}
+                    <button
+                      onClick={() => {
+                        // TODO: Implement challenge functionality
+                        alert('Challenge feature coming soon!');
+                      }}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        fontSize: '20px',
+                        cursor: 'pointer',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.background = '#f0f0f0';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.background = 'transparent';
+                      }}
+                      title="Challenge"
+                    >
+                      ⚔️
+                    </button>
+                    
+                    {/* Report Button */}
+                    <button
+                      onClick={() => {
+                        if (confirm(`Report ${selectedConversation.otherUser?.username || 'this user'}?`)) {
+                          // TODO: Implement report functionality
+                          alert('Report feature coming soon!');
+                        }
+                      }}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        fontSize: '20px',
+                        cursor: 'pointer',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        transition: 'background 0.2s',
+                        color: '#dc3545'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.background = '#ffe0e0';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.background = 'transparent';
+                      }}
+                      title="Report"
+                    >
+                      🚩
+                    </button>
+                  </div>
                 </div>
                 <button
                   onClick={() => {
@@ -12842,19 +13047,22 @@ $$;
               </div>
               
               {/* Messages Container */}
-              <div style={{
-                flex: 1,
-                overflowY: 'auto',
-                padding: '16px',
-                background: '#f9f9f9',
-                borderRadius: '8px',
-                marginBottom: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-                minHeight: '300px',
-                maxHeight: '500px'
-              }}>
+              <div 
+                ref={messagesContainerRef}
+                style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '16px',
+                  background: '#f9f9f9',
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  minHeight: '300px',
+                  maxHeight: '500px'
+                }}
+              >
                 {messagesLoading ? (
                   <div style={{ textAlign: 'center', color: '#666' }}>Loading messages...</div>
                 ) : conversationMessages.length === 0 ? (
@@ -12905,6 +13113,7 @@ $$;
                     );
                   })
                 )}
+                <div ref={messagesEndRef} />
               </div>
               
               {/* Message Input */}

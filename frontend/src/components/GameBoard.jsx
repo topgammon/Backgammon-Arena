@@ -2208,13 +2208,17 @@ $$;
       }
       
       // Check if user already has a pending challenge with this user
-      const { data: existingChallenge } = await supabase
+      const { data: existingChallenge, error: challengeCheckError } = await supabase
         .from('challenges')
         .select('*')
         .eq('challenger_id', user.id)
         .eq('challenged_id', otherUser.id)
         .eq('status', 'pending')
-        .single();
+        .maybeSingle();
+      
+      if (challengeCheckError && challengeCheckError.code !== 'PGRST116') {
+        console.error('Error checking for existing challenge:', challengeCheckError);
+      }
       
       if (existingChallenge) {
         alert('You already have a pending challenge with this player. Please wait for them to respond.');
@@ -2223,30 +2227,74 @@ $$;
       
       // Create or get conversation
       if (!conversation || !conversation.id) {
-        // Create new conversation if it doesn't exist
+        // First, try to find existing conversation
         const user1Id = user.id < otherUser.id ? user.id : otherUser.id;
         const user2Id = user.id < otherUser.id ? otherUser.id : user.id;
         
-        const { data: newConv, error: convError } = await supabase
+        const { data: existingConv, error: findError } = await supabase
           .from('conversations')
-          .insert({
-            user1_id: user1Id,
-            user2_id: user2Id
-          })
-          .select()
-          .single();
+          .select('*')
+          .eq('user1_id', user1Id)
+          .eq('user2_id', user2Id)
+          .maybeSingle();
         
-        if (convError) {
-          console.error('Error creating conversation:', convError);
-          alert('Failed to create conversation. Please try again.');
+        if (findError && findError.code !== 'PGRST116') {
+          console.error('Error finding conversation:', findError);
+          alert('Failed to find conversation. Please try again.');
           return;
         }
         
-        conversation = {
-          ...newConv,
-          otherUser: otherUser
-        };
-        setSelectedConversation(conversation);
+        if (existingConv) {
+          // Use existing conversation
+          conversation = {
+            ...existingConv,
+            otherUser: otherUser
+          };
+          setSelectedConversation(conversation);
+        } else {
+          // Create new conversation if it doesn't exist
+          const { data: newConv, error: convError } = await supabase
+            .from('conversations')
+            .insert({
+              user1_id: user1Id,
+              user2_id: user2Id
+            })
+            .select()
+            .single();
+          
+          if (convError) {
+            console.error('Error creating conversation:', convError);
+            // If it's a conflict error, try to fetch the existing conversation again
+            if (convError.code === '23505' || convError.message?.includes('duplicate') || convError.message?.includes('unique')) {
+              const { data: retryConv } = await supabase
+                .from('conversations')
+                .select('*')
+                .eq('user1_id', user1Id)
+                .eq('user2_id', user2Id)
+                .maybeSingle();
+              
+              if (retryConv) {
+                conversation = {
+                  ...retryConv,
+                  otherUser: otherUser
+                };
+                setSelectedConversation(conversation);
+              } else {
+                alert('Failed to create conversation. Please try again.');
+                return;
+              }
+            } else {
+              alert('Failed to create conversation. Please try again.');
+              return;
+            }
+          } else {
+            conversation = {
+              ...newConv,
+              otherUser: otherUser
+            };
+            setSelectedConversation(conversation);
+          }
+        }
       }
       
       // Create challenge message

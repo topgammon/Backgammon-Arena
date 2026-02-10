@@ -1328,17 +1328,39 @@ function GameBoard() {
             .order('last_message_at', { ascending: false });
           
           if (convsData) {
+            // Fetch unread message counts per conversation
+            const conversationIds = convsData.map(conv => conv.id);
+            let unreadCountsByConversation = {};
+            
+            if (conversationIds.length > 0) {
+              const { data: unreadMessagesData } = await supabase
+                .from('messages')
+                .select('conversation_id')
+                .eq('recipient_id', user.id)
+                .eq('is_read', false)
+                .in('conversation_id', conversationIds);
+              
+              if (unreadMessagesData) {
+                // Count unread messages per conversation
+                unreadMessagesData.forEach(msg => {
+                  unreadCountsByConversation[msg.conversation_id] = 
+                    (unreadCountsByConversation[msg.conversation_id] || 0) + 1;
+                });
+              }
+            }
+            
             const convsList = convsData.map(conv => {
               const otherUser = conv.user1_id === user.id ? conv.user2 : conv.user1;
               return {
                 ...conv,
-                otherUser: otherUser
+                otherUser: otherUser,
+                unreadCount: unreadCountsByConversation[conv.id] || 0
               };
             });
             setConversations(convsList);
           }
           
-          // Update unread count
+          // Update total unread count
           const { data: unreadData } = await supabase
             .from('messages')
             .select('id')
@@ -1670,21 +1692,43 @@ $$;
             console.error('Error fetching conversations:', convsError);
             setConversations([]);
           } else {
-            // Transform conversations to include other user info
+            // Fetch unread message counts per conversation
+            const conversationIds = (convsData || []).map(conv => conv.id);
+            let unreadCountsByConversation = {};
+            
+            if (conversationIds.length > 0) {
+              const { data: unreadMessagesData, error: unreadMessagesError } = await supabase
+                .from('messages')
+                .select('conversation_id')
+                .eq('recipient_id', user.id)
+                .eq('is_read', false)
+                .in('conversation_id', conversationIds);
+              
+              if (!unreadMessagesError && unreadMessagesData) {
+                // Count unread messages per conversation
+                unreadMessagesData.forEach(msg => {
+                  unreadCountsByConversation[msg.conversation_id] = 
+                    (unreadCountsByConversation[msg.conversation_id] || 0) + 1;
+                });
+              }
+            }
+            
+            // Transform conversations to include other user info and unread count
             const convsList = (convsData || []).map(conv => {
               const otherUser = conv.user1_id === user.id ? conv.user2 : conv.user1;
               return {
                 ...conv,
-                otherUser: otherUser
+                otherUser: otherUser,
+                unreadCount: unreadCountsByConversation[conv.id] || 0
               };
             });
             setConversations(convsList);
           }
           
-          // Fetch unread message count
+          // Fetch total unread message count
           const { data: unreadData, error: unreadError } = await supabase
             .from('messages')
-            .select('id', { count: 'exact', head: true })
+            .select('id')
             .eq('recipient_id', user.id)
             .eq('is_read', false);
           
@@ -1812,7 +1856,18 @@ $$;
                 .update({ is_read: true })
                 .in('id', messageIds);
               
-              // Refresh unread count
+              // Update the conversation's unread count in the conversations list
+              setConversations(prev => prev.map(conv => {
+                if (conv.id === selectedConversation.id) {
+                  return {
+                    ...conv,
+                    unreadCount: 0
+                  };
+                }
+                return conv;
+              }));
+              
+              // Refresh total unread count
               const { data: unreadData } = await supabase
                 .from('messages')
                 .select('id')
@@ -1918,11 +1973,33 @@ $$;
                   .order('last_message_at', { ascending: false });
                 
                 if (convsData) {
+                  // Fetch unread message counts per conversation
+                  const conversationIds = convsData.map(conv => conv.id);
+                  let unreadCountsByConversation = {};
+                  
+                  if (conversationIds.length > 0) {
+                    const { data: unreadMessagesData } = await supabase
+                      .from('messages')
+                      .select('conversation_id')
+                      .eq('recipient_id', user.id)
+                      .eq('is_read', false)
+                      .in('conversation_id', conversationIds);
+                    
+                    if (unreadMessagesData) {
+                      // Count unread messages per conversation
+                      unreadMessagesData.forEach(msg => {
+                        unreadCountsByConversation[msg.conversation_id] = 
+                          (unreadCountsByConversation[msg.conversation_id] || 0) + 1;
+                      });
+                    }
+                  }
+                  
                   const convsList = convsData.map(conv => {
                     const otherUser = conv.user1_id === user.id ? conv.user2 : conv.user1;
                     return {
                       ...conv,
-                      otherUser: otherUser
+                      otherUser: otherUser,
+                      unreadCount: unreadCountsByConversation[conv.id] || 0
                     };
                   });
                   setConversations(convsList);
@@ -12574,6 +12651,8 @@ $$;
                         const otherUser = conv.otherUser;
                         if (!otherUser) return null;
                         
+                        const hasUnread = (conv.unreadCount || 0) > 0;
+                        
                         return (
                           <div
                             key={conv.id}
@@ -12591,17 +12670,17 @@ $$;
                               alignItems: 'center',
                               gap: '12px',
                               padding: '12px',
-                              background: '#f9f9f9',
+                              background: hasUnread ? '#fff4e6' : '#f9f9f9',
                               borderRadius: '8px',
-                              border: '1px solid #e0e0e0',
+                              border: hasUnread ? '2px solid #ff751f' : '1px solid #e0e0e0',
                               cursor: 'pointer',
-                              transition: 'background 0.2s'
+                              transition: 'background 0.2s, border 0.2s'
                             }}
                             onMouseEnter={(e) => {
-                              e.currentTarget.style.background = '#f0f0f0';
+                              e.currentTarget.style.background = hasUnread ? '#ffe8cc' : '#f0f0f0';
                             }}
                             onMouseLeave={(e) => {
-                              e.currentTarget.style.background = '#f9f9f9';
+                              e.currentTarget.style.background = hasUnread ? '#fff4e6' : '#f9f9f9';
                             }}
                           >
                             <div style={{
@@ -12622,12 +12701,35 @@ $$;
                                 marginBottom: '4px'
                               }}>
                                 <div style={{
-                                  fontSize: '16px',
-                                  fontWeight: 'bold',
-                                  color: '#333',
-                                  fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px'
                                 }}>
-                                  {otherUser.username || 'Unknown'}
+                                  <div style={{
+                                    fontSize: '16px',
+                                    fontWeight: 'bold',
+                                    color: '#333',
+                                    fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                                  }}>
+                                    {otherUser.username || 'Unknown'}
+                                  </div>
+                                  {hasUnread && (
+                                    <span style={{
+                                      background: '#ff751f',
+                                      color: '#fff',
+                                      borderRadius: '50%',
+                                      width: '20px',
+                                      height: '20px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '11px',
+                                      fontWeight: 'bold',
+                                      fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif'
+                                    }}>
+                                      {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                               <div style={{

@@ -1705,6 +1705,75 @@ $$;
     }
   }, [screen, user?.id, viewingUserId, supabase]);
 
+  // Global unread message count fetch and realtime subscription (works regardless of screen)
+  useEffect(() => {
+    if (!supabase || !user?.id) {
+      setUnreadMessageCount(0);
+      return;
+    }
+
+    const fetchUnreadCount = async () => {
+      try {
+        const { data: unreadData, error: unreadError } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('recipient_id', user.id)
+          .eq('is_read', false);
+        
+        if (!unreadError && unreadData !== null) {
+          setUnreadMessageCount(unreadData.length || 0);
+        }
+      } catch (err) {
+        console.error('Error fetching unread message count:', err);
+      }
+    };
+
+    // Fetch initial count
+    fetchUnreadCount();
+
+    // Subscribe to real-time updates for all messages to the current user
+    console.log('🔔 Setting up global Realtime subscription for unread messages');
+    const channel = supabase
+      .channel('global-unread-messages', {
+        config: {
+          broadcast: { self: true }
+        }
+      })
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `recipient_id=eq.${user.id}`
+        },
+        async (payload) => {
+          console.log('🔔 New message received (global subscription):', payload);
+          // Refresh unread count when a new message arrives
+          await fetchUnreadCount();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `recipient_id=eq.${user.id}`
+        },
+        async (payload) => {
+          console.log('🔔 Message updated (global subscription):', payload);
+          // Refresh unread count when a message is marked as read
+          await fetchUnreadCount();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, user?.id]);
+
   // Fetch messages for selected conversation and subscribe to real-time updates
   useEffect(() => {
     if (selectedConversation && supabase && user?.id) {
@@ -7059,9 +7128,32 @@ $$;
                         flexShrink: 0,
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        position: 'relative'
                       }}>
                         {renderAvatar(false, false, null, 42, userProfile, user)}
+                        {unreadMessageCount > 0 && (
+                          <span style={{
+                            position: 'absolute',
+                            top: '-4px',
+                            right: '-4px',
+                            background: '#ff751f',
+                            color: '#fff',
+                            borderRadius: '50%',
+                            width: '20px',
+                            height: '20px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                            fontFamily: 'Montserrat, Segoe UI, Verdana, Geneva, sans-serif',
+                            border: '2px solid #a8a7a8',
+                            boxSizing: 'border-box'
+                          }}>
+                            {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
+                          </span>
+                        )}
                       </div>
                       <span style={{ 
                         fontSize: isMobile ? '14px' : '18px', 

@@ -2258,13 +2258,16 @@ $$;
     if (!supabase || !user?.id || !selectedConversation || !messageInput.trim()) return;
     
     try {
+      // Filter the message before sending
+      const filteredMessage = filterChatMessage(messageInput.trim());
+      
       const { error: messageError } = await supabase
         .from('messages')
         .insert({
           conversation_id: selectedConversation.id,
           sender_id: user.id,
           recipient_id: selectedConversation.otherUser.id,
-          content: messageInput.trim()
+          content: filteredMessage
         });
       
       if (messageError) {
@@ -13558,6 +13561,9 @@ $$;
                         conversationId = newConv.id;
                       }
                       
+                      // Filter the message before sending
+                      const filteredMessage = filterChatMessage(messageOverlayText.trim());
+                      
                       // Send message
                       const { error: messageError } = await supabase
                         .from('messages')
@@ -13565,7 +13571,7 @@ $$;
                           conversation_id: conversationId,
                           sender_id: user.id,
                           recipient_id: profileToDisplay.id,
-                          content: messageOverlayText.trim()
+                          content: filteredMessage
                         });
                       
                       if (messageError) {
@@ -13584,7 +13590,7 @@ $$;
                             conversation_id: conversationId,
                             sender_id: user.id,
                             recipient_id: profileToDisplay.id,
-                            content: messageOverlayText.trim()
+                            content: filteredMessage
                           });
                         }
                         
@@ -14009,7 +14015,7 @@ $$;
                               {msg.sender?.username || 'Unknown'}
                             </div>
                           )}
-                          <div>{msg.content}</div>
+                          <div>{filterChatMessage(msg.content)}</div>
                           {isChallenge && (
                             <div style={{
                               marginTop: '8px',
